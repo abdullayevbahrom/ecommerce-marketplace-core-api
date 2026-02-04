@@ -1,0 +1,164 @@
+.reg
+  background-image: url("../images/src/register.png")
+  background-repeat: no-repeat
+  background-size: cover
+  &--page
+    display: flex
+    align-items: center
+    justify-content: center
+    min-height: 100vh
+  &__social
+    display: flex
+    justify-content: center
+    align-items: center
+    padding: 0 0 20px
+  
+.register
+  &__sec
+    font-family: 'Lato', sans-serif
+    text-align: center
+    font-style: normal
+    font-weight: 600
+    font-size: 40px
+    line-height: 58px
+    color: #616161
+    @media (max-width: 640px)
+      font-size: 36px
+      
+  &__main
+    display: flex
+    justify-content: center
+    margin-top: 25px
+    padding-bottom: 50px
+  &__box
+    display: flex
+    flex-direction: column
+    background: #F6FBF9
+    border: 2px solid #038992
+    box-sizing: border-box
+    border-radius: 32px
+    text-align: center
+    padding: 10px 30px
+    width: 480px
+    @media (max-width: 640px)
+      width: 100%
+      padding: 10px 10px
+  &__top
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: bold
+    font-size: 30px
+    line-height: 47px
+    text-align: center
+    color: #212B27
+    margin-top: 10px
+    margin-bottom: 0
+    @media (max-width: 640px)
+      font-size: 26px
+      line-height: 26px
+  &__par
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: normal
+    font-size: 14px
+    line-height: 19px
+    text-align: center
+    color: #32403B
+    margin-bottom: 20px
+    @media (max-width: 640px)
+      line-height: 15px
+      margin-bottom: 10px
+  &__input
+    background: #FFFFFF
+    border: 1px solid rgba(0, 0, 0, 0.1)
+    box-sizing: border-box
+    border-radius: 10px
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: normal
+    font-size: 16px
+    line-height: 19px
+    text-align: left
+    padding: 0 20px
+    color: rgba(16, 19, 18, 0.6)
+    height: 45px
+    margin-top: 15px
+    @media (max-width: 640px)
+      font-size: 14px
+      padding: 0 10px
+      height: 45px
+      margin-top: 10px
+  &__agree
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: normal
+    font-size: 13px
+    line-height: 18px
+    color: #32403B
+  &__bold
+    font-weight: bold 
+  &__submit
+    background: #84C7AE
+    border-radius: 10px
+    border: 2px solid #84C7AE
+    font-family: 'Lato', sans-serif
+    text-decoration: none
+    font-style: normal
+    font-weight: bold
+    font-size: 20px
+    line-height: 29px
+    color: #FFFFFF
+    width: 180px
+    margin: 0 auto
+    padding: 8px 0
+    &:hover
+      border: 2px solid #84C7AE
+      background: #fff
+      color: #84C7AE
+    @media (max-width: 640px)
+      width: 100%
+      font-size: 20px
+      padding: 8px 0
+      
+  &__log
+    display: flex
+    flex-direction: row
+    justify-content: center
+    margin-top: 20px
+    margin-bottom: 10px
+    h6
+      font-family: 'Lato', sans-serif
+      margin: 0
+      font-style: normal
+      font-weight: normal
+      font-size: 14px
+      line-height: 18px
+      color: #32403B
+    a
+      font-family: 'Lato', sans-serif
+      margin: 0
+      font-style: normal
+      font-weight: normal
+      font-size: 14px
+      line-height: 18px
+      color: #32403B
+      margin-left: 5px
+      &:hover
+        color: #038992
+    button
+      font-family: 'Lato', sans-serif
+      margin: 0
+      font-style: normal
+      font-weight: normal
+      font-size: 14px
+      line-height: 18px
+      color: #32403B
+      margin-left: 5px
+      background: inherit
+      border: none
+      &:hover
+        color: #038992
+#auth
+  display: none
+#reg
+  display: flex

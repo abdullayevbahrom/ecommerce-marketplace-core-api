@@ -1,0 +1,752 @@
+<?php
+
+namespace app\models\order;
+
+use Yii;
+use app\models\user\User;
+use app\models\user\cart\UserCart;
+use app\models\user\cart\UserCartFilter;
+use app\models\delivery\Delivery;
+use app\models\order\product\OrderProduct;
+use app\models\order\product\OrderProductFilter;
+use app\models\Category;
+use app\models\brand\CategoryBrand;
+use app\models\product\Product;
+use app\models\logist\Logist;
+use app\models\shop\Shop;
+use app\models\stock\Stock;
+use app\services\DidoxOrderService;
+use yii\services\BTS;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
+use Intervention\Image\ImageManager;
+
+/**
+ * This is the model class for table "order".
+ *
+ * @property int $id
+ * @property int|null $user_id
+ * @property int|null $payment_id
+ * @property int|null $delivery_id
+ * @property int|null $bts_region_id
+ * @property int|null $bts_city_id
+ * @property float|null $price
+ * @property float|null $amount
+ * @property float|null $delivery_cost
+ * @property int $receiver
+ * @property string|null $name
+ * @property string|null $lastname
+ * @property string|null $email
+ * @property string|null $phone
+ * @property string|null $address
+ * @property string|null $comment
+ * @property int $status
+ * @property int $status_payment
+ * @property string $date
+ * @property string|null $inn
+ * @property string|null $account
+ * @property string|null $bank_id
+ *
+ * @property Delivery $delivery
+ * @property OrderProduct[] $orderProducts
+ * @property Category $payment
+ * @property User $user
+ */
+class Order extends \yii\db\ActiveRecord
+{
+    public $order_id;
+    /**
+     * {@inheritdoc}
+     */
+    public static function tableName()
+    {
+        return 'order';
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function rules()
+    {
+        return [
+            [['address', 'delivery_id'], 'required', 'message' => 'Заполните поле'],
+            [['user_id', 'payment_id', 'delivery_id', 'shop_id', 'logist_id', 'tariff_id', 'receiver', 'status', 'status_payment', 'status_logist', 'status_delivery', 'status_review', 'promocode_id'], 'integer'],
+            [['price', 'amount', 'delivery_cost', 'bts_region_id', 'bts_city_id', 'discount_amount'], 'number'],
+            [['phone', 'address', 'comment', 'inn', 'account', 'bank_id'], 'string'],
+            [['date'], 'safe'],
+            [['name', 'lastname', 'email'], 'string', 'max' => 255],
+            [['delivery_id'], 'exist', 'skipOnError' => true, 'targetClass' => Delivery::className(), 'targetAttribute' => ['delivery_id' => 'id']],
+            [['payment_id'], 'exist', 'skipOnError' => true, 'targetClass' => Category::className(), 'targetAttribute' => ['payment_id' => 'id']],
+            [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::className(), 'targetAttribute' => ['user_id' => 'id']],
+        ];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function attributeLabels()
+    {
+        return [
+            'id' => 'ID',
+            'user_id' => 'User ID',
+            'payment_id' => 'Payment ID',
+            'delivery_id' => 'Delivery ID',
+            'price' => 'Price',
+            'amount' => 'Amount',
+            'delivery_cost' => 'Delivery Cost',
+            'receiver' => 'Receiver',
+            'name' => 'Name',
+            'lastname' => 'Lastname',
+            'email' => 'Email',
+            'phone' => 'Phone',
+            'address' => 'Address',
+            'comment' => 'Comment',
+            'status' => 'Status',
+            'status_payment' => 'Status Payment',
+            'date' => 'Date',
+            'inn' => 'INN',
+            'account' => 'Account',
+            'bank_id' => 'Bank ID (MFO)',
+            'promocode_id' => 'Promocode',
+            'discount_amount' => 'Discount Amount',
+        ];
+    }
+
+    /**
+     * Gets query for [[Promocode]].
+     *
+     * @return \yii\db\ActiveQuery
+     */
+    public function getPromocode()
+    {
+        return $this->hasOne(\app\models\Promocode::className(), ['id' => 'promocode_id']);
+    }
+    
+    // Note: OrderReview relationship commented out as the model doesn't exist
+    // Reviews are tracked via status_review field instead
+    /*
+    public function getOrderReview()
+    {
+        return $this->hasOne(OrderReview::className(), ['order_id' => 'id']);
+    }
+    */
+
+    public function saveObject($cart) {
+        // Validate minimum order quantities before creating order
+        foreach ($cart as $cartItem) {
+            $product = $cartItem->product;
+            if ($product && $product->min_order && ($cartItem->amount < $product->min_order)) {
+                $this->addError('cart', 'Product "' . $product->name_ru . '" requires minimum order quantity of ' . $product->min_order);
+                return false;
+            }
+        }
+    
+        /** @var User $user */
+        $user = Yii::$app->user->identity;
+        $this->user_id = $user->id;
+        $this->status = 0;
+        $this->status_payment = 1;
+        $this->status_delivery = 0;
+        $this->status_review = 0;
+        $this->bts_city_id = $user->bts_city_id;
+        $this->bts_region_id = $user->bts_region_id;
+
+        // Auto-fill Didox fields from User
+        $this->inn = $user->inn ?? $user->eimzo_tax_id ?? null;
+        $this->account = $user->account ?? null;
+        $this->bank_id = $user->mfo ?? null;
+
+        $shop_id = null;
+        $delivery_id = null;
+    
+        if ($this->save()) {
+            $price = 0;
+            $amount = 0;
+            $warehouseOrderItems = []; // Initialize the warehouse items array
+    
+            foreach ($cart as $product) {
+                $order_product = new OrderProduct;
+                $shop_id = $product->product->shop_id;
+    
+                $order_product->user_id = $this->user_id;
+                $order_product->order_id = $this->id;
+                $order_product->shop_id = $product->product->shop_id;
+                $order_product->product_id = $product->product->id;
+                $order_product->amount = $product->amount;
+                $order_product->delivery_cost = $product->delivery_cost;
+                $order_product->stock_id = $product->product->stock_id;
+    
+                // Calculate price based on quantity and wholesale tiers
+                $unit_price = $product->product->getPriceByQuantity($product->amount);
+                $order_product->product_price = $unit_price * $product->amount;
+                $order_product->price = $order_product->product_price;
+    
+                // ToDo::change if add new delivery method
+                $order_product->delivery_id = $product->delivery_id ?? 1;
+                $order_product->status = 1;
+    
+                $delivery_id = $order_product->delivery_id;
+    
+                $price += $order_product->price;
+                $amount += $order_product->amount;
+    
+                if ($order_product->save()) {
+                    
+                    // Add item to warehouse order items array
+                    $warehouseOrderItems[] = [
+                        'yii_product_id' => $order_product->product_id,
+                        'quantity' => $order_product->amount,
+                        'price' => $unit_price, // Unit price, not total price
+                    ];
+                    
+                    $shop_product = Product::findOne($order_product->product_id);
+                    if ($shop_product) {
+                        $shop_product->amount = $shop_product->amount - $order_product->amount;
+                        $shop_product->save(false);
+    
+                        if ($product->cartFilter) {
+                            $keys = ['order_product_id', 'product_filter_id'];
+                            $vals = [];
+                            foreach ($product->cartFilter as $value) {
+                                $vals[] = [
+                                    'order_product_id' => $order_product->id,
+                                    'product_filter_id' => $value->product_filter_id
+                                ];
+                            }
+    
+                            Yii::$app->db->createCommand()->batchInsert('order_product_filter', $keys, $vals)->execute();
+                        }
+                    }
+                }
+            }
+            
+            // Send order to warehouse with populated items array
+            try {
+                if (!empty($warehouseOrderItems)) {
+                    $this->sendOrderToWarehouse($warehouseOrderItems);
+                }
+            } catch (\Exception $e) {
+                $this->addError('warehouse', $e->getMessage());
+                return false;
+            }
+    
+            $user = User::findOne($this->user_id);
+            $user->last_address = $this->address;
+            
+            // Auto-fill user profile for individual users (fiz) on first order when they receive it themselves
+            if ($user->type === 'fiz' && $this->receiver == 1) {
+                $profileIncomplete = empty($user->name) || empty($user->lastname) || empty($user->phone) || empty($user->email);
+                
+                if ($profileIncomplete) {
+                    // Update user profile with order data if fields are empty
+                    if (empty($user->name) && !empty($this->name)) {
+                        $user->name = $this->name;
+                    }
+                    if (empty($user->lastname) && !empty($this->lastname)) {
+                        $user->lastname = $this->lastname;
+                    }
+                    if (empty($user->phone) && !empty($this->phone)) {
+                        $user->phone = $this->phone;
+                    }
+                    if (empty($user->email) && !empty($this->email)) {
+                        $user->email = $this->email;
+                    }
+                    if (empty($user->address) && !empty($this->address)) {
+                        $user->address = $this->address;
+                    }
+                    if(empty($user->bts_region_id) && !empty($this->bts_region_id)) {
+                        $user->bts_region_id = $this->bts_region_id;
+                    }
+                    if(empty($user->bts_city_id) && !empty($this->bts_city_id)) {
+                        $user->bts_city_id = $this->bts_city_id;
+                    }
+                }
+            }
+            
+            $user->save(false);
+    
+            error_log("heelooo !!! 123 ->>");
+    
+            // ToDo::change if add new delivery method
+            if ($delivery_id) {
+                error_log("UserCart::deleteAll(234234");
+                /** @var User $user */
+                $user = Yii::$app->user->identity;
+                UserCart::deleteAll(['user_id'=>$user->id]);
+                $order = self::findOne($this->id);
+                $deliveryPrice = $this->createOrderProductsAndBtsIntegration($user, $order);
+                
+                // Calculate total product price
+                $productsTotal = $price;
+                
+                // Apply Promocode if exists
+                $discount = 0;
+                if ($order->promocode_id) {
+                    $promocode = \app\models\Promocode::findOne($order->promocode_id);
+                    if ($promocode) {
+                        // Re-validate to ensure it's still valid at the moment of purchase
+                        // We need to pass cart items for category/product validation
+                        // Since cart is deleted, we use the order products we just created
+                        // However, checkValidity expects cart items structure usually, but we can adapt or just check basic validity here
+                        // For simplicity and robustness, we check basic validity + min order amount
+                        
+                        list($isValid, $error) = $promocode->checkValidity($user, $productsTotal);
+                        
+                        if ($isValid) {
+                            $discount = $promocode->calculateDiscount($productsTotal);
+                            $order->discount_amount = $discount;
+                            
+                            // Increment usage counts
+                            // Note: We don't increment here because it's calculated on the fly based on existing orders in checkValidity
+                            // But if we had a counter column, we would increment it.
+                            // Since checkValidity counts rows in `order` table, saving this order with promocode_id is enough.
+                        } else {
+                            // If invalid (e.g. expired just now), remove it
+                            $order->promocode_id = null;
+                            $order->discount_amount = 0;
+                        }
+                    }
+                }
+
+                $order->price = max(0, $productsTotal - $discount) + $deliveryPrice;
+                $order->delivery_cost = $deliveryPrice;
+                $order->amount = $amount;
+                $order->shop_id = $shop_id;
+                $order->delivery_id = $delivery_id;
+    
+                error_log("UserCart::deleteAll(234234");
+                // Create order products based on stocks and calculate BTS delivery for each group
+                
+                // Save the final order state
+                $saved = $order->save(false);
+                
+                // Automatically create Didox documents (Invoice and Contract)
+                if ($saved) {
+                    try {
+                        DidoxOrderService::createDocuments($order);
+                    } catch (\Exception $e) {
+                        Yii::error("Didox auto-creation failed: " . $e->getMessage(), 'didox');
+                    }
+                }
+                
+                return $saved;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Create order products based on stock grouping and handle BTS integration
+     * @param User $user
+     * @return bool
+     */
+    public function createOrderProductsAndBtsIntegration($user, $orderInfo)
+    {
+        error_log("createOrderProductsAndBtsIntegration");
+        
+        // Get order products grouped by stock_id (cart has already been cleared)
+        $orderProducts = OrderProduct::find()
+            ->with(['product.stock'])
+            ->where(['order_id' => $this->id])
+            ->all();
+            
+        // Group order products by stock_id
+        $stockGroups = [];
+        foreach ($orderProducts as $orderProduct) {
+            $stockId = $orderProduct->product->stock_id ?? null;
+            if (!isset($stockGroups[$stockId])) {
+                $stockGroups[$stockId] = [];
+            }
+            $stockGroups[$stockId][] = $orderProduct;
+        }
+        
+        $totalDeliveryCost = 0;
+        
+        // Process each stock group
+        foreach ($stockGroups as $stockId => $groupItems) {
+            $stock = $stockId ? Stock::findOne($stockId) : null;
+            
+            // Calculate total weight and volume for this group using existing order products
+            $totalWeight = 0;
+            $totalVolume = 0;
+            $groupProducts = [];
+            
+            foreach ($groupItems as $orderProduct) {
+                $product = $orderProduct->product;
+                
+                // Use existing order product (already saved)
+                $groupProducts[] = $orderProduct;
+                
+                // Calculate weight and volume
+                $totalWeight += ($product->weight ?? 1) * $orderProduct->amount;
+                $totalVolume += (($product->length ?? 10) * ($product->width ?? 10) * ($product->height ?? 10)) * $orderProduct->amount;
+            }
+            
+            error_log("errorlwe3141312");
+            
+            // Create BTS order for this stock group (if stock has BTS info)
+            if ($stock && $stock->bts_city_id && !empty($groupProducts)) {
+                error_log("!END??!@#!");
+                $this->createBtsOrderForStockGroup($stock, $groupProducts, $user, $orderInfo, $totalWeight, $totalVolume);
+                
+                // Sum up delivery costs
+                foreach ($groupProducts as $orderProduct) {
+                    $totalDeliveryCost += $orderProduct->bts_price ?? 0;
+                }
+            }
+        }
+
+        return $totalDeliveryCost;
+    }
+    
+    /**
+     * Create BTS order for a specific stock group
+     * @param Stock $stock
+     * @param OrderProduct[] $orderProducts
+     * @param User $user
+     * @param float $totalWeight
+     * @param float $totalVolume
+     * @return bool
+     */
+    protected function createBtsOrderForStockGroup($stock, $orderProducts, $user, $orderInfo, $totalWeight, $totalVolume)
+    {
+        $shop = $stock->shop;
+        
+        $data = [
+            "senderDelivery" => 1, // 1-Вызов курьера, 0-самовывоз в офис BTS.
+            "senderCityId" => $stock->bts_city_id,
+            "senderAddress" => $stock->address,
+            "senderReal" => $shop->name_ru,
+            "senderPhone" => $shop->contact_phone,
+            "weight" => max(1, $totalWeight / 1000), // Convert to kg
+            "packageId" => 4, // вид упаковки. Виды упаковок
+            "postTypeId" => 22, // тип доставки. Типы доставки
+            "receiverDelivery" => 1, // 1-Если курьер доставит, 0- если получатель сам забирает с офиса BTS.
+            "receiver" => $orderInfo->lastname . ' ' . $orderInfo->name,
+            "receiverCityId" => $orderInfo->bts_city_id ?? $user->bts_city_id,
+            "receiverAddress" => $orderInfo->address ?? $user->address,
+            "volume" => max(1, $totalVolume / 1000000), // Convert to cubic meters
+            "urgent" => 0,
+            "takePhoto" => 1, // 1 - требуется фото получателя, 0 - необизаятелно. поумолчание 0.
+            "senderSign" => null, // подпись отправителя
+            "receiverSign" => null, // подпись получателя
+            "piece" => count($orderProducts), // количество мест (number of products)
+            "is_test" => 1, // 1 - тестовый заказ, 0 - реальный заказ
+            "senderDate" => date('Y-m-d', strtotime($orderInfo->date)), // дата отправки
+            "receiverDate" => date('Y-m-d', strtotime('+1 day', strtotime($orderInfo->date))), // дата получения
+            "receiverPhone" => $orderInfo->phone ? $orderInfo->phone : $user->phone, // телефон получателя
+            "receiverPhone1" => null
+        ];
+
+        $bts = new BTS();
+
+        // Validate order data before sending to BTS
+        $validationErrors = $bts->validateOrderData($data);
+        if (!empty($validationErrors)) {
+            Yii::error('BTS order validation failed: ' . json_encode($validationErrors), __METHOD__);
+            // Continue with order creation even if BTS validation fails
+        }
+        
+        $response = $bts->createOrder($data);
+
+        if ($response['success'] && isset($response['data']['orderId'])) {
+            $btsData = $response['data'];
+            $btsId = $btsData['orderId'];
+            $btsStatus = $btsData['status']['id'] ?? null;
+            $btsStatusInfo = $btsData['status']['info'] ?? null;
+            $btsPrice = $btsData['cost'] ?? null;
+            
+            // Distribute BTS cost among order products (evenly)
+            $pricePerProduct = $btsPrice ? $btsPrice / count($orderProducts) : 0;
+            
+            // Update all order products in this group with BTS information
+            foreach ($orderProducts as $orderProduct) {
+                $orderProduct->bts_id = $btsId;
+                $orderProduct->bts_status = $btsStatus;
+                $orderProduct->bts_status_info = $btsStatusInfo;
+                // devide price per product by count of order products
+                // ToDo::similarly to delivery_cost
+                $orderProduct->bts_price = $pricePerProduct / count($orderProducts);
+                $orderProduct->delivery_cost = $orderProduct->bts_price;
+                $orderProduct->price = $orderProduct->price + $orderProduct->bts_price;
+                $orderProduct->save(false);
+            }
+        } else {
+            // Log BTS error but don't fail the order creation
+            error_log("BTS order creation failed: " . ($response['error'] ?? 'Unknown error'));
+            Yii::error('BTS order creation failed: ' . ($response['error'] ?? 'Unknown error'), __METHOD__);
+            
+            $errorMessage = 'BTS integration failed: ' . ($response['error'] ?? 'Unknown error');
+            
+            // Update order products with error info
+            foreach ($orderProducts as $orderProduct) {
+                $orderProduct->bts_id = null;
+                $orderProduct->bts_status = null;
+                $orderProduct->bts_status_info = $errorMessage;
+                $orderProduct->bts_price = null;
+                $orderProduct->save(false);
+            }
+        }
+        
+        return true;
+    }
+
+    public function fields() {
+        $controller = Yii::$app->controller->id;
+        $action = Yii::$app->controller->action->id;
+
+        $data = ['id', 'user', 'payment', 'delivery', 'price', 'amount', 'delivery_cost', 'discount_amount', 'promocode', 'name', 'phone', 'address', 'status'=>function(){return Yii::$app->request->get('status') == 3 ? 3 : $this->status;}, 'status_payment', 'date', 'orderReceipt'];
+    
+        $exception = ['send', 'detail', 'index'];
+
+        if (($controller == 'order') && in_array($action, $exception)) {
+            $data[] = 'orderProducts';
+        }
+
+        return $data;
+    }
+
+    /**
+     * Gets query for [[Delivery]].
+     *
+     * @return \yii\db\ActiveQuery
+     */
+    public function getDelivery()
+    {
+        return $this->hasOne(Delivery::className(), ['id' => 'delivery_id']);
+    }
+
+    /**
+     * Gets query for [[OrderProducts]].
+     *
+     * @return \yii\db\ActiveQuery
+     */
+    public function getOrderProducts()
+    {
+        return $this->hasMany(OrderProduct::className(), ['order_id' => 'id']);
+    }
+
+    /**
+     * Gets query for [[Payment]].
+     *
+     * @return \yii\db\ActiveQuery
+     */
+    public function getPayment()
+    {
+        return $this->hasOne(Category::className(), ['id' => 'payment_id']);
+    }
+
+    /**
+     * Gets query for [[User]].
+     *
+     * @return \yii\db\ActiveQuery
+     */
+    public function getUser()
+    {
+        return $this->hasOne(User::className(), ['id' => 'user_id']);
+    }
+
+    public function getLogist()
+    {
+        return $this->hasOne(Logist::className(), ['id' => 'logist_id']);
+    }
+
+    public function getShop()
+    {
+        return $this->hasOne(Shop::className(), ['id' => 'shop_id']);
+    }
+
+    public function getOrderReceipt() {
+        return $this->hasOne(OrderReceipt::className(), ['order_id'=>'id']);
+    }
+
+    /**
+     * Update BTS order status for all order products
+     * @return bool
+     */
+    public function updateBtsStatus()
+    {
+        $updated = false;
+        foreach ($this->orderProducts as $orderProduct) {
+            if ($orderProduct->bts_id) {
+                $bts = new BTS();
+                $response = $bts->getOrderStatus($orderProduct->bts_id);
+
+                if ($response['success'] && isset($response['data']['status'])) {
+                    $statusData = $response['data']['status'];
+                    $orderProduct->bts_status = $statusData['id'] ?? $orderProduct->bts_status;
+                    $orderProduct->bts_status_info = $statusData['info'] ?? $orderProduct->bts_status_info;
+                    $orderProduct->save(false);
+                    $updated = true;
+                }
+            }
+        }
+        return $updated;
+    }
+
+    /**
+     * Get BTS tracking information for all order products
+     * @return array
+     */
+    public function getBtsTracking()
+    {
+        $trackingData = [];
+        foreach ($this->orderProducts as $orderProduct) {
+            if ($orderProduct->bts_id) {
+                $bts = new BTS();
+                $response = $bts->getOrderTracking($orderProduct->bts_id);
+                if ($response['success']) {
+                    $trackingData[$orderProduct->bts_id] = $response['data'];
+                }
+            }
+        }
+        return $trackingData;
+    }
+
+    /**
+     * Get full BTS order information for all order products
+     * @return array
+     */
+    public function getBtsOrderInfo()
+    {
+        $orderInfo = [];
+        foreach ($this->orderProducts as $orderProduct) {
+            if ($orderProduct->bts_id) {
+                $bts = new BTS();
+                $response = $bts->getOrderInfo($orderProduct->bts_id);
+                if ($response['success']) {
+                    $orderInfo[$orderProduct->bts_id] = $response['data'];
+                }
+            }
+        }
+        return $orderInfo;
+    }
+
+    /**
+     * Check if order has BTS integration
+     * @return bool
+     */
+    public function hasBtsIntegration()
+    {
+        foreach ($this->orderProducts as $orderProduct) {
+            if ($orderProduct->hasBtsIntegration()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get BTS status label summary
+     * @param string $language Language code (ru, uz, en)
+     * @return string
+     */
+    public function getBtsStatusLabel($language = 'ru')
+    {
+        $statuses = [];
+        foreach ($this->orderProducts as $orderProduct) {
+            if ($orderProduct->bts_id) {
+                $label = BTS::getBtsStatusLabel($orderProduct->bts_status, $language);
+                if ($label) {
+                    $statuses[] = $label;
+                } else {
+                    $statuses[] = $orderProduct->bts_status_info ?: 'Unknown status';
+                }
+            }
+        }
+        return empty($statuses) ? 'No BTS integration' : implode('; ', array_unique($statuses));
+    }
+
+    /**
+     * Get all BTS statuses with details
+     * @param string $language Language code (ru, uz, en)
+     * @return array
+     */
+    public function getBtsStatusesDetailed($language = 'ru')
+    {
+        $statuses = [];
+        foreach ($this->orderProducts as $orderProduct) {
+            if ($orderProduct->bts_id) {
+                $statuses[] = [
+                    'bts_id' => $orderProduct->bts_id,
+                    'status_id' => $orderProduct->bts_status,
+                    'status_info' => $orderProduct->bts_status_info,
+                    'status_label' => BTS::getBtsStatusLabel($orderProduct->bts_status, $language),
+                    'order_product_id' => $orderProduct->id,
+                    'stock_name' => $orderProduct->stock ? $orderProduct->stock->name_ru : null
+                ];
+            }
+        }
+        return $statuses;
+    }
+    
+    private function sendOrderToWarehouse($items)
+    {
+        // Skip warehouse sync in development/local environment
+        // Can be overridden via params: Yii::$app->params['warehouseSyncEnabled'] = true/false
+        $warehouseSyncDisabled = isset(Yii::$app->params['warehouseSyncEnabled']) 
+            ? Yii::$app->params['warehouseSyncEnabled'] 
+            : true; // Default: enabled
+
+        if (!$warehouseSyncDisabled) {
+            Yii::info("Warehouse sync skipped (development mode) for Order #{$this->id}", 'warehouse_sync');
+            return;
+        }
+        
+        $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com';
+        $apiUrl = $baseUrl . '/api/sales/create-from-ecommerce';
+    
+        $client = new Client(['timeout' => 10.0]);
+    
+        $dataToSend = [
+            'id' => $this->id,
+            'yii_order_id' => $this->id,
+            'items' => $items,
+        ];
+    
+        $token = md5($this->id . Yii::$app->params['apiSecretKey']);
+    
+        try {
+            $response = $client->post($apiUrl, [
+                'json' => $dataToSend,
+                'headers' => [
+                    'X-Api-Token' => $token,
+                    'Content-Type' => 'application/json',
+                ],
+            ]);
+        
+            $body = json_decode($response->getBody()->getContents(), true);
+        
+            if ($response->getStatusCode() !== 201 || empty($body['success'])) {
+                $errorMessage = $body['message'] ?? 'Неизвестная ошибка склада';
+                throw new \Exception('Ошибка склада: ' . $errorMessage);
+            }
+        
+        } catch (RequestException $e) {
+            if ($e->hasResponse()) {
+                $resp = $e->getResponse();
+                $status = $resp->getStatusCode();
+                $content = (string) $resp->getBody();
+                $data = json_decode($content, true);
+        
+                if (json_last_error() === JSON_ERROR_NONE && isset($data['message'])) {
+                    Yii::error(
+                        "Склад вернул ошибку ($status): " . $data['message'],
+                        'warehouse_sync'
+                    );
+                    throw new \Exception('Ошибка склада: ' . $data['message']);
+                } else {
+                    Yii::error("Склад вернул некорректный ответ ($status): $content", 'warehouse_sync');
+                    throw new \Exception('Ошибка склада: некорректный ответ.');
+                }
+            }
+        
+            Yii::error(
+                'Не удалось связаться со складом. Guzzle: ' . $e->getMessage(),
+                'warehouse_sync'
+            );
+            throw new \Exception('Не удалось связаться со складом. Попробуйте позже.');
+        }
+    }
+}

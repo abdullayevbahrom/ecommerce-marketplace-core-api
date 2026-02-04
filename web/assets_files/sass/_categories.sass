@@ -1,0 +1,110 @@
+.categories
+  background-image: url("../images/src/categories.png")
+  background-repeat: no-repeat
+
+  background-size: 100%
+  background-color: #F6FBF9
+  &__main
+    padding-top: 20px
+    padding-bottom: 50px
+  &__text
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: 600
+    font-size: 36px
+    line-height: 58px
+    color: #616161
+    text-align: center
+    margin: 20px 0
+    @media (max-width: 768px)
+      font-size: 27px
+      margin-bottom: 0
+      margin-top: 0
+  &__box
+    display: flex
+    flex-wrap: wrap
+    justify-content: space-between
+  &__item
+    text-align: center
+    display: flex
+    flex-direction: column
+    align-items: center
+    margin: 15px 30px
+    justify-content: center
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: 500
+    font-size: 18px
+    line-height: 22px
+    color: #616161
+    @media (max-width: 640px)
+      justify-content: flex-start
+      margin: 0px 10px
+      font-size: 14px
+      line-height: 20px
+      height: auto
+      a
+        padding-bottom: 0px
+    @media (max-width: 1024px)
+      margin: 15px 20px
+  &__link
+    background: #E6F3F4
+    text-align: center
+    display: flex
+    align-items: center
+    justify-content: center
+    width: 80px
+    height: 80px
+    border-radius: 50%
+    margin-top: 10px
+    margin-bottom: 10px
+    &:hover
+      background: #038992
+      transition: 0.2s
+      fill: #fff
+    img
+      padding: 30px
+@media (max-width: 640px)
+  .categories
+    &__box
+      overflow-x: scroll
+      flex-wrap: nowrap
+      width: 100%
+      height: 200px
+      margin-bottom: -50px
+      @media (max-width: 640px)
+        padding-bottom: 20px
+        height: auto
+      &::-webkit-scrollbar
+        width: 12px
+
+      &::-webkit-scrollbar-track
+        -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3)
+        border-radius: 10px
+
+      &::-webkit-scrollbar-thumb
+        border-radius: 10px
+        background: #038992
+        -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.5)
+@media (max-width: 1024px)
+  .categories
+    &__box
+      overflow-x: scroll
+      flex-wrap: nowrap
+      width: 100%
+      height: 200px
+      margin-bottom: -50px
+      @media (max-width: 640px)
+        padding-bottom: 20px
+        height: auto
+      &::-webkit-scrollbar
+        width: 12px
+
+      &::-webkit-scrollbar-track
+        -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3)
+        border-radius: 10px
+
+      &::-webkit-scrollbar-thumb
+        border-radius: 10px
+        background: #038992
+        -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.5)

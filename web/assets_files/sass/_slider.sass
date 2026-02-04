@@ -1,0 +1,515 @@
+.mySwipper
+  width: 400px
+  height: 400px
+.swiper-slide
+  text-align: center
+  font-size: 18px
+  background: inherit
+  display: -webkit-box
+  display: -ms-flexbox
+  display: -webkit-flex
+  display: flex
+  -webkit-box-pack: center
+  -ms-flex-pack: center
+  -webkit-justify-content: center
+  justify-content: center
+  -webkit-box-align: center
+  -ms-flex-align: center
+  -webkit-align-items: center
+  align-items: center
+  width: 400px
+  height: 400px
+  img
+    display: block
+    width: 400px
+    height: 400px
+    object-fit: cover
+    margin-top: 60px
+    @media (max-width: 640px)
+      width: 80%
+      height: 100%
+    @media (max-width: 1024px)
+      width: 80%
+      height: 100%
+.swiper-container
+  margin-left: auto
+  margin-right: auto
+.about
+  display: -webkit-box
+  display: -ms-flexbox
+  -webkit-box-orient: horizontal
+  -webkit-box-direction: normal
+  -ms-flex-direction: row
+  flex-direction: row
+  -webkit-box-pack: center
+  -ms-flex-pack: center
+  @media (max-width: 640px)
+    display: flex
+    flex-direction: column
+  &__box
+    margin-top: 50px
+  &__things
+    width: 100%
+    margin-top: 50px
+  &__info
+    position: relative
+    width: 48%
+    background: #E6F3F4
+    box-shadow: 0px 0px 2px rgba(0, 0, 0, 0.25)
+    margin: 0 20px
+    @media (max-width: 640px)
+      width: 100%
+      margin: 0
+  &__info__2
+    position: relative
+    width: 48%
+    background: #E6F3F4
+    box-shadow: 0px 0px 2px rgba(0, 0, 0, 0.25)
+    margin: 0 20px
+    display: flex
+    flex-direction: column
+    padding: 0 30px 15px 30px
+    justify-content: space-between
+    @media (max-width: 640px)
+      width: 100%
+      margin: 0
+      margin-top: 30px
+      padding: 0 10px
+    @media (max-width: 1024px)
+      padding: 0 10px
+  &__save
+    display: flex
+    justify-content: space-between
+    padding: 0 20px
+    margin-top: 10px
+    @media (max-width: 640px)
+      align-items: center
+      margin-bottom: 10px
+  &__bookmark
+    font-size: 36px
+    color: #038992
+    margin-bottom: 30px
+    @media (max-width: 640px)
+      margin-bottom: 20px
+      margin-top: 20px
+    @media (max-width: 1024px)
+      margin-bottom: 0px
+      margin-top: 0px
+  &__link
+    display: flex
+    flex-direction: row
+  &__footer
+    display: flex
+    flex-direction: column
+    flex-wrap: wrap
+    margin-top: 25px
+  &__space
+    display: flex
+    flex-direction: row
+    justify-content: space-between
+    margin-top: auto
+    align-items: flex-end
+    align-content: flex-end
+    justify-items: flex-end
+    
+    h6
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 600
+      font-size: 15px
+      line-height: 15px
+      text-align: center
+      color: #616161
+      margin-top: 30px
+      margin-bottom: 20px
+      @media (max-width: 640px)
+        font-size: 14px
+      @media (max-width: 1024px)
+        font-size: 14px
+        margin-top: 20px
+        margin-bottom: 10px
+    @media (max-width: 640px)
+      margin-top: 0px
+      flex-direction: row
+      flex-wrap: wrap
+    @media (max-width: 1024px)
+      margin-top: 0px
+      flex-direction: row
+      flex-wrap: wrap
+  &__title
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: 600
+    font-size: 30px
+    line-height: 36px
+    text-align: center
+    color: #616161
+    margin-top: 30px
+    margin-bottom: 20px
+    @media (max-width: 640px)
+      font-size: 26px
+      line-height: 30px
+    @media (max-width: 1024px)
+      font-size: 20px
+      margin-bottom: 0
+      margin-top: 20px
+  &__cost
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: 800
+    font-size: 30px
+    line-height: 58px
+    text-align: center
+    color: #616161
+    margin: 0
+    @media (max-width: 640px)
+      font-size: 30px
+      line-height: 30px
+    @media (max-width: 1024px)
+      font-size: 30px
+      line-height: 30px
+  &__user
+    display: flex
+    flex-direction: row
+    margin-top: 20px
+    @media (max-width: 640px)
+      margin-top: 10px
+  &__text
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: 600
+    font-size: 16px
+    line-height: 28px
+    color: #616161
+    @media (max-width: 1024px)
+      font-size: 16px
+  &__link
+    a
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: normal
+      font-size: 18px
+      line-height: 22px
+      text-decoration-line: underline
+      color: #616161
+      margin-left: 20px
+      &:nth-child(1)
+        margin-left: 0px
+      @media (max-width: 640px)
+        font-size: 16px
+        line-height: 18px
+        margin-left: 10px
+      @media (max-width: 1024px)
+        font-size: 16px
+        line-height: 18px
+        margin-left: 10px
+  &__complain
+    margin: 0 auto
+    margin-top: 30px
+    
+    
+    a
+      width: 160px
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 600
+      font-size: 18px
+      line-height: 22px
+      color: #84C7AE
+      border: 2px solid #84C7AE
+      box-sizing: border-box
+      border-radius: 8px
+      text-align: center
+      text-decoration: none
+      padding: 5px 8px
+    @media (max-width: 640px)
+      margin-top: 30px
+    @media (max-width: 1024px)
+      margin-top: 20px
+.swiper-button-next 
+  background-image: url(../svg/nexta.svg)
+  background-repeat: no-repeat
+  background-size: 100% auto
+  background-position: center
+  margin-right: 15px
+  @media (max-width: 640px)
+    margin-right: -8px
+  @media (max-width: 1024px)
+    margin-right: -8px
+.swiper-button-next::after 
+  display: none
+.swiper-button-prev
+  background-image: url(../svg/backa.svg)
+  background-repeat: no-repeat
+  background-size: 100% auto
+  background-position: center
+  margin-left: 15px
+  @media (max-width: 640px)
+    margin-left: -8px
+  @media (max-width: 1024px)
+    margin-left: -8px
+.swiper-button-prev::after 
+  display: none
+.white
+  &__info
+    position: relative
+    background: #FFFFFF
+    width: 48%
+    box-shadow: 0px 0px 2px rgba(0, 0, 0, 0.25)
+    margin: 0 20px
+    padding: 0 20px
+     
+    @media (max-width: 640px)
+      width: 100%
+      margin: 0
+      margin-bottom: 30px
+      padding: 0 10px
+      padding-bottom: 20px
+  &__title
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: 600
+    font-size: 30px
+    line-height: 43px
+    color: #616161
+    margin-top: 30px
+    text-align: center
+    margin-bottom: 20px
+    @media (max-width: 640px)
+      font-size: 30px
+      line-height: 25px
+    @media (max-width: 1024px)
+      font-size: 30px
+      line-height: 25px
+.user
+  &__img
+    img
+      @media (max-width: 640px)
+        width: 60px
+  &__info
+    margin-left: 20px
+    @media (max-width: 640px)
+      margin-left: 10px
+    h6
+      margin-top: 10px
+      margin-bottom: 0px
+      font-style: normal
+      font-weight: 600
+      font-size: 24px
+      line-height: 29px
+      color: #000000
+      @media (max-width: 640px)
+        font-size: 22px
+        line-height: 28px
+    p
+      margin-top: 0px
+      font-style: normal
+      font-weight: 600
+      font-size: 14px
+      line-height: 17px
+      color: #616161
+  &__message
+    background: #E6F3F4
+    border: none
+    width: 100%
+    resize: none
+    font-style: normal
+    font-weight: 500
+    font-size: 18px
+    line-height: 22px
+    padding: 10px 20px
+    color: rgba(97, 97, 97, 0.8)
+    margin-top: 10px
+  &__contact
+    display: flex
+    justify-content: space-between
+    flex-direction: row
+    margin-top: 20px
+  &__link
+    display: flex
+    text-decoration: none
+    img
+      @media (max-width: 640px)
+        width: 30px
+      @media (max-width: 1024px)
+        width: 30px
+  &__number
+    display: flex
+    align-items: center
+    font-style: normal
+    font-weight: bold
+    font-size: 20px
+    line-height: 24px
+    color: #038992
+    margin-left: 10px
+    @media (max-width: 640px)
+      font-size: 18px
+    @media (max-width: 1024px)
+      font-size: 16px
+
+  &__send
+    display: flex
+    align-items: center
+    background: #E6F3F4
+    border-radius: 8px    
+    padding: 5px 20px
+    font-style: normal
+    font-weight: 600
+    font-size: 18px
+    line-height: 22px
+    @media (max-width: 640px)
+      padding: 8px 10px
+      font-size: 16px
+    @media (max-width: 1024px)
+      padding: 8px 10px
+      font-size: 16px
+    a
+      text-decoration: none
+      color: rgba(97, 97, 97, 0.8)
+  &__file
+    display: flex
+    align-items: center
+  &__file__name
+    margin-left: 20px
+    margin-bottom: 20px
+    h6
+      margin-top: 10px
+      margin-bottom: 0px
+      font-style: normal
+      font-weight: 600
+      font-size: 18px
+      line-height: 22px
+      color: #000000
+    p
+      margin-top: 5px
+      margin-bottom: 0px 
+      font-style: normal
+      font-weight: 600
+      font-size: 14px
+      line-height: 17px
+      color: #616161
+
+  &__location
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: 600
+    font-size: 30px
+    line-height: 43px
+    color: #616161
+    margin-top: 30px
+    margin-bottom: 30px
+    text-align: center
+    @media (max-width: 640px)
+      font-size: 30px
+      line-height: 30px
+    @media (max-width: 1024px)
+      font-size: 30px
+.location
+  text-align: center
+  &__name
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: bold
+    font-size: 24px
+    line-height: 29px
+    color: #000000
+    margin: 0 auto
+    @media (max-width: 640px)
+      font-size: 17px
+      line-height: 20px
+    i
+      margin-right: 10px
+  &__image
+    margin-top: 50px
+    @media (max-width: 640px)
+      width: 100%
+      margin-bottom: 20px
+    @media (max-width: 1024px)
+      width: 100%
+.modal
+  &__box
+    position: fixed
+    z-index: 9999
+    width: 100%
+    height: 100%
+    left: 0
+    top: 0
+    right: 0
+    background-color: rgb(0,0,0)
+    background-color: #00000023
+    @media (max-width: 640px)
+      padding: 0 10px
+  &__item
+    position: relative
+    background: #fff
+    width: 600px
+    height: auto
+    margin-left: auto
+    margin-right: auto
+    background: #FFFFFF
+    box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.171)
+    border-radius: 10px
+    z-index: 9999
+    margin-top: 100px
+    padding: 20px 20px
+    @media (max-width: 640px)
+      width: 100%
+  &__text
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: 600
+    font-size: 30px
+    line-height: 43px
+    color: #616161
+    text-align: center
+    h5
+      margin: 0
+      margin-top: 20px
+      margin-bottom: 50px
+  &__flex
+    display: flex
+    flex-direction: row
+    justify-content: flex-end
+    padding: 10px 30px
+    @media (max-width: 640px)
+      justify-content: center
+  &__cancel
+    background: #fff
+    color: #038992
+    border: 2px solid #038992
+    border-radius: 10px
+    padding: 5px 15px
+    font-style: normal
+    font-weight: 600
+    font-size: 20px
+    line-height: 29px
+    color: #038992
+    margin-right: 10px
+    cursor: pointer
+    &:hover
+      border: 2px solid #038992
+      background: #038992
+      color: #fff
+  &__done
+    background: #fff
+    color: #038992
+    border: 2px solid #038992
+    border-radius: 10px
+    padding: 5px 15px
+    font-style: normal
+    font-weight: 600
+    font-size: 20px
+    line-height: 29px
+    color: #038992
+    cursor: pointer
+    &:hover
+      border: 2px solid #038992
+      background: #038992
+      color: #fff
+#map 
+  height: 380px
+  margin-top: 20px
+  /* The height is 400 pixels */
+  width: 100%
+  border-radius: 10px
+  /* The width is the width of the web page */

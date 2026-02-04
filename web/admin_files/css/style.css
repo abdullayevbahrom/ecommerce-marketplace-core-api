@@ -1,0 +1,135 @@
+div.cropbox .imageBox {
+	background-color: #cccccc !important;
+}
+
+#map-location {
+	width:100%;
+	height: 400px;
+}
+
+.width-full {
+	width: 100% !important;
+}
+
+div.cropbox .imageBox {
+	background-color: #cccccc !important;
+}
+
+.left-menu {
+    list-style-type: none;
+    margin-left:-40px;
+    margin-top:20px;
+}
+
+.left-menu a {
+    width:100%;
+}
+
+.left-menu li {
+    margin-bottom:10px;
+}
+
+.lang-button {
+    width: 100%;
+}
+
+.lang-block-uz,
+.lang-block-en {
+    display: none;
+}
+
+.category-result {
+    display: none;
+}
+
+tbody> tr{
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+tbody> tr:hover{
+    background-color: #d1d8e3 !important;
+
+}
+table {
+    overflow-y: scroll;
+}
+
+.invalid-feedback, .error_field {
+    color:#cc0000;
+}
+
+#action-links {
+    display:none;
+}
+.block-color {
+    width: 200px;
+    height: 30px;
+}
+
+/* DIDOX Status Background Classes */
+.bg-gray {
+    background-color: #999 !important;
+    color: #fff !important;
+}
+
+.bg-yellow {
+    background-color: #f39c12 !important;
+    color: #fff !important;
+}
+
+.bg-orange {
+    background-color: #ff851b !important;
+    color: #fff !important;
+}
+
+.bg-green {
+    background-color: #00a65a !important;
+    color: #fff !important;
+}
+
+.bg-red {
+    background-color: #dd4b39 !important;
+    color: #fff !important;
+}
+
+.bg-blue {
+    background-color: #3c8dbc !important;
+    color: #fff !important;
+}
+
+/* DIDOX Status Label Classes */
+.label.label-gray {
+    background-color: #999;
+    color: #fff;
+}
+
+.label-grey {
+    background-color: #999;
+    color: #fff;
+}
+
+.label-yellow {
+    background-color: #f39c12;
+    color: #fff;
+}
+
+.label-orange {
+    background-color: #ff851b;
+    color: #fff;
+}
+
+.label-green {
+    background-color: #00a65a;
+    color: #fff;
+}
+
+.label-red {
+    background-color: #dd4b39;
+    color: #fff;
+}
+
+.label-blue {
+    background-color: #3c8dbc;
+    color: #fff;
+}

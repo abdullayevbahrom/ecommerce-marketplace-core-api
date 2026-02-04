@@ -1,0 +1,413 @@
+.profile
+  background-color: #E5E5E5
+  &__box
+    display: flex
+    flex-direction: row
+    margin-top: 15px
+  &__information
+    display: flex
+    flex-direction: row
+    justify-content: space-between
+    background: #fff
+    width: 100%
+    min-height: 238px
+    @media (max-width: 640px)
+      flex-direction: column
+    @media (max-width: 1024px)
+      flex-direction: column
+  &__select
+    @media (max-width: 640px)
+      position: absolute
+      margin-top: 20px  
+      margin-left: 20px
+  &__image
+    padding: 22px
+    @media (max-width: 640px)
+      display: flex
+      justify-content: flex-end
+    img
+      width: 322px
+      height: 195px
+      @media (max-width: 640px)
+        width: 90%
+        height: 100%
+      @media (max-width: 1024px)
+        width: 100%
+        height: 100%
+  &__title
+    margin-left: -100px
+    @media (max-width: 640px)
+      margin-left: 0px
+      padding: 0 10px
+    @media (max-width: 1024px)
+      margin-left: 0
+      padding: 0 10px
+    h5
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 600
+      font-size: 20px
+      line-height: 29px
+      color: #000000
+      margin-top: 15px
+      margin-bottom: 10px
+    h6
+      font-family: 'Lato', sans-serif  
+      font-style: normal
+      font-weight: normal
+      font-size: 16px
+      line-height: 22px
+      color: #7F807F
+      margin-top: 5px
+      margin-bottom: 10px
+  &__cost
+    h5
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 600
+      font-size: 24px
+      line-height: 29px
+      color: #000000
+      margin-top: 22px
+      margin-bottom: 0
+      @media (max-width: 640px)
+        font-size: 20px
+  &__link
+    margin-top: 25px
+    margin-bottom: 40px
+    a
+      font-family: 'Lato', sans-serif  
+      font-style: normal
+      font-weight: 600
+      font-size: 16px
+      line-height: 22px
+      color: #7F807F
+      text-decoration: none
+      margin-right: 10px
+      &:hover
+        color: #000
+  &__right
+    display: flex
+    flex-direction: column
+    text-align: right
+    margin-right: 22px
+    @media (max-width: 640px)
+      margin-right: 10px
+  &__watch
+    display: flex
+    flex-direction: row
+    align-items: flex-end
+    margin-top: 145px
+    @media (max-width: 640px)
+      margin-top: -25px
+      margin-bottom: 20px
+    @media (max-width: 1024px)
+      margin-top: -25px
+      margin-bottom: 20px
+    span
+      margin-left: 20px
+      font-style: normal
+      font-weight: normal
+      font-size: 16px
+      line-height: 22px
+      color: #7F807F
+      @media (max-width: 640px)
+        margin-left: 10px
+        margin-right: 10px
+  &__statistic
+    font-family: 'Lato', sans-serif  
+    font-style: normal
+    font-weight: normal
+    font-size: 18px
+    line-height: 22px
+    text-decoration-line: underline
+    color: #000000
+    img
+      margin-left: 10px
+  &__up
+    display: flex
+    justify-content: center
+    margin-bottom: 30px
+    @media (max-width: 640px)
+      justify-content: space-between
+      margin-bottom: 30px
+    a
+      font-family: 'Lato', sans-serif 
+      font-style: normal
+      font-weight: 600
+      font-size: 20px
+      line-height: 29px
+      color: #038992
+      border: 2px solid #038992
+      box-sizing: border-box
+      border-radius: 10px
+      text-decoration: none
+      padding: 4px 15px
+      margin: 25px 10px
+      cursor: pointer
+      &:hover
+        background: #038992
+        color: #fff
+      @media (max-width: 640px)
+        font-size: 16px
+        padding: 5px 5px
+        margin: 0
+        margin-top: 20px
+
+    
+.search__item__profile 
+  margin-right: 20px
+  
+      
+.declaration
+  background-image: url(../images/src/profilebg.png)
+  background-size: 100%
+  background-color: #E5E5E5
+  background-repeat: no-repeat
+  margin-top: 30px
+  padding-top: 20px
+.amount
+  background: #fff
+  padding-bottom: 20px
+.active
+  display: flex
+  flex-direction: row
+  justify-content: space-between
+  @media (max-width: 640px)
+    flex-direction: column-reverse
+  &__checkbox
+    display: flex
+    flex-direction: row
+    justify-content: space-between
+    margin-top: 50px
+  &__sort
+    position: relative
+    @media (max-width: 640px)
+      margin-top: 0px
+  &__select
+    width: 220px
+    height: 50px
+    border: none
+    border-radius: 6px
+    font-style: normal
+    font-weight: 400
+    font-size: 16px
+    line-height: 34px
+    color: #7F807F
+    padding: 0 10px
+    appearance: none
+    @media (max-width: 640px)
+      width: 60%
+  &__margin
+    @media (max-width: 640px)
+      margin-top: 20px
+  &__select1
+    width: 220px
+    height: 50px
+    border: none
+    border-radius: 6px
+    font-style: normal
+    font-weight: 400
+    font-size: 16px
+    line-height: 34px
+    color: #7F807F
+    padding: 0 10px
+    appearance: none
+    @media (max-width: 640px)
+      width: 160px
+
+  &__select__icon
+    position: absolute
+    z-index: 999
+    margin-top: 20px
+    margin-left: -28px
+  &__search
+    display: flex
+    align-items: center
+    @media (max-width: 1024px)
+      width: 100%
+    button
+      width: 80px
+      height: 50px
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: normal
+      font-size: 18px
+      line-height: 34px
+      color: #7F807F
+      background: #FFFFFF
+      border-radius: 6px
+      border: none
+      margin-left: 5px
+      @media (max-width: 1024px)
+        width: 20%
+        
+  &__status
+    display: flex
+    align-items: center 
+    a
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 500
+      font-size: 18px
+      line-height: 29px
+      color: #7F807F
+      margin-right: 20px
+      text-decoration: none
+      @media (max-width: 1024px)
+        font-size: 18px
+
+      &:hover
+        text-decoration: underline
+        text-decoration-color: #038992
+      @media (max-width: 640px)
+        font-size: 18px
+        margin-top: 10px
+  &__line
+    display: flex
+    width: 277px
+    height: 50px
+    background: #FFFFFF
+    border-radius: 6px
+    padding-left: 5px
+    @media (max-width: 1024px)
+      width: 80%
+    img
+      width: 30px
+    input
+      font-family: 'Lato', sans-serif
+      color: #7F807F
+      font-style: normal
+      font-weight: normal
+      font-size: 14px
+      line-height: 34px
+      height: 50px
+      width: 100%
+      border: none
+      padding: 0 10px
+      border-radius: 6px
+  &__limit
+    display: flex
+    flex-direction: row
+    justify-content: space-between
+    background: #E6F3F4
+    border-radius: 10px
+    padding: 10px 30px
+    margin-top: 40px
+    @media (max-width: 640px)
+      flex-direction: row
+      padding: 10px 10px
+    h5
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: normal
+      font-size: 18px
+      line-height: 29px
+      color: #7F807F
+      margin: 0
+      display: flex
+      align-items: center
+      @media (max-width: 640px)
+        font-size: 14px
+        margin-bottom: 3px
+        text-align: left
+        margin-right: 10px
+        line-height: 20px
+      @media (max-width: 1024px)
+        font-size: 15px
+        text-align: justify
+    a
+      background: #038992
+      border-radius: 6px
+      color: #FFFFFF
+      font-style: normal
+      font-weight: 600
+      font-size: 18px
+      line-height: 34px
+      padding: 5px 20px
+      text-decoration: none
+      @media (max-width: 640px)
+        width: auto
+        text-align: center
+        padding: 3px 5px
+        margin: 0 auto
+        display: inline-block
+        height: 40px
+.checkbox__main
+  display: flex
+  padding-left: 0
+  margin: 0
+  li
+    display: flex
+.checkbox__all
+  position: absolute // take it out of document flow
+  opacity: 0 // hide it
+  @media (max-width: 768px)
+    font-size: 16px
+  & + label 
+    position: relative
+    cursor: pointer
+    padding: 0
+
+  & + label:before 
+    content: ''
+    margin-right: 10px
+    display: inline-block
+    vertical-align: text-top
+    width: 30px
+    height: 30px
+    background: #E5E5E5
+    border: 3px solid #038992
+    box-sizing: border-box
+    border-radius: 5px
+    @media (max-width: 768px)
+      width: 20px
+      height: 20px
+  // Box hover
+  &:hover + label:before 
+    background: #E5E5E5
+  
+  // Box focus
+  &:focus + label:before 
+    box-shadow: none
+  
+  // Box checked
+  &:checked + label:before 
+    background: #038992
+  
+  // Disabled state label.
+  &:disabled + label 
+    color: #b8b8b8
+  
+  // Disabled box.
+  &:disabled + label:before 
+    box-shadow: none
+    background: #ddd
+
+  // Checkmark. Could be replaced with an image
+  &:checked + label:after 
+    content: ''
+    position: absolute
+    left: 10px
+    top: 15px
+    background: white
+    width: 4px
+    height: 4px
+    box-shadow: 2px 0 0 white, 4px 0 0 white, 4px -2px 0 white, 4px -4px 0 white, 4px -6px 0 white, 4px -8px 0 white
+    transform: rotate(45deg)
+    @media (max-width: 768px)
+      width: 2px
+      height: 2px
+      left: 5px
+      top: 10px
+.text__label
+  display: flex
+  align-items: flex-end
+  cursor: pointer
+.photo__label
+  cursor: pointer
+.message__all
+  @media (max-width: 768px)
+    display: flex
+    flex-direction: column
+    padding-left: 0 !important

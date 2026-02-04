@@ -1,0 +1,142 @@
+.message
+  &__select
+    @media (max-width: 640px)
+      display: flex
+      flex-direction: row
+      justify-content: flex-start !important
+    ul
+      @media (max-width: 640px)
+        width: 100% !important
+  &__item
+    background: #fff
+    border-radius: 10px
+    min-height: 120px
+    display: flex
+    align-items: center
+    padding: 0 20px
+    justify-content: space-between
+    margin-top: 3px
+    @media (max-width: 640px)
+      flex-direction: column
+      align-items: flex-start
+  &__box
+    padding-top: 30px
+    padding-bottom: 30px
+  &__all
+    padding-left: 18px
+  &__info
+    margin-left: -100px
+    @media (max-width: 640px)
+      margin-left: 0
+    h5
+      margin-top: 0px
+      margin-bottom: 10px
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 600
+      font-size: 20px
+      line-height: 23px
+      color: #000000
+    p
+      margin-top: 0
+      margin-bottom: 0
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 500
+      font-size: 18px
+      line-height: 20px
+      color: #7F807F
+  &__date
+    h6
+      margin: 0
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 500
+      font-size: 16px
+      line-height: 20px
+      color: #7F807F
+      @media (max-width: 640px)
+        text-align: center
+    p
+      margin: 0
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 500
+      font-size: 16px
+      line-height: 20px
+      color: #7F807F
+      @media (max-width: 640px)
+        margin-left: 10px
+    @media (max-width: 640px)
+      display: flex
+      flex-direction: row
+      justify-content: flex-start
+      margin-top: 20px
+      margin-bottom: 10px
+.checkbox__white
+  display: flex
+  padding-left: 0
+  margin: 0
+  li
+    display: flex
+.checkbox__all__white
+  position: absolute // take it out of document flow
+  opacity: 0 // hide it
+  @media (max-width: 768px)
+    font-size: 16px
+  & + label 
+    position: relative
+    cursor: pointer
+    padding: 0
+
+  & + label:before 
+    content: ''
+    margin-right: 10px
+    display: inline-block
+    vertical-align: text-top
+    width: 30px
+    height: 30px
+    background: #fff
+    border: 3px solid #038992
+    box-sizing: border-box
+    border-radius: 5px
+    @media (max-width: 768px)
+      width: 20px
+      height: 20px
+  // Box hover
+  &:hover + label:before 
+    background: #ffffff
+  
+  // Box focus
+  &:focus + label:before 
+    box-shadow: none
+  
+  // Box checked
+  &:checked + label:before 
+    background: #038992
+  
+  // Disabled state label.
+  &:disabled + label 
+    color: #ffffff
+  
+  // Disabled box.
+  &:disabled + label:before 
+    box-shadow: none
+    background: #ddd
+
+  // Checkmark. Could be replaced with an image
+  &:checked + label:after 
+    content: ''
+    position: absolute
+    left: 10px
+    top: 15px
+    background: white
+    width: 4px
+    height: 4px
+    box-shadow: 2px 0 0 white, 4px 0 0 white, 4px -2px 0 white, 4px -4px 0 white, 4px -6px 0 white, 4px -8px 0 white
+    transform: rotate(45deg)
+    @media (max-width: 768px)
+      width: 2px
+      height: 2px
+      left: 5px
+      top: 13px

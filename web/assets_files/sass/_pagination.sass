@@ -1,0 +1,53 @@
+.pagination
+  position: relative
+  display: flex
+  padding: 10px 20px
+  &__box
+    display: flex
+    justify-content: center
+  li
+    list-style: none
+    line-height: 50px
+    margin: 0 5px
+
+    &.pageNumber
+      width: 35px
+      height: 35px
+      line-height: 33px
+      text-align: center
+
+    a
+      display: block
+      width: 35px
+      height: 35px
+      text-decoration: none
+      color: #383838
+      font-weight: 600
+      background: #F6FBF9
+      border: 2px solid #969797
+      border-radius: 50%
+
+    &.pageNumber
+      &:hover a, &.active a
+        background: #F6FBF9
+        color: #038992
+        border: 2px solid #038992
+
+    &:first-child
+      
+      margin-right: 10px
+      font-weight: 700
+      font-size: 20px
+      
+
+    &:last-child
+      margin-left: 10px
+      font-weight: 700
+      font-size: 20px
+      a
+        border: none
+        background: inherit
+
+.next 
+  line-height: 35px
+  text-align: center

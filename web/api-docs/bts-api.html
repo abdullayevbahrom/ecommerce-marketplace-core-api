@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTS API Documentation</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .endpoint { background: #f4f4f4; padding: 15px; margin: 15px 0; border-left: 4px solid #007cba; }
+        .method { color: #fff; padding: 3px 8px; border-radius: 3px; font-weight: bold; }
+        .get { background: #28a745; }
+        .post { background: #007bff; }
+        .put { background: #ffc107; color: #212529; }
+        .delete { background: #dc3545; }
+        .example { background: #e9ecef; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .response { background: #d4edda; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .error { background: #f8d7da; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        code { background: #f8f9fa; padding: 2px 4px; border-radius: 3px; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🚚 BTS API Documentation</h1>
+    <p><strong>Base URL:</strong> <code>https://yoursite.com/api/bts</code></p>
+    <p><strong>Authentication:</strong> Bearer Token (required for all endpoints)</p>
+
+    <h2>📋 Table of Contents</h2>
+    <ul>
+        <li><a href="#calculate">Calculate Shipping Cost</a></li>
+        <li><a href="#regions">Get Regions</a></li>
+        <li><a href="#cities">Get Cities</a></li>
+        <li><a href="#region-cities">Get Cities by Region (Dynamic)</a></li>
+        <li><a href="#delivery-types">Get Delivery Types</a></li>
+        <li><a href="#dynamic-examples">Dynamic Loading Examples</a></li>
+        <li><a href="#error-codes">Error Codes</a></li>
+    </ul>
+
+    <hr>
+
+    <h2 id="calculate">💰 Calculate Shipping Cost</h2>
+    <div class="endpoint">
+        <p><span class="method post">POST</span> <code>/api/bts/calculate</code></p>
+        <p>Calculate shipping cost between two cities using BTS logistics service.</p>
+
+        <h3>Request Headers</h3>
+        <div class="example">
+            <pre>Authorization: Bearer YOUR_API_TOKEN
+Content-Type: application/json</pre>
+        </div>
+
+        <h3>Request Body</h3>
+        <div class="example">
+            <pre>{
+    "senderCityId": 6,
+    "receiverCityId": 8,
+    "weight": 2.5,
+    "volume": 0.1,
+    "senderDate": "2024-01-20",
+    "senderDelivery": 1,
+    "receiverDelivery": 1
+}</pre>
+        </div>
+
+        <h3>Parameters</h3>
+        <ul>
+            <li><strong>senderCityId</strong> (integer, required): BTS city ID for sender</li>
+            <li><strong>receiverCityId</strong> (integer, required): BTS city ID for receiver</li>
+            <li><strong>weight</strong> (number, required): Package weight in kg (must be > 0)</li>
+            <li><strong>volume</strong> (number, optional): Package volume in cubic meters</li>
+            <li><strong>senderDate</strong> (string, optional): Send date in Y-m-d format (min: tomorrow, max: +30 days)</li>
+            <li><strong>senderDelivery</strong> (integer, required): 0 = pickup, 1 = door-to-door</li>
+            <li><strong>receiverDelivery</strong> (integer, required): 0 = pickup, 1 = door-to-door</li>
+        </ul>
+
+        <h3>Success Response (200)</h3>
+        <div class="response">
+            <pre>{
+    "data": {
+        "summaryPrice": 92000,
+        "currency": "UZS",
+        "requestData": {
+            "senderCityId": 6,
+            "receiverCityId": 8,
+            "weight": 2.5,
+            "volume": 0.1,
+            "senderDate": "2024-01-20",
+            "senderDelivery": 1,
+            "receiverDelivery": 1
+        },
+        "senderCity": "г.Ташкент",
+        "receiverCity": "г.Нукус"
+    }
+}</pre>
+        </div>
+
+        <h3>Error Response (422)</h3>
+        <div class="error">
+            <pre>{
+    "errors": {
+        "weight": ["Вес должен быть больше 0"],
+        "senderDate": ["Дата отправки должна быть минимум завтра: 2024-01-16"]
+    }
+}</pre>
+        </div>
+    </div>
+
+    <hr>
+
+    <h2 id="regions">🌍 Get Regions</h2>
+    <div class="endpoint">
+        <p><span class="method get">GET</span> <code>/api/bts/regions</code></p>
+        <p>Get list of all available regions in Uzbekistan.</p>
+
+        <h3>Query Parameters</h3>
+        <ul>
+            <li><strong>language</strong> (string, optional): Response language - ru, uz, en (default: ru)</li>
+        </ul>
+
+        <h3>Request Example</h3>
+        <div class="example">
+            <pre>GET /api/bts/regions?language=ru
+Authorization: Bearer YOUR_API_TOKEN</pre>
+        </div>
+
+        <h3>Success Response (200)</h3>
+        <div class="response">
+            <pre>{
+    "data": [
+        {
+            "id": 6,
+            "name": "город Ташкент",
+            "name_ru": "город Ташкент",
+            "name_uz": "Tashkent shaxri",
+            "name_en": "Tashkent city"
+        },
+        {
+            "id": 2,
+            "name": "Андижанская область",
+            "name_ru": "Андижанская область",
+            "name_uz": "Andijon viloyati",
+            "name_en": "Andijan region"
+        }
+    ]
+}</pre>
+        </div>
+    </div>
+
+    <hr>
+
+    <h2 id="cities">🏙️ Get Cities</h2>
+    <div class="endpoint">
+        <p><span class="method get">GET</span> <code>/api/bts/cities</code></p>
+        <p>Get list of cities, optionally filtered by region.</p>
+
+        <h3>Query Parameters</h3>
+        <ul>
+            <li><strong>regionId</strong> (integer, optional): Filter cities by region ID</li>
+            <li><strong>language</strong> (string, optional): Response language - ru, uz, en (default: ru)</li>
+        </ul>
+
+        <h3>Request Examples</h3>
+        <div class="example">
+            <pre># Get all cities
+GET /api/bts/cities
+Authorization: Bearer YOUR_API_TOKEN
+
+# Get cities in specific region
+GET /api/bts/cities?regionId=6&language=ru
+Authorization: Bearer YOUR_API_TOKEN</pre>
+        </div>
+
+        <h3>Success Response (200)</h3>
+        <div class="response">
+            <pre>{
+    "data": [
+        {
+            "id": 6,
+            "name": "г.Ташкент",
+            "name_ru": "г.Ташкент",
+            "name_uz": "Тошкент шаҳар",
+            "name_en": "Tashkent city",
+            "region_id": 6
+        },
+        {
+            "id": 8,
+            "name": "г.Нукус",
+            "name_ru": "г.Нукус",
+            "name_uz": "Нукус шаҳар",
+            "name_en": "Nukus city",
+            "region_id": 11
+        }
+    ]
+}</pre>
+        </div>
+
+        <h3>Error Response (422)</h3>
+        <div class="error">
+            <pre>{
+    "errors": {
+        "regionId": ["Неверный ID региона"]
+    }
+}</pre>
+        </div>
+    </div>
+
+    <hr>
+
+    <h2 id="region-cities">🎯 Get Cities by Region (Dynamic)</h2>
+    <div class="endpoint">
+        <p><span class="method get">GET</span> <code>/api/bts/region-cities/{regionId}</code></p>
+        <p>Get cities for a specific region. Perfect for dynamic dropdown loading when user selects a region.</p>
+
+        <h3>URL Parameters</h3>
+        <ul>
+            <li><strong>regionId</strong> (integer, required): Region ID in the URL path</li>
+        </ul>
+
+        <h3>Query Parameters</h3>
+        <ul>
+            <li><strong>language</strong> (string, optional): Response language - ru, uz, en (default: ru)</li>
+        </ul>
+
+        <h3>Request Examples</h3>
+        <div class="example">
+            <pre># Get cities for Tashkent region (ID: 6)
+GET /api/bts/region-cities/6
+Authorization: Bearer YOUR_API_TOKEN
+
+# Get cities with specific language
+GET /api/bts/region-cities/6?language=uz
+Authorization: Bearer YOUR_API_TOKEN</pre>
+        </div>
+
+        <h3>Success Response (200)</h3>
+        <div class="response">
+            <pre>{
+    "data": {
+        "region": {
+            "id": 6,
+            "name": "город Ташкент",
+            "name_ru": "город Ташкент",
+            "name_uz": "Tashkent shaxri",
+            "name_en": "Tashkent city"
+        },
+        "cities": [
+            {
+                "id": 6,
+                "name": "г.Ташкент",
+                "name_ru": "г.Ташкент",
+                "name_uz": "Тошкент шаҳар",
+                "name_en": "Tashkent city",
+                "region_id": 6
+            },
+            {
+                "id": 5,
+                "name": "г.Янгийуль",
+                "name_ru": "г.Янгийуль",
+                "name_uz": "Янгийўл шаҳар",
+                "name_en": "Yangiyul city",
+                "region_id": 6
+            }
+        ],
+        "total_cities": 2
+    }
+}</pre>
+        </div>
+
+        <h3>Error Response (422)</h3>
+        <div class="error">
+            <pre>{
+    "errors": {
+        "regionId": ["Неверный ID региона"]
+    }
+}</pre>
+        </div>
+    </div>
+
+    <hr>
+
+    <h2 id="delivery-types">📦 Get Delivery Types</h2>
+    <div class="endpoint">
+        <p><span class="method get">GET</span> <code>/api/bts/delivery-types</code></p>
+        <p>Get available delivery types for sender and receiver.</p>
+
+        <h3>Request Example</h3>
+        <div class="example">
+            <pre>GET /api/bts/delivery-types
+Authorization: Bearer YOUR_API_TOKEN</pre>
+        </div>
+
+        <h3>Success Response (200)</h3>
+        <div class="response">
+            <pre>{
+    "data": [
+        {
+            "id": 0,
+            "name": "Самовывоз",
+            "name_ru": "Самовывоз",
+            "name_uz": "O'zi olib ketish",
+            "name_en": "Pickup",
+            "description": "Получение/отправка из/в отделение BTS"
+        },
+        {
+            "id": 1,
+            "name": "Доставка",
+            "name_ru": "Доставка",
+            "name_uz": "Yetkazib berish",
+            "name_en": "Door-to-door",
+            "description": "Доставка курьером до адреса"
+        }
+    ]
+}</pre>
+        </div>
+    </div>
+
+    <hr>
+
+    <h2 id="error-codes">❌ Error Codes</h2>
+    <div class="endpoint">
+        <h3>HTTP Status Codes</h3>
+        <ul>
+            <li><strong>200</strong> - Success</li>
+            <li><strong>401</strong> - Unauthorized (invalid or missing token)</li>
+            <li><strong>422</strong> - Validation Error (invalid parameters)</li>
+            <li><strong>500</strong> - Internal Server Error</li>
+        </ul>
+
+        <h3>Common Error Messages</h3>
+        <div class="error">
+            <pre># Missing authentication
+{
+    "name": "Unauthorized",
+    "message": "Your request was made with invalid credentials.",
+    "code": 0,
+    "status": 401
+}
+
+# Validation errors
+{
+    "errors": {
+        "weight": ["Вес должен быть больше 0"],
+        "senderCityId": ["Неверный ID города отправителя"],
+        "senderDate": ["Дата отправки должна быть минимум завтра: 2024-01-16"]
+    }
+}
+
+# Server error
+{
+    "errors": {
+        "general": ["Ошибка сервиса расчета доставки"]
+    }
+}</pre>
+        </div>
+    </div>
+
+    <hr>
+
+    <h2>🔧 Integration Examples</h2>
+
+    <h3>JavaScript/AJAX Example</h3>
+    <div class="example">
+        <pre>// Calculate shipping cost
+fetch('/api/bts/calculate', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + userToken
+    },
+    body: JSON.stringify({
+        senderCityId: 6,        // Tashkent
+        receiverCityId: 8,      // Nukus
+        weight: 2.5,            // 2.5 kg
+        senderDelivery: 1,      // Door-to-door
+        receiverDelivery: 0,    // Pickup
+        senderDate: '2024-01-20'
+    })
+})
+.then(response => response.json())
+.then(data => {
+    if (data.data) {
+        console.log('Shipping cost:', data.data.summaryPrice, 'UZS');
+    } else {
+        console.error('Errors:', data.errors);
+    }
+});</pre>
+    </div>
+
+    <h3>PHP cURL Example</h3>
+    <div class="example">
+        <pre><?php
+$url = 'https://yoursite.com/api/bts/calculate';
+$data = [
+    'senderCityId' => 6,
+    'receiverCityId' => 8,
+    'weight' => 2.5,
+    'senderDelivery' => 1,
+    'receiverDelivery' => 0,
+    'senderDate' => '2024-01-20'
+];
+
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $url);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Content-Type: application/json',
+    'Authorization: Bearer ' . $userToken
+]);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+$response = curl_exec($ch);
+$result = json_decode($response, true);
+
+if (isset($result['data'])) {
+    echo "Shipping cost: " . $result['data']['summaryPrice'] . " UZS";
+} else {
+    print_r($result['errors']);
+}
+curl_close($ch);
+?></pre>
+    </div>
+
+    <h2>📝 Notes</h2>
+    <ul>
+        <li>All endpoints require authentication via Bearer token</li>
+        <li>Dates must be in Y-m-d format (YYYY-MM-DD)</li>
+        <li>Minimum send date is tomorrow, maximum is 30 days in future</li>
+        <li>Weight must be greater than 0</li>
+        <li>City and region IDs must be valid BTS identifiers</li>
+        <li>All prices are returned in UZS (Uzbek Som)</li>
+        <li>Language parameter accepts: ru, uz, en (default: ru)</li>
+    </ul>
+
+    <footer style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center;">
+        <p>📧 For support, contact your API administrator</p>
+        <p>🔄 Last updated: <?= date('Y-m-d H:i:s') ?></p>
+    </footer>
+</body>
+</html> 

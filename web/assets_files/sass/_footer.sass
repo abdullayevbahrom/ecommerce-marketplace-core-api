@@ -1,0 +1,117 @@
+.back__footer
+  background-image: url("../images/src/footer.png")
+  background-repeat: no-repeat
+  background-size: 100%
+  background-position: center
+  background-color: #F6FBF9
+.footer
+  &__logo
+    img
+      @media (max-width: 1024px)
+        width: 50px
+  &__first
+    display: flex
+    flex-direction: row
+    justify-content: space-between 
+    padding-top: 50px
+    @media (max-width: 640px)
+      display: flex
+      flex-direction: column
+      text-align: center
+  &__box
+    display: flex
+    flex-direction: column
+    padding-top: 20px
+    @media (max-width: 640px)
+      padding-left: 0
+      padding-top: 0px
+      margin-bottom: 0px
+    @media (max-width: 1024px)
+      padding-left: 15px
+  &__item
+    display: flex
+    flex-direction: column     
+  &__link
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: normal
+    font-size: 18px
+    line-height: 22px
+    color: #616161
+    text-decoration: none
+    margin: 5px 
+    transition-property: width
+    transition-duration: 2s
+    transition-timing-function: linear
+    transition-delay: 1s
+    &:hover
+      color: #038992
+      text-decoration: underline
+    @media (max-width: 1024px)
+      font-size: 16px
+  &__second
+    display: flex
+    flex-direction: row
+    justify-content: center
+    margin-top: 30px
+    @media (max-width: 640px)
+      justify-items: center
+      justify-content: center
+
+  &__android
+    margin-left: 30px
+    @media (max-width: 640px)
+      margin-left: 10px
+      display: flex
+      align-self: end
+      img
+        width: 60%
+        
+  &__apple
+    @media (max-width: 640px)
+      display: flex
+      justify-content: flex-end
+      img
+        width: 60%
+  &__social
+    display: flex
+    flex-direction: row
+    justify-content: center
+    margin-top: 30px
+    padding-bottom: 30px
+    border-bottom: 1.5px solid #038992
+  &__social__link
+    background: #616161
+    width: 50px
+    height: 50px
+    border-radius: 50%
+    display: flex
+    align-items: center
+    justify-content: center
+    text-decoration: none
+    margin: 0 8px
+    color: #ffffff
+    
+    &:hover
+      background: #038992
+    i
+      text-align: center
+      font-size: 26px
+    @media (max-width: 640px)
+      width: 40px
+      height: 40px
+      i
+        font-size: 22px
+  &__make
+    text-align: center
+    p
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 500
+      font-size: 15px
+      line-height: 22px
+      color: #616161
+      margin-bottom: 0px
+      padding-bottom: 20px
+      @media (max-width: 640px)
+        font-size: 14px

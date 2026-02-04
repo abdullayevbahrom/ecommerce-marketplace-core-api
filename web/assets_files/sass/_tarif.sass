@@ -1,0 +1,137 @@
+.tarif
+  padding: 20px 0 40px 0
+  &__title
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: 600
+    font-size: 30px
+    line-height: 43px
+    color: #616161
+    margin-top: 10px
+    margin-bottom: 20px
+    
+    @media (max-width: 640px)
+      font-size: 20px
+      margin-bottom: 0
+  &__box
+    display: flex
+    flex-direction: row
+    justify-content: space-between
+    @media (max-width: 640px)
+      flex-direction: column
+  &__item
+    width: 30%
+    background: #fff
+    padding: 20px 30px
+    border-radius: 10px
+    display: flex
+    flex-direction: column
+    justify-content: space-between
+    &:hover
+      box-shadow: 0px 0px 10px 1px rgba(63,63,63,0.7)
+      -webkit-box-shadow: 0px 0px 10px 1px rgba(63,63,63,0.7)
+      -moz-box-shadow: 0px 0px 10px 1px rgba(63,63,63,0.7)
+    @media (max-width: 640px)
+      width: 100% !important
+      margin-top: 30px
+      padding: 20px 20px !important
+    @media (max-width: 1024px)
+      width: 32%
+      padding: 20px 10px
+  &__top
+    display: flex
+    flex-direction: column
+    text-align: center
+    justify-content: space-between
+    img
+      width: 180px
+      margin: 0 auto
+      @media (max-width: 640px)
+        width: 120px
+        height: auto
+      @media (max-width: 1024px)
+        width: 120px
+        height: auto
+    a
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 600
+      font-size: 20px
+      line-height: 29px
+      text-decoration-line: underline
+      color: #000000
+      text-underline-offset: 5px
+    h5
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: 800
+      font-size: 20px
+      line-height: 29px
+      color: #000000
+      margin-top: 0
+      margin-bottom: 20px
+      @media (max-width: 640px)
+        margin-bottom: 10px
+    p
+      font-family: 'Lato', sans-serif
+      font-style: normal
+      font-weight: bold
+      font-size: 16px
+      line-height: 29px
+      color: #038992
+      margin-top: 0
+      margin-bottom: 0
+  &__center
+    display: flex
+    flex-direction: column
+    ul
+      padding-left: 0
+      @media (max-width: 640px)
+        margin-top: 0
+      @media (max-width: 1024px)
+        margin-top: 0
+      li
+        display: flex
+        flex-direction: row
+        justify-content: space-between
+        margin-top: 10px
+  &__done
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: normal
+    font-size: 16px
+    line-height: 24px
+    color: #000000
+    img
+      @media (max-width: 1024px)
+        width: auto
+        height: 20px
+  &__donehover
+    font-family: 'Lato', sans-serif
+    font-style: normal
+    font-weight: normal
+    font-size: 16px
+    line-height: 24px
+    color: rgba(0, 0, 0, 0.2)
+    img
+      @media (max-width: 1024px)
+        width: auto
+        height: 20px
+  &__bottom
+    display: flex
+    justify-content: center
+    margin-top: 10px
+    button
+      font-family: 'Lato', sans-serif
+      background: #038992
+      border-radius: 10px
+      font-style: normal
+      font-weight: 600
+      font-size: 18px
+      line-height: 29px
+      color: #FFFFFF
+      border: 3px solid #038992
+      padding: 5px 15px
+      &:hover
+        background: #fff
+        color: #038992
