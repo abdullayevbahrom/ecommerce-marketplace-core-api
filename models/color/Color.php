@@ -2,6 +2,7 @@
 
 namespace app\models\color;
 
+use app\models\product\ProductColor;
 use Yii;
 
 /**
@@ -13,7 +14,8 @@ use Yii;
  * @property string|null $name_uz
  * @property string|null $color
  * @property string $date
- *
+ * @property int $status
+ * 
  * @property ProductColor[] $productColors
  */
 class Color extends \yii\db\ActiveRecord
@@ -29,6 +31,10 @@ class Color extends \yii\db\ActiveRecord
     /**
      * {@inheritdoc}
      */
+
+    const STATUS_ACTIVE = 1;
+    const STATUS_INACTIVE = 2;
+
     public function rules()
     {
         return [
@@ -49,7 +55,9 @@ class Color extends \yii\db\ActiveRecord
             'name_en' => 'Name En',
             'name_uz' => 'Name Uz',
             'color' => 'Color',
+            'status' => 'Status',
             'date' => 'Date',
+
         ];
     }
 
@@ -60,7 +68,8 @@ class Color extends \yii\db\ActiveRecord
         $data = [
             'id',
             'name' => function() use($language) {return $this->{'name_'.$language} ? $this->{'name_'.$language} : $this->name_ru;},
-            'color'
+            'color',
+            'status'
         ];
 
         return $data;

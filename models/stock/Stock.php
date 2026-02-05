@@ -294,11 +294,11 @@ class Stock extends \yii\db\ActiveRecord
         return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'stock', 'main'=>1]);
     }
     
-    public function afterSave($insert, $changedAttributes)
-    {
-        parent::afterSave($insert, $changedAttributes);
-        $this->syncToWarehouse();
-    }
+    // public function afterSave($insert, $changedAttributes)
+    // {
+    //     parent::afterSave($insert, $changedAttributes);
+    //     $this->syncToWarehouse();
+    // }
 
     private function syncToWarehouse()
     {

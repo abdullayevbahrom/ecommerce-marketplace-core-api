@@ -1,5 +1,6 @@
 <?php
 use app\widgets\admin_language_tab\AdminLanguageTab;
+use yii\helpers\Html;
 
 $this->title = 'Color';
 $this->params['breadcrumbs'][] = $this->title;
@@ -35,10 +36,13 @@ $this->params['breadcrumbs'][] = $this->title;
                                 <span class="fa fa-cog"></span>
                             </button>
                             <ul class="dropdown-menu pull-right">
-                                <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/color/']);?>">List color</a></li>    
+                                <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/color/']);?>">Список цветов</a></li>
+                                <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/color/lock', 'id'=>$model->id]);?>"><?=($model->status == 1) ? 'Заблокировать' : 'Разблокировать';?></a></li>
+                                <?php if (Yii::$app->user->identity->role !== \app\models\user\User::ROLE_MODERATOR): ?>    
                                 <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/color/create']);?>">Add color</a></li>
                                 <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/color/create', 'id'=>$model->id]);?>">Edit</a></li>
                                 <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/color/remove', 'id'=>$model->id]);?>" class="remove-object">Delete</a></li>
+                                <?php endif; ?>
                             </ul>
                         </div>
                     </div>
@@ -55,6 +59,24 @@ $this->params['breadcrumbs'][] = $this->title;
                                 <td><div class="block-color" style="border:1px solid #000; background-color:<?=$model->color;?>"></div></td>
                             </tr>
                         </table>
+                        <?php if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR && $model->status == 2): ?>
+                                    <hr>
+                                    <h4><i class="fa fa-comment"></i> Комментарий модератора</h4>
+                                    <form method="post" action="<?=Yii::$app->urlManager->createUrl(['/admin/color/comment', 'id'=>$model->id])?>">
+                                        <?= Html::csrfMetaTags() ?>
+                                        <textarea
+                                            name="comment"
+                                            class="form-control"
+                                            rows="4"
+                                            required
+                                            placeholder="Укажите причину, почему товар остаётся заблокированным"
+                                        ></textarea>
+                                        <br>
+                                        <button type="submit" class="btn btn-warning btn-sm">
+                                            <i class="fa fa-paper-plane"></i> Отправить комментарий
+                                        </button>
+                                    </form>
+                        <?php endif; ?>
                     </div>
                     <div class="lang-block lang-block-uz">
                         <table class="table table-striped">

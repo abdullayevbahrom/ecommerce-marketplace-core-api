@@ -18,7 +18,7 @@ return [
     'baseUrl' => 'http://shop.test',
     'apiSecretKey' => '123',
     'warehouseSyncEnabled' => false,
-    'warehouseApiUrl' => 'http://localhost:8080', // Default warehouse API URL
+    'warehouseApiUrl' => 'http://localhost:8000', // Default warehouse API URL
     
     // Sklad uses X-Api-Token: md5(branch_id + apiSecretKey) for authentication
     // Same apiSecretKey is used for both Order sync and Product submissions

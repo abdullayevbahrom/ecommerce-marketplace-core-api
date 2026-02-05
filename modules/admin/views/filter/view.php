@@ -1,5 +1,6 @@
 <?php
 use app\widgets\admin_language_tab\AdminLanguageTab;
+use yii\helpers\Html;
 
 $this->title = 'Фильтр';
 $this->params['breadcrumbs'][] = $this->title;
@@ -33,10 +34,14 @@ $this->params['breadcrumbs'][] = $this->title;
                             <span class="fa fa-cog"></span>
                         </button>
                         <ul class="dropdown-menu pull-right">
-                            <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/filter/create']);?>">Добавить фильтр</a></li>
-                            <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/filter/create', 'id'=>$model->id]);?>">Редактировать</a></li>
+                            <?php if (Yii::$app->user->identity->role !== \app\models\user\User::ROLE_MODERATOR): ?>
+                                <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/filter/create']);?>">Добавить фильтр</a></li>
+                                <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/filter/create', 'id'=>$model->id]);?>">Редактировать</a></li>
+                            <?php endif; ?>
                             <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/filter/lock', 'id'=>$model->id]);?>"><?=($model->status == 1) ? 'Заблокировать' : 'Разблокировать';?></a></li>
+                            <?php if (Yii::$app->user->identity->role !== \app\models\user\User::ROLE_MODERATOR): ?>
                             <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/filter/remove', 'id'=>$model->id]);?>" class="remove-object">Удалить</a></li>
+                            <?php endif; ?>
                         </ul>
                     </div>
                 </div>
@@ -88,7 +93,7 @@ $this->params['breadcrumbs'][] = $this->title;
                     <tr>
                         <td>Статус</td>
                         <td>
-                            <?php if ($model->status == 0) {?>
+                            <?php if ($model->status == 2) {?>
                                 <small class="label bg-red">Заблокирован</small>
                             <?php }?>
                             <?php if ($model->status == 1) {?>
@@ -96,9 +101,42 @@ $this->params['breadcrumbs'][] = $this->title;
                             <?php }?>
                         </td>
                     </tr>
+                    <?php if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR && $model->status == 2): ?>
+                        <hr>
+                        <h4><i class="fa fa-comment"></i> Комментарий модератора</h4>
+                        <form method="post" action="<?=Yii::$app->urlManager->createUrl(['/admin/filter/comment', 'id'=>$model->id])?>">
+                            <?= Html::csrfMetaTags() ?>
+                            <textarea
+                                name="comment"
+                                class="form-control"
+                                rows="4"
+                                required
+                                placeholder="Укажите причину, почему филтр остаётся заблокированным"
+                            ></textarea>
+                            <br>
+                            <button type="submit" class="btn btn-warning btn-sm">
+                                <i class="fa fa-paper-plane"></i> Отправить комментарий
+                            </button>
+                        </form>
+                    <?php endif; ?>
                     <tr>
                         <td>Дата создания</td>
                         <td><?=$model->date ? $model->date : 'Нет данных';?></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Комментарий модератора:</strong></td>
+                        <td>
+                            <?php if (!empty($model->moderationComments)): ?>
+                                <?php $lastComment = end($model->moderationComments); ?>
+                                <?= Html::encode($lastComment->comment) ?>
+                                <br>
+                                <small class="text-muted">
+                                    <?= Yii::$app->formatter->asDatetime($lastComment->created_at) ?>
+                                </small>
+                            <?php else: ?>
+                                <span class="text-muted">Не указан</span>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                 </table>
                 <?php if ($model->childs) {?>

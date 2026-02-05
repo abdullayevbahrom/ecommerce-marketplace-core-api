@@ -52,9 +52,11 @@ $type = Yii::$app->request->get('type');
                             <i class="fa fa-info-circle"></i> Основная информация о товаре
                         </h3>
                         <div class="box-tools pull-right">
+                            <?php if (Yii::$app->user->identity->role !== \app\models\user\User::ROLE_MODERATOR): ?>
                             <a href="<?=Yii::$app->urlManager->createUrl(['/admin/product/create', 'id'=>$model->id]);?>" class="btn btn-warning btn-sm">
                                 <i class="fa fa-edit"></i> Редактировать
                             </a>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="box-body">
@@ -85,6 +87,29 @@ $type = Yii::$app->request->get('type');
                                             <?php }?>
                                         </td>
                                     </tr>
+                                    <?php if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR && $model->status == 2): ?>
+                                        <hr>
+                                        <h4><i class="fa fa-comment"></i> Комментарий модератора</h4>
+
+                                        <form method="post" action="<?=Yii::$app->urlManager->createUrl(['/admin/product/comment', 'id'=>$model->id])?>">
+
+                                            <?= Html::csrfMetaTags() ?>
+
+                                            <textarea
+                                                name="comment"
+                                                class="form-control"
+                                                rows="4"
+                                                required
+                                                placeholder="Укажите причину, почему товар остаётся заблокированным"
+                                            ></textarea>
+
+                                            <br>
+
+                                            <button type="submit" class="btn btn-warning btn-sm">
+                                                <i class="fa fa-paper-plane"></i> Отправить комментарий
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                     <tr>
                                         <td><strong>Категория:</strong></td>
                                         <td><?= $model->category ? Html::encode($model->category->name_ru) : '<span class="text-muted">Не указана</span>' ?></td>
@@ -105,6 +130,22 @@ $type = Yii::$app->request->get('type');
                                             <?php }?>
                                         </td>
                                     </tr>
+                                    <tr>
+                                        <td><strong>Комментарий модератора:</strong></td>
+                                        <td>
+                                            <?php if (!empty($model->moderationComments)): ?>
+                                                <?php $lastComment = end($model->moderationComments); ?>
+                                                <?= Html::encode($lastComment->comment) ?>
+                                                <br>
+                                                <small class="text-muted">
+                                                    <?= Yii::$app->formatter->asDatetime($lastComment->created_at) ?>
+                                                </small>
+                                            <?php else: ?>
+                                                <span class="text-muted">Не указан</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+
                                     <tr>
                                         <td><strong>Рейтинг:</strong></td>
                                         <td>
@@ -325,9 +366,11 @@ $type = Yii::$app->request->get('type');
                                                         <a href="<?=Yii::$app->urlManager->createUrl(['/admin/product/view', 'id'=>$product->id]);?>" class="btn btn-info btn-xs" title="Просмотр">
                                                             <i class="fa fa-eye"></i>
                                                         </a>
+                                                        <?php if (Yii::$app->user->identity->role !== \app\models\user\User::ROLE_MODERATOR): ?>
                                                         <a href="<?=Yii::$app->urlManager->createUrl(['/admin/product/create', 'id'=>$product->id]);?>" class="btn btn-warning btn-xs" title="Редактировать">
                                                             <i class="fa fa-edit"></i>
                                                         </a>
+                                                        <?php endif ?>
                                                     </div>
                                                 </td>
                                             </tr>

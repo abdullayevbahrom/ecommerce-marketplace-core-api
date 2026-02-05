@@ -8,6 +8,8 @@ use yii\web\HttpException;
 use app\models\user\User;
 use app\models\color\Color;
 use app\models\color\ColorSearch;
+use app\models\moderator\ModerationComment;
+use GuzzleHttp\Client;
 
 class ColorController extends Controller{
 	public $user;
@@ -42,6 +44,11 @@ class ColorController extends Controller{
         $searchModel = new ColorSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
 
+        if ($this->user->role == User::ROLE_MODERATOR) {
+            $dataProvider->query->andWhere(['status' => 2])->andWhere(['deleted_at' => null]);
+        }
+
+
         $dataProvider->setSort([
             'defaultOrder' => [
                 'id' => 'desc'
@@ -55,6 +62,11 @@ class ColorController extends Controller{
     }
 
     public function actionCreate() {
+
+        if ($this->user->role == User::ROLE_MODERATOR) {
+            return $this->redirect(['/admin/default/profile']);
+        }
+
         $model = ($id = Yii::$app->request->get('id')) ? Color::find()->where(['id'=>$id])->one() : new Color;
 
         if ($model->load(Yii::$app->request->post()) && $model->validate()) {
@@ -79,10 +91,131 @@ class ColorController extends Controller{
 
     public function actionRemove($id) {
         $model = Color::findOne(['id'=>$id]);
+        
+        if ($this->user->role == User::ROLE_MODERATOR) {
+            return $this->redirect(['/admin/default/profile']);
+        }
 
         if ($this->user && ($this->user->role != User::ROLE_USER) && $model && $model->delete()) {
             Yii::$app->session->setFlash('color_removed', 'Deleted');
         }
+        return $this->redirect(['/admin/color']);
+    }
+
+    public function actionLock($id) {
+        $model = Color::findOne($id);
+        
+        if (!$model) {
+            throw new HttpException(404, 'Page not found');
+        }
+
+        $user = Yii::$app->user->identity;
+
+        if ($user->role === User::ROLE_MODERATOR && $model->status != 2) {
+            throw new HttpException(403, 'Moderator can only unlock colors');
+        }
+
+        $oldStatus = $model->status;
+        $model->status = ($model->status == Color::STATUS_INACTIVE) ? Color::STATUS_ACTIVE : Color::STATUS_INACTIVE;
+        $model->save(false);
+
+        $this->sendToWarehouse([
+            'id' => $model->id,
+            'entity_type'  => 'filter',
+            'entity_id'    => $model->id,
+            'action'       => $model->status == Color::STATUS_ACTIVE  ? 'approve' : 'reject',
+            'status_after' => $model->status == Color::STATUS_ACTIVE  ? 'approved' : 'rejected',
+            'comment'      => 'Ваш цвет разблокирован',
+            'moderator_id' => $user->id,
+        ]);
+
+        Yii::$app->session->setFlash('color_locked', $model->status == 1 ? 'color unlocked' : 'color blocked');
+
+        if ($user->role === User::ROLE_MODERATOR) {
+            return $this->redirect(['/admin/color']);
+        }
+
+        return $this->redirect(Yii::$app->request->referrer);
+    }
+
+    protected function sendToWarehouse(array $payload)
+    {
+        try {
+            $client = new Client(['timeout' => 5.0]);
+
+            $apiUrl = rtrim(Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com', '/') . '/api/moderation/sync';
+
+            $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
+
+            if (!$secretKey) {
+                return;
+            }
+
+            $token = md5($payload['id'] . $secretKey);
+
+            $client->post($apiUrl, [
+                'json' => array_merge($payload, [
+                    'metadata' => [
+                        'source' => 'yii2',
+                    ],
+                ]),
+                'headers' => [
+                    'X-Api-Token' => $token,
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            \Yii::error($e->getMessage(), 'warehouse');
+        }
+    }
+
+    public function actionComment($id)
+    {
+        $model = Color::findOne($id);
+        if (!$model) {
+            throw new HttpException(404, 'color not found');
+        }
+
+        $user = Yii::$app->user->identity;
+
+        if ($user->role !== User::ROLE_MODERATOR) {
+            throw new HttpException(403, 'Access denied');
+        }
+
+        if ($model->status != 2) {
+            throw new HttpException(400, 'Comment allowed only for blocked color');
+        }
+
+        $commentText = trim(Yii::$app->request->post('comment'));
+        if (!$commentText) {
+            Yii::$app->session->setFlash('error', 'Комментарий обязателен');
+            return $this->redirect(Yii::$app->request->referrer);
+        }
+
+        $comment = new ModerationComment();
+        $comment->entity_type  = 'color';
+        $comment->entity_id    = $model->id;
+        $comment->action       = 'reject';   // approve | reject | block
+        $comment->comment      = $commentText;
+        $comment->moderator_id = $user->id;
+        $comment->is_sent_to_warehouse = 1;
+        $comment->save(false);
+
+        $this->sendToWarehouse([
+            'id' => $model->id,
+            'entity_type'  => 'color',
+            'entity_id'    => $model->id,
+            'action'       => 'reject',
+            'status_after' => 'rejected',
+            'comment'      => $commentText,
+            'moderator_id' => $user->id,
+        ]);
+
+        Yii::$app->session->setFlash(
+            'info',
+            'Комментарий отправлен. цвет остаётся заблокированным.'
+        );
+
         return $this->redirect(['/admin/color']);
     }
 }

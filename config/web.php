@@ -112,14 +112,55 @@ $config = [
                 
                 // Product Management (Sklad Integration)
                 'POST api/product/create' => 'api/product/create',
+                'PUT api/product/update' => 'api/product/update',
+                'POST api/product/delete' => 'api/product/delete',
+                'OPTIONS api/product/update' => 'product/update',
+                
+                'POST /api/category/create' => 'api/category/create',
+                'PUT  /api/category/update' => 'api/category/update',
+                'POST /api/category/delete' => 'api/category/delete',
+
+                'POST /api/brand-category/create' => 'api/brand-category/create',
+                'PUT  /api/brand-category/update' => 'api/brand-category/update',
+                'POST /api/brand-category/delete' => 'api/brand-category/delete',
 
                 // Sync Controller Routes
                 'GET api/sync/products/pending' => 'api/sync/pending',
                 'POST api/sync/products/confirm' => 'api/sync/confirm',
+                'POST api/sync/stock' => 'api/sync/stock',
+                'POST api/sync/stock-delete' => 'api/sync/stock-delete',
+                'POST api/sync/user' => 'api/sync/user',
+                'POST api/sync/user-delete' => 'api/sync/user-delete',
+
+                'POST /api/sync/product' => 'api/sync/product',
+                'POST /api/sync/product-delete' => 'api/sync/product-delete',
+
+                'POST /api/sync/category' => 'api/sync/category',
+                'POST /api/sync/category-delete' => 'api/sync/category-delete',
+
+                'POST /api/sync/brand' => 'api/sync/brand',
+                'POST /api/sync/brand-delete' => 'api/sync/brand-delete',
+
+                'POST /api/sync/ikpu' => 'api/sync/ikpu',
+                'POST /api/sync/ikpu-delete' => 'api/sync/ikpu-delete',
+
+                'POST /api/sync/product-type' => 'api/sync/product-type',
+                'POST /api/sync/product-type-delete' => 'api/sync/product-type-delete',
+
+                'POST /api/sync/filter' => 'api/sync/filter',
+                'POST /api/sync/filter-delete' => 'api/sync/filter-delete',
+
+                'POST /api/sync/color' => 'api/sync/color',
+                'POST /api/sync/color-delete' => 'api/sync/color-delete',
+
+                'POST api/sync/moderation' => 'api/sync/moderation',
+                'POST api/sync/moderation-comment' => 'api/sync/moderation-comment',
+
 
                 // Wallet API
                 'GET api/wallet/balance' => 'api/wallet/balance',
                 'POST api/wallet/deploy' => 'api/wallet/deploy',
+                
             ],
         ],
         'image' => [

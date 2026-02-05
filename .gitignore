@@ -7,6 +7,11 @@
 node_modules/
 dist/
 vendor/
+runtime/
+.env
+.env.*
+web/assets/
+.vscode/
 
 # Compiled Java class files
 *.class

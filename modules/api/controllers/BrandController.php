@@ -11,6 +11,7 @@ use yii\helpers\ArrayHelper;
 
 use app\models\Category;
 use app\models\brand\CategoryBrand;
+use yii\web\NotFoundHttpException;
 
 class BrandController extends Controller {
     
@@ -92,6 +93,72 @@ class BrandController extends Controller {
             'pagination' => false,
             'sort' => ['defaultOrder' => ['sort'=>'desc']]
         ]);
+    }
+    
+    public function actionCreate()
+    {
+        $data = Yii::$app->request->post();
+
+        $brand = new CategoryBrand();
+        $brand->category_id = $data['category_id'] ?? null;
+        $brand->name_ru = $data['name_ru'];
+        $brand->name_en = $data['name_en'] ?? null;
+        $brand->name_uz = $data['name_uz'] ?? null;
+        $brand->description_ru = $data['description_ru'] ?? null;
+        $brand->description_en = $data['description_en'] ?? null;
+        $brand->description_uz = $data['description_uz'] ?? null;
+        $brand->sort = $data['sort'] ?? 0;
+        $brand->status = 0;
+
+        if (!$brand->save()) {
+            return $this->asJson(['errors' => $brand->errors])->setStatusCode(422);
+        }
+
+        return [
+            'success' => true,
+            'data' => ['id' => $brand->id],
+        ];
+    }
+
+    public function actionUpdate()
+    {
+        $data = Yii::$app->request->bodyParams;
+
+        $brand = CategoryBrand::findOne($data['id'] ?? null);
+        if (!$brand) {
+            throw new NotFoundHttpException();
+        }
+
+        foreach (['category_id','name_ru','name_en','name_uz','description_ru','description_en','description_uz','sort'] as $f) {
+            if (array_key_exists($f, $data)) {
+                $brand->$f = $data[$f];
+            }
+        }
+
+        $brand->status = 0;
+
+        if (!$brand->save()) {
+            return $this->asJson(['errors' => $brand->errors])->setStatusCode(422);
+        }
+
+        return ['success' => true];
+    }
+
+    public function actionDelete()
+    {
+        $data = Yii::$app->request->post();
+
+        $brand = CategoryBrand::findOne($data['id'] ?? null);
+        if (!$brand) {
+            throw new NotFoundHttpException();
+        }
+
+        $brand->status = 0;
+        $brand->deleted_at = date('Y-m-d H:i:s');
+
+        $brand->save(false);
+
+        return ['success' => true];
     }
 }
 ?>

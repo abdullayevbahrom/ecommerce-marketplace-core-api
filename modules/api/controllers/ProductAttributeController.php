@@ -70,16 +70,15 @@ class ProductAttributeController extends Controller
     protected function applySyncFilter($query)
     {
         $updatedSince = Yii::$app->request->get('updated_since');
-        if ($updatedSince) {
-            // Getting the model class from the query
-            $modelClass = $query->modelClass;
-            $tableName = $modelClass::tableName();
-            
-            $query->andWhere([
-                'or',
-                ['>=', "$tableName.updated_at", $updatedSince],
-                ['>=', "$tableName.deactivated_at", $updatedSince]
-            ]);
+        if (!$updatedSince) {
+            return;
+        }
+        $modelClass = $query->modelClass;
+        $tableName = $modelClass::tableName();
+        $schema     = Yii::$app->db->schema->getTableSchema($tableName);
+
+        if ($schema->getColumn('updated_at')) {
+            $query->andWhere(['>=', "$tableName.updated_at", $updatedSince]);
         }
     }
 
@@ -91,18 +90,14 @@ class ProductAttributeController extends Controller
      * Get list of Colors
      * GET /api/product-attribute/color
      */
-    public function actionColorList()
+    public function actionColorList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
         $query = Color::find()->asArray();
         $this->applySyncFilter($query);
         
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => false,
-            'sort' => ['defaultOrder' => ['id' => SORT_DESC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -113,37 +108,28 @@ class ProductAttributeController extends Controller
      * Get list of Categories
      * GET /api/product-attribute/category
      */
-    public function actionCategoryList()
+    public function actionCategoryList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
         $query = Category::find()->where(['type' => 'product'])->asArray();
         $this->applySyncFilter($query);
         
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => false,
-            'sort' => ['defaultOrder' => ['sort' => SORT_ASC, 'id' => SORT_ASC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     /**
      * Get list of Tags
      * GET /api/product-attribute/tag
      */
-    public function actionTagList()
+    public function actionTagList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
         $query = Category::find()->where(['type' => 'tag'])->asArray();
         $this->applySyncFilter($query);
         
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => true,
-            'pageSize' => 100,
-            'sort' => ['defaultOrder' => ['sort' => SORT_ASC, 'id' => SORT_ASC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -154,7 +140,7 @@ class ProductAttributeController extends Controller
      * Get list of Brands
      * GET /api/product-attribute/brand
      */
-    public function actionBrandList()
+    public function actionBrandList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
@@ -165,11 +151,7 @@ class ProductAttributeController extends Controller
             $query->andWhere(['category_id' => $catId]);
         }
 
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => ['pageSize' => 100],
-            'sort' => ['defaultOrder' => ['sort' => SORT_ASC, 'name_ru' => SORT_ASC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -180,21 +162,27 @@ class ProductAttributeController extends Controller
      * Get list of Product Types
      * GET /api/product-attribute/product-type
      */
-    public function actionProductTypeList()
+    public function actionProductTypeList($page = 1, $pageSize = 50)
     {
-        $this->checkAuth();
-        $query = ProductType::find()->with('productTypeValues')->asArray();
-        $this->applySyncFilter($query);
-        
-        if ($catId = Yii::$app->request->get('category_id')) {
-            $query->andWhere(['category_id' => $catId]);
-        }
-        
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => ['pageSize' => 50],
-            'sort' => ['defaultOrder' => ['sort' => SORT_ASC]],
-        ]);
+        $query = ProductType::find()->with('productTypeValues');
+        //$this->applySyncFilter($query);
+        $count = $query->count();
+    
+        $items = $query
+            ->orderBy(['id' => SORT_ASC])
+            ->offset(($page - 1) * $pageSize)
+            ->limit($pageSize)
+            ->asArray()
+            ->all();
+    
+        return [
+            'success' => true,
+            'page' => $page,
+            'pageSize' => $pageSize,
+            'total' => $count,
+            'hasMore' => ($page * $pageSize) < $count,
+            'items' => $items,
+        ];
     }
 
     // =========================================================================
@@ -205,7 +193,7 @@ class ProductAttributeController extends Controller
      * Get list of Filters
      * GET /api/product-attribute/filter
      */
-    public function actionFilterList()
+    public function actionFilterList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         // Only fetch parents (admin panel uses parent_id=0 for root)
@@ -224,11 +212,7 @@ class ProductAttributeController extends Controller
             $query->andWhere(['category_id' => $categoryIds]);
         }
         
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => ['pageSize' => 50],
-            'sort' => ['defaultOrder' => ['id' => SORT_DESC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -239,7 +223,7 @@ class ProductAttributeController extends Controller
      * Get list of IKPU codes
      * GET /api/product-attribute/ikpu
      */
-    public function actionIkpuList()
+    public function actionIkpuList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
@@ -256,11 +240,7 @@ class ProductAttributeController extends Controller
              ]);
         }
         
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => ['pageSize' => 50],
-            'sort' => ['defaultOrder' => ['code' => SORT_ASC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -271,18 +251,21 @@ class ProductAttributeController extends Controller
      * Get list of Users
      * GET /api/product-attribute/user
      */
-    public function actionUserList()
+    public function actionUserList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
-        $query = User::find();
+        $query = User::find()->andWhere([
+            'role' => [
+                User::ROLE_ADMIN,
+                User::ROLE_MODERATOR,
+                User::ROLE_SHOP,
+            ]
+        ]);
+        
         $this->applySyncFilter($query);
 
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => ['pageSize' => 50],
-            'sort' => ['defaultOrder' => ['id' => SORT_DESC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -293,18 +276,14 @@ class ProductAttributeController extends Controller
      * Get list of Shops
      * GET /api/product-attribute/shop
      */
-    public function actionShopList()
+    public function actionShopList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
         $query = Shop::find()->asArray();
         $this->applySyncFilter($query);
 
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => ['pageSize' => 50],
-            'sort' => ['defaultOrder' => ['id' => SORT_DESC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -315,18 +294,20 @@ class ProductAttributeController extends Controller
      * Get list of Stocks
      * GET /api/product-attribute/stock
      */
-    public function actionStockList()
+    public function actionStockList($page = 1, $pageSize = 50)
     {
+        $shopId = (int) Yii::$app->request->get('shop_id');
+        if (!$shopId) {
+            Yii::$app->response->statusCode = 422;
+            return ['error' => 'shop_id required'];
+        }
+
         $this->checkAuth();
         
-        $query = Stock::find()->asArray();
+        $query = Stock::find()->where(['shop_id' => $shopId])->andWhere(['deleted_at' => null])->asArray();
         $this->applySyncFilter($query);
 
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => ['pageSize' => 50],
-            'sort' => ['defaultOrder' => ['id' => SORT_DESC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -337,18 +318,14 @@ class ProductAttributeController extends Controller
      * Get list of Regions
      * GET /api/product-attribute/region
      */
-    public function actionRegionList()
+    public function actionRegionList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
         $query = Region::find()->asArray();
         $this->applySyncFilter($query);
 
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => false,
-            'sort' => ['defaultOrder' => ['id' => SORT_ASC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -359,18 +336,14 @@ class ProductAttributeController extends Controller
      * Get list of Deliveries
      * GET /api/product-attribute/delivery
      */
-    public function actionDeliveryList()
+    public function actionDeliveryList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
         $query = Delivery::find()->asArray();
         $this->applySyncFilter($query);
 
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => false,
-            'sort' => ['defaultOrder' => ['id' => SORT_ASC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
     }
 
     // =========================================================================
@@ -381,17 +354,34 @@ class ProductAttributeController extends Controller
      * Get list of Offices
      * GET /api/product-attribute/office
      */
-    public function actionOfficeList()
+    public function actionOfficeList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
         
         $query = Office::find()->asArray();
         $this->applySyncFilter($query);
 
-        return new \yii\data\ActiveDataProvider([
-            'query' => $query,
-            'pagination' => false,
-            'sort' => ['defaultOrder' => ['id' => SORT_ASC]],
-        ]);
+        return $this->paginate($query, $page, $pageSize);
+    }
+
+    protected function paginate(\yii\db\ActiveQuery $query, int $page, int $pageSize)
+    {
+        $count = (clone $query)->count();
+
+        $items = $query
+            ->orderBy(['id' => SORT_ASC])
+            ->offset(($page - 1) * $pageSize)
+            ->limit($pageSize)
+            ->asArray()
+            ->all();
+
+        return [
+            'success'  => true,
+            'page'     => $page,
+            'pageSize' => $pageSize,
+            'total'    => $count,
+            'hasMore'  => ($page * $pageSize) < $count,
+            'items'    => $items,
+        ];
     }
 }

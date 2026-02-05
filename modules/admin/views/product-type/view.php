@@ -33,11 +33,13 @@ $this->params['breadcrumbs'][] = $this->title;
                 <div class="box box-info color-palette-box">
                     <div class="box-body">
                         <ul class="left-menu">
+                            <?php if (Yii::$app->user->identity->role != \app\models\user\User::ROLE_MODERATOR): ?>
                             <li>
                                 <a href="<?=Yii::$app->urlManager->createUrl(['/admin/product-type/create', 'id'=>$model->id])?>" class="btn btn-primary width-full">
                                     <i class="fa fa-pencil"></i> Edit
                                 </a>
                             </li>
+                            <?php endif; ?>
                             <li>
                                 <a href="<?=Yii::$app->urlManager->createUrl(['/admin/product-type/lock', 'id'=>$model->id])?>" class="btn btn-warning width-full">
                                     <?php if ($model->status == 1) {?>
@@ -47,11 +49,31 @@ $this->params['breadcrumbs'][] = $this->title;
                                     <?php }?>
                                 </a>
                             </li>
+                            <?php if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR && $model->status == 2): ?>
+                                    <hr>
+                                    <h4><i class="fa fa-comment"></i> Комментарий модератора</h4>
+                                    <form method="post" action="<?=Yii::$app->urlManager->createUrl(['/admin/product-type/comment', 'id'=>$model->id])?>">
+                                        <?= Html::csrfMetaTags() ?>
+                                        <textarea
+                                            name="comment"
+                                            class="form-control"
+                                            rows="4"
+                                            required
+                                            placeholder="Укажите причину, почему тип товара остаётся заблокированным"
+                                        ></textarea>
+                                        <br>
+                                        <button type="submit" class="btn btn-warning btn-sm">
+                                            <i class="fa fa-paper-plane"></i> Отправить комментарий
+                                        </button>
+                                    </form>
+                            <?php endif; ?>
+                            <?php if (Yii::$app->user->identity->role != \app\models\user\User::ROLE_MODERATOR): ?>
                             <li>
                                 <a href="<?=Yii::$app->urlManager->createUrl(['/admin/product-type/remove', 'id'=>$model->id])?>" class="btn btn-danger width-full remove-object">
                                     <i class="fa fa-trash"></i> Delete
                                 </a>
                             </li>
+                            <?php endif; ?>
                         </ul>
                     </div>
                 </div>

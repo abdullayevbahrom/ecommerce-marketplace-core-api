@@ -47,6 +47,12 @@ class User extends ActiveRecord implements IdentityInterface {
     const PHOTO_PATH = 'uploads/user/';
     const PHOTO_DEFAULT = '/assets_files/images/user.png';
 
+    const SOURCE_YII = 'yii';
+    const SOURCE_SKLAD = 'sklad';
+
+    const STATUS_ACTIVE = 1;
+    const STATUS_INACTIVE = 0;
+
     public $authKey;
     public $imageFiles = [];
     public $moderator_access = [];
@@ -131,6 +137,8 @@ class User extends ActiveRecord implements IdentityInterface {
             // BTS region and city validation
             [['bts_region_id', 'bts_city_id'], 'integer'],
             ['bts_city_id', 'validateCityRegion'],
+
+            ['source', 'in', 'range' => [self::SOURCE_YII, self::SOURCE_SKLAD]],
         ];
     }
     

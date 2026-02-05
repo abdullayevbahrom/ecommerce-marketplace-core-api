@@ -10,6 +10,7 @@ use app\models\user\UserSearch;
 use app\models\moderator\ModeratorUrl;
 use app\models\moderator\ModeratorAccess;
 use app\models\Category;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ModeratorController extends Controller{
     public $user;

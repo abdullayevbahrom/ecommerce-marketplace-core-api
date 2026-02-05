@@ -229,6 +229,13 @@ class Product extends \yii\db\ActiveRecord
         return $this->category_tree;
     }
 
+    public function softDelete()
+    {
+        $this->status = 2;
+        $this->deleted_at = date('Y-m-d H:i:s');
+        return $this->save(false);
+    }
+
     public function setCategory($category_id = null) {
         if (!$category_id) {
             $category_id = $this->category_id;
@@ -1333,6 +1340,13 @@ class Product extends \yii\db\ActiveRecord
         }
     }
 
+    public function getModerationComments()
+    {
+        return $this->hasMany(\app\models\moderator\ModerationComment::class,
+            ['entity_id' => 'id']
+        )->andWhere(['entity_type' => 'product']);
+    }
+
     /**
      * Before save event - update IKPU cache
      */
@@ -1410,5 +1424,20 @@ class Product extends \yii\db\ActiveRecord
         } catch (RequestException $e) {
             Yii::error('Failed to sync product to warehouse: ' . $e->getMessage(), 'warehouse_sync');
         }
+    }
+
+    public function beforeDelete()
+    {
+        if(!parent::beforeDelete()) {
+            return false;
+        }
+
+         Yii::$app->db->createCommand()->insert('product_sync_log', [
+            'submission_id' => $this->id,
+            'action' => 'delete',
+            'created_at' => date('Y-m-d H:i:s'),
+        ])->execute();
+
+        return true;
     }
 }

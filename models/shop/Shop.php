@@ -19,6 +19,7 @@ use app\models\shop\oferta\ShopOferta;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
+use yii\db\Exception as DbException;
 
 /**
  * This is the model class for table "shop".
@@ -158,19 +159,32 @@ class Shop extends \yii\db\ActiveRecord
         return $seller->save();
     }
 
-    public function saveObject() {
-        $this->status = 1;
+    public function saveObject() 
+    {
+        $db = Yii::$app->db;
+        $transaction = $db->beginTransaction();
 
-        if ($this->save()) {
-            // user
+        try {
+            $this->status = 1;
+
+            if (!$this->save()) {
+                throw new DbException('Shop save failed');
+            }
+
             $user = $this->saveUser();
+            if (!$user) {
+                throw new DbException('Shop user creation failed');
+            }
+
             $this->user_id = $user->id;
             $this->save(false);
 
-            // seller
-            $this->saveSeller();
+            if (!$this->saveSeller()) {
+                throw new DbException('Shop seller save failed');
+            }
 
             $image = new Images;
+
             if ($image->imageFiles = UploadedFile::getInstances($this, 'imageFiles')) {
                 if ($this->image) {
                     $this->image->removeImageSize();
@@ -182,13 +196,142 @@ class Shop extends \yii\db\ActiveRecord
                 $image->uploadPhoto($this->id, 'shop', 3);
             }
 
-            // Sync to Sklad
-            $this->syncToWarehouse();
+            $stock = $this->createDefaultStock();
+            if (!$stock || !$stock->id) {
+                throw new DbException('Default stock creation failed');
+            }
+
+            $this->syncShopToWarehouse($user);
+
+            $this->syncStockToWarehouse($stock, $user);
+
+            $transaction->commit();
 
             return true;
+
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            Yii::error(['message' => $e->getMessage(), 'shop_id' => $this->id ?? null, 'trace'   => $e->getTraceAsString()], 'warehouse_sync');
+            return false;
+        }
+    }
+
+    private function syncShopToWarehouse(User $user)
+    {
+        $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? null;
+        $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
+
+        if (!$baseUrl || !$secretKey) {
+            Yii::error('Warehouse API config missing', 'warehouse_sync');
+            return;
         }
 
-        return false;
+        $apiUrl = rtrim($baseUrl, '/') . '/api/sync/shop';
+
+        $payload = [
+            'id'       => $this->id,
+            'user_id'  => $user->id,
+            'name'     => $user->name,
+            'shop_name_ru'     => $this->name_ru,
+            'phone'    => $this->phone,
+            'inn'      => $this->inn,
+            'address'  => $this->address_legal,
+        ];
+
+        $token = md5($this->id . $secretKey);
+
+        try {
+            $client = new Client(['timeout' => 5]);
+
+            $response = $client->post($apiUrl, [
+                'json' => $payload,
+                'headers' => [
+                    'X-Api-Token' => $token,
+                    'Accept' => 'application/json',
+                ],
+            ]);
+
+            if ($response->getStatusCode() !== 200) {
+                throw new \RuntimeException('Shop sync failed');
+            }
+
+            Yii::info("Shop {$this->id} synced to warehouse", 'warehouse_sync');
+
+        } catch (RequestException $e) {
+            Yii::error(
+                'Shop sync error: ' . $e->getMessage(),
+                'warehouse_sync'
+            );
+            throw $e; 
+        }
+
+    }
+
+    private function syncStockToWarehouse(Stock $stock, User $user)
+    {
+        $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? null;
+        $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
+
+        if (!$baseUrl || !$secretKey) {
+            Yii::error('Warehouse API config missing', 'warehouse_sync');
+            return;
+        }
+
+        $apiUrl = rtrim($baseUrl, '/') . '/api/sync/branch';
+
+        $payload = [
+            'id'       => $stock->id,          // yii_stock_id
+            'shop_id'  => $this->id,          // yii_shop_id
+            'user_id' => $user->id,
+            'name_ru'  => $stock->name_ru,
+            'address'  => $stock->getFullAddress(),
+        ];
+
+        $token = md5($stock->id . $secretKey);
+
+        try {
+            $client = new Client(['timeout' => 5]);
+
+            $response = $client->post($apiUrl, [
+                'json' => $payload,
+                'headers' => [
+                    'X-Api-Token' => $token,
+                    'Accept' => 'application/json',
+                ],
+            ]);
+
+            if ($response->getStatusCode() !== 200) {
+                throw new \RuntimeException('Stock sync failed');
+            }
+
+            Yii::info("Stock {$stock->id} synced to warehouse", 'warehouse_sync');
+
+        } catch (RequestException $e) {
+            Yii::error(
+                'Stock sync error: ' . $e->getMessage(),
+                'warehouse_sync'
+            );
+            throw $e;
+        }
+    }
+
+
+
+
+    public function createDefaultStock()
+    {
+        $stock = new Stock();
+        $stock->name_ru = 'Ваше витрина';
+        $stock->description_ru = 'Склад по умолчанию';
+        $stock->status = 1;
+        $stock->shop_id = $this->id;
+        $stock->address = $this->address_legal ?? null;
+
+        if (!$stock->save()) {
+            throw new \RuntimeException('Default stock creation failed');
+        }
+
+        return $stock;
     }
 
     private function syncToWarehouse()
@@ -196,12 +339,19 @@ class Shop extends \yii\db\ActiveRecord
         $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com';
         $apiUrl = $baseUrl . '/api/sync/shop';
 
+        $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
+        $token = md5($this->id . $secretKey);
+
+        if (!$secretKey) {
+            return;
+        }
+
         $client = new Client(['timeout' => 5.0]);
 
         $dataToSend = [
             'id' => $this->id,
             'user_id' => $this->user_id,
-            'name' => $this->name_ru,
+            'name' => $this->name,
             'phone' => $this->phone,
             'inn' => $this->inn,
             'address' => $this->address_legal,

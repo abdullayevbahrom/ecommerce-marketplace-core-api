@@ -13,6 +13,7 @@ use yii\filters\auth\HttpBearerAuth;
 
 use app\models\Category;
 use app\models\filter\Filter;
+use yii\db\Transaction;
 
 class CategoryController extends Controller {
     
@@ -117,6 +118,144 @@ class CategoryController extends Controller {
             'pagination' => false,
             'sort' => ['defaultOrder' => ['id'=>'desc']]
         ]);
+    }
+
+    /**
+     * POST /api/category/create
+     */
+    public function actionCreate()
+    {
+        $data = Yii::$app->request->post();
+
+        $transaction = Yii::$app->db->beginTransaction(Transaction::SERIALIZABLE);
+
+        try {
+            $category = new Category();
+
+            $category->parent_id = (int)($data['parent_id'] ?? 0);
+            $category->name_ru = $data['name_ru'] ?? null;
+            $category->name_en = $data['name_en'] ?? null;
+            $category->name_uz = $data['name_uz'] ?? null;
+            $category->description_ru = $data['description_ru'] ?? null;
+            $category->description_en = $data['description_en'] ?? null;
+            $category->description_uz = $data['description_uz'] ?? null;
+
+             $category->status = 0;
+
+            if (!$category->validate()) {
+                throw new HttpException(422, json_encode($category->errors));
+            }
+
+            if (!$category->save(false)) {
+                throw new HttpException(500, 'Failed to save category');
+            }
+
+            $transaction->commit();
+
+            return [
+                'success' => true,
+                'data' => [
+                    'id' => $category->id,
+                ],
+            ];
+
+
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            throw $e;
+        }
+    }
+
+    public function actionUpdate()
+    {
+        $data = Yii::$app->request->bodyParams;
+
+        if (empty($data['id'])) {
+            throw new HttpException(400, 'id is required');
+        }
+
+        $category = Category::findOne($data['id']);
+
+        if (!$category) {
+            throw new HttpException(404, 'Category not found');
+        }
+
+        $transaction = Yii::$app->db->beginTransaction();
+
+        try {
+            if (array_key_exists('parent_id', $data)) {
+                $category->parent_id = (int)$data['parent_id'];
+            }
+
+            foreach (['name_ru', 'name_en', 'name_uz', 'description_ru', 'description_en', 'description_uz'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $category->$field = $data[$field];
+                }
+            }
+
+            $category->status = 0;
+
+            if (!$category->validate()) {
+                throw new HttpException(422, json_encode($category->errors));
+            }
+
+            if (!$category->save(false)) {
+                throw new HttpException(500, 'Failed to update category');
+            }
+
+            $transaction->commit();
+
+            return [
+                'success' => true,
+                'data' => [
+                    'id' => $category->id,
+                ],
+            ];
+        
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            throw $e;
+        }
+    }
+
+    public function actionDelete()
+    {
+        $data = Yii::$app->request->post();
+
+        if (empty($data['id'])) {
+            throw new HttpException(400, 'id is required');
+        }
+
+        $category = Category::findOne($data['id']);
+
+        if (!$category) {
+            throw new HttpException(404, 'Category not found');
+        }
+
+        if (Category::find()->where(['parent_id' => $category->id])->exists()) {
+            throw new HttpException(409, 'Category has children');
+        }
+
+        $transaction = Yii::$app->db->beginTransaction();
+
+        try {
+            $category->status = 0;
+            $category->deleted_at = date('Y-m-d H:i:s');
+
+            if (!$category->save(false)) {
+                throw new HttpException(500, 'Failed to delete category');
+            }
+
+            $transaction->commit();
+
+            return [
+                'success' => true,
+            ];
+
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            throw $e;
+        }
     }
 }
 ?>

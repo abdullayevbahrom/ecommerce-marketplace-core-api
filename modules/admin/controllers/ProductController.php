@@ -26,11 +26,13 @@ use app\models\delivery\Delivery;
 use app\models\office\Office;
 use app\models\office\ProductOffice;
 use app\models\Images;
+use app\models\moderator\ModerationComment;
+use app\models\product\ProductModerationComment;
 use app\models\Settings;
 use app\models\product\ProductType;
 use app\models\product\ProductTypeValue;
 use app\models\product\ProductProductType;
-
+use GuzzleHttp\Client;
 use yii\services\Billz;
 use Intervention\Image\ImageManager;
 
@@ -67,6 +69,10 @@ class ProductController extends Controller {
         $searchModel = new ProductSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
         $dataProvider->query->with('category', 'image');
+
+        if ($this->user->role == User::ROLE_MODERATOR) {
+            $dataProvider->query->andWhere(['status' => 2])->andWhere(['deleted_at' => null]);
+        }
 
         $dataProvider->setSort([
             'defaultOrder' => [
@@ -119,6 +125,10 @@ class ProductController extends Controller {
         $current_product_types = [];
         $tree = [0 => ''];
         
+        if ($this->user->role == User::ROLE_MODERATOR) {
+            return $this->redirect(['/admin/default/profile']);
+        }
+
         // edit
         if ($id) {
             $model = Product::find()->with('image', 'gallery', 'category', 'productColors', 'productColors.image', 'productColors.color', 'productFilters', 'productFilters.filter', 'productProperties', 'productOffices')->where(['id'=>$id])->one();
@@ -241,29 +251,127 @@ class ProductController extends Controller {
         ]);
     }
 
-    public function actionLock($id) {
-        $this->log('lock'.$id);
+    public function actionLock($id)
+    {
         $model = Product::findOne($id);
-
         if (!$model) {
-            throw new HttpException(404, 'Page not found');
+            throw new HttpException(404, 'Product not found');
         }
 
-        if ($model->status == 1) {
-            $model->status = 2;
-            $msg = 'Blocked';
-        } else {
-            $model->status = 1;
-            $msg = 'Unblocked';
+        $user = Yii::$app->user->identity;
+
+        if ($user->role === User::ROLE_MODERATOR && $model->status != 2) {
+            throw new HttpException(403, 'Moderator can only unlock products');
         }
 
-        if ($model->save(false)) {
-            Yii::$app->session->setFlash('product_locked', $msg);
-        }
+        $oldStatus = $model->status;
+        $model->status = ($model->status == 1) ? 2 : 1;
+        $model->save(false);
 
-        return $this->redirect(Yii::$app->request->referrer);
+        $this->sendToWarehouse([
+            'id' => $model->id,
+            'entity_type'  => 'product',
+            'entity_id'    => $model->id,
+            'action'       => $model->status == 1 ? 'approve' : 'block',
+            'status_after' => $model->status == 1 ? 'approved' : 'pending',
+            'comment'      => 'Ваш товар разблокирован',
+            'moderator_id' => $user->id,
+        ]);
+
+        Yii::$app->session->setFlash(
+            'product_locked',
+            $model->status == 1 ? 'Product unlocked' : 'Product blocked'
+        );
+
+        return $user->role === User::ROLE_MODERATOR
+            ? $this->redirect(['/admin/product'])
+            : $this->redirect(Yii::$app->request->referrer);
+    }
+    
+
+    protected function sendToWarehouse(array $payload)
+    {
+        try {
+            $client = new Client(['timeout' => 5.0]);
+
+            $apiUrl = rtrim(Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com', '/') . '/api/moderation/sync';
+
+            $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
+            if (!$secretKey) {
+                return;
+            }
+
+            $token = md5($payload['id'] . $secretKey);
+
+            $client->post($apiUrl, [
+                'json' => array_merge($payload, [
+                    'metadata' => [
+                        'source' => 'yii2',
+                    ],
+                ]),
+                'headers' => [
+                    'X-Api-Token' => $token,
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            \Yii::error($e->getMessage(), 'warehouse');
+        }
     }
 
+    public function actionComment($id)
+    {
+        $model = Product::findOne($id);
+        if (!$model) {
+            throw new HttpException(404, 'Product not found');
+        }
+
+        $user = Yii::$app->user->identity;
+
+        if ($user->role !== User::ROLE_MODERATOR) {
+            throw new HttpException(403, 'Access denied');
+        }
+
+        if ($model->status != 2) {
+            throw new HttpException(400, 'Comment allowed only for blocked products');
+        }
+
+        $commentText = trim(Yii::$app->request->post('comment'));
+        if (!$commentText) {
+            Yii::$app->session->setFlash('error', 'Комментарий обязателен');
+            return $this->redirect(Yii::$app->request->referrer);
+        }
+
+        $comment = new ModerationComment();
+        $comment->entity_type  = 'product';
+        $comment->entity_id    = $model->id;
+        $comment->action       = 'reject';   // approve | reject | block
+        $comment->comment      = $commentText;
+        $comment->moderator_id = $user->id;
+        $comment->is_sent_to_warehouse = 0;
+        $comment->save(false);
+
+        $this->sendToWarehouse([
+            'id' => $model->id,
+            'entity_type'  => 'product',
+            'entity_id'    => $model->id,
+            'action'       => 'reject',
+            'status_after' => 'rejected',
+            'comment'      => $commentText,
+            'moderator_id' => $user->id,
+        ]);
+
+        Yii::$app->session->setFlash(
+            'info',
+            'Комментарий отправлен. Товар остаётся заблокированным.'
+        );
+
+        return $this->redirect(['/admin/product']);
+    }
+
+
+
+    
     public function actionRemoves($id,$page = 1) {
     if(Yii::$app->user->identity->role == User::ROLE_ADMIN){
         $this->log('remove'.$id);
@@ -278,10 +386,17 @@ class ProductController extends Controller {
         $model->removeObject();
     }
 
+    if ($this->user->role == User::ROLE_MODERATOR) {
+            return $this->redirect(['/admin/default/profile']);
+        }
+
         return $this->redirect(['/admin/product/index?page='.$page]);
     }
 
     public function actionRemove($id) {
+        if ($this->user->role == User::ROLE_MODERATOR) {
+            return $this->redirect(['/admin/default/profile']);
+        }
         
         $this->log('del'.$id);
         return $this->redirect(Yii::$app->request->referrer);

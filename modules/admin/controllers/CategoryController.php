@@ -31,7 +31,7 @@ class CategoryController extends Controller{
                 }
             }
 
-            if (!in_array('product', $accesses)) {
+            if (!in_array('category', $accesses)) {
                 throw new HttpException(403, 'Error access');
             }
         }

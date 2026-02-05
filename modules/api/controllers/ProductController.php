@@ -20,6 +20,7 @@ use app\models\product\review\ProductReview;
 use app\models\product\ProductRequest;
 use app\models\user\favorite\UserFavorite;
 use app\models\user\compare\UserCompare;
+use app\models\user\User;
 use app\models\user\activity\UserActivity;
 use app\models\brand\CategoryBrand; // Added Brand model
 use app\models\Brand; // Added Brand model
@@ -353,6 +354,22 @@ class ProductController extends Controller {
         }
         
         return $this->sendError(422, 'Validation error', $model->errors);
+    }
+
+    // GET /api/sklad/products/changed
+    public function actionChanged()
+    {
+        $this->checkSkladAuth();
+    
+        $products = Product::find()
+            ->where(['sync_status' => 0])
+            ->limit(100)
+            ->all();
+    
+        return [
+            'success' => true,
+            'products' => $products,
+        ];
     }
 
     /**

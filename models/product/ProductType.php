@@ -32,6 +32,9 @@ class ProductType extends \yii\db\ActiveRecord
     const TYPE_CHECKBOX = 'checkbox';
     const TYPE_RANGE = 'range';
 
+    const STATUS_ACTIVE = 1;
+    const STATUS_INACTIVE = 2;
+    
     /**
      * {@inheritdoc}
      */

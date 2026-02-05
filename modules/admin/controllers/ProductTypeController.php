@@ -14,6 +14,9 @@ use app\models\product\ProductType;
 use app\models\product\ProductTypeSearch;
 use app\models\product\ProductTypeValue;
 use app\models\Category;
+use app\models\moderator\ModerationComment;
+use app\models\product\Product;
+use GuzzleHttp\Client;
 
 class ProductTypeController extends Controller {
     public $user;
@@ -49,6 +52,10 @@ class ProductTypeController extends Controller {
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
         $dataProvider->query->with('category');
 
+        if ($this->user->role == User::ROLE_MODERATOR) {
+            $dataProvider->query->andWhere(['status' => 2]);
+        }
+
         $dataProvider->setSort([
             'defaultOrder' => [
                 'sort' => SORT_ASC,
@@ -80,6 +87,9 @@ class ProductTypeController extends Controller {
     public function actionCreate($id = null) {
         $model = new ProductType;
 
+        if ($this->user->role == User::ROLE_MODERATOR) {
+            return $this->redirect(['/admin/default/profile']);
+        }
         // edit
         if ($id) {
             $model = ProductType::find()->with('productTypeValues')->where(['id'=>$id])->one();
@@ -140,20 +150,118 @@ class ProductTypeController extends Controller {
             throw new HttpException(404, 'Page not found');
         }
 
-        if ($model->status == 1) {
-            $model->status = 0;
-            $msg = 'Blocked';
-        } else {
-            $model->status = 1;
-            $msg = 'Unblocked';
+        $user = Yii::$app->user->identity;
+
+        if ($user->role === User::ROLE_MODERATOR && $model->status != 2) {
+            throw new HttpException(403, 'Moderator can only unlock products type');
         }
 
-        if ($model->save(false)) {
-            Yii::$app->session->setFlash('product_type_locked', $msg);
-        }
+        $oldStatus = $model->status;
+        $model->status = ($model->status == ProductType::STATUS_ACTIVE) ? ProductType::STATUS_INACTIVE : ProductType::STATUS_ACTIVE;
+        $model->save(false);
 
-        return $this->redirect(Yii::$app->request->referrer);
+        $this->sendToWarehouse([
+            'id' => $model->id,
+            'entity_type'  => 'product-type',
+            'entity_id'    => $model->id,
+            'action'       => $model->status == 1 ? 'approve' : 'block',
+            'status_after' => $model->status == 1 ? 'approved' : 'pending',
+            'comment'      => 'Ваш тип товара разблокирован',
+            'moderator_id' => $user->id,
+        ]);
+
+
+        Yii::$app->session->setFlash(
+            'product_locked',
+            $model->status == 1 ? 'Product type unlocked' : 'Product type blocked'
+        );
+
+        return $user->role === User::ROLE_MODERATOR
+            ? $this->redirect(['/admin/product-type'])
+            : $this->redirect(Yii::$app->request->referrer);
     }
+    
+
+    protected function sendToWarehouse(array $payload)
+    {
+        try {
+            $client = new Client(['timeout' => 5.0]);
+
+            $apiUrl = rtrim(Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com', '/') . '/api/moderation/sync';
+
+            $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
+            if (!$secretKey) {
+                return;
+            }
+
+            $token = md5($payload['id'] . $secretKey);
+
+            $client->post($apiUrl, [
+                'json' => array_merge($payload, [
+                    'metadata' => [
+                        'source' => 'yii2',
+                    ],
+                ]),
+                'headers' => [
+                    'X-Api-Token' => $token,
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            \Yii::error($e->getMessage(), 'warehouse');
+        }
+    }
+
+    public function actionComment($id)
+    {
+        $model = ProductType::findOne($id);
+        if (!$model) {
+            throw new HttpException(404, 'Product type not found');
+        }
+
+        $user = Yii::$app->user->identity;
+
+        if ($user->role !== User::ROLE_MODERATOR) {
+            throw new HttpException(403, 'Access denied');
+        }
+
+        if ($model->status != 2) {
+            throw new HttpException(400, 'Comment allowed only for blocked products type');
+        }
+
+        $commentText = trim(Yii::$app->request->post('comment'));
+        if (!$commentText) {
+            Yii::$app->session->setFlash('error', 'Комментарий обязателен');
+            return $this->redirect(Yii::$app->request->referrer);
+        }
+
+        $comment = new ModerationComment();
+        $comment->entity_type  = 'product-type';
+        $comment->entity_id    = $model->id;
+        $comment->action       = 'reject';   // approve | reject | block
+        $comment->comment      = $commentText;
+        $comment->moderator_id = $user->id;
+        $comment->is_sent_to_warehouse = 0;
+        $comment->save(false);
+
+        $this->sendToWarehouse([
+            'id' => $model->id,
+            'entity_type'  => 'product-type',
+            'entity_id'    => $model->id,
+            'action'       => 'reject',
+            'status_after' => 'rejected',
+            'comment'      => $commentText,
+            'moderator_id' => $user->id,
+        ]);
+
+        Yii::$app->session->setFlash(
+            'info',
+            'Комментарий отправлен. Тип Товара остаётся заблокированным.'
+        );
+
+        return $this->redirect(['/admin/product-type']);
+    }
+        
 
     public function actionRemove($id) {
         $model = ProductType::findOne($id);

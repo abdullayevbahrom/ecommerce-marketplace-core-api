@@ -202,4 +202,11 @@ class Filter extends \yii\db\ActiveRecord
     {
         return $this->hasOne(CategoryFilter::className(), ['filter_id'=>'id']);
     }
+
+    public function getModerationComments()
+    {
+        return $this->hasMany(\app\models\moderator\ModerationComment::class,
+            ['entity_id' => 'id']
+        )->andWhere(['entity_type' => 'filter']);
+    }
 }

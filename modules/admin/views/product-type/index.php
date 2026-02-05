@@ -29,11 +29,13 @@ $this->params['breadcrumbs'][] = $this->title;
         
         <div class="box box-info color-palette-box">
             <div class="box-header with-border">
+                <?php if (Yii::$app->user->identity->role != \app\models\user\User::ROLE_MODERATOR): ?>
                 <div class="pull-right">
                     <a href="<?=Yii::$app->urlManager->createUrl(['/admin/product-type/create'])?>" class="btn btn-primary">
                         <i class="glyphicon glyphicon-plus"></i> Add Product Type
                     </a>
                 </div>
+                <?php endif; ?>
             </div>
             <div class="box-body">
                 <?= GridView::widget([
@@ -105,6 +107,9 @@ $this->params['breadcrumbs'][] = $this->title;
                                     ]);
                                 },
                                 'update' => function ($url, $model, $key) {
+                                    if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR) {
+                                        return '';
+                                    }
                                     return Html::a('<i class="fa fa-pencil"></i>', ['/admin/product-type/create', 'id' => $model->id], [
                                         'title' => 'Update',
                                         'class' => 'btn btn-sm btn-info'
@@ -119,6 +124,9 @@ $this->params['breadcrumbs'][] = $this->title;
                                     ]);
                                 },
                                 'delete' => function ($url, $model, $key) {
+                                    if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR) {
+                                        return '';
+                                    }
                                     return Html::a('<i class="fa fa-trash"></i>', ['/admin/product-type/remove', 'id' => $model->id], [
                                         'title' => 'Delete',
                                         'class' => 'btn btn-sm btn-danger',
