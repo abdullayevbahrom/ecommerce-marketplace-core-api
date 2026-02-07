@@ -447,6 +447,23 @@ $product_request_count = ProductRequest::find()->where(['status'=>ProductRequest
     <?php }?>
 </div>
 <?php $this->endBody() ?>
+
+<script>
+    $(document).on('click', '.view_category', function () {
+        const categoryId = $(this).data('value');
+    
+        if (!categoryId) {
+            console.error('Category ID not found');
+            return;
+        }
+    
+        // подставляем action в форму
+        $('#moderator-comment-form').attr(
+            'action',
+            '/admin/category/comment?id=' + categoryId
+        );
+    });
+</script>
 </body>
 </html>
 <?php $this->endPage() ?>

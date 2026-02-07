@@ -9,6 +9,7 @@ use app\widgets\admin_language_tab\AdminLanguageTab;
 
 use app\models\filter\Filter;
 use app\models\category\CategoryFilter;
+use app\models\user\User;
 
 $this->title = 'Categories';
 $this->params['breadcrumbs'][] = $this->title;
@@ -62,13 +63,16 @@ $this->params['breadcrumbs'][] = $this->title;
                                                                 <span class="fa fa-cog"></span>
                                                             </a>
                                                             <ul class="dropdown-menu pull-right">
-                                                                <li><a href="javascript:;" class="add_category" data-value="<?=$c['id'];?>" data-toggle="modal" data-target="#add-category">Add subcategory</a></li>
                                                                 <li><a href="javascript:;" class="view_category" data-value="<?=$c['id'];?>" data-toggle="modal" data-target="#view-category">View</a></li>
+                                                                <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/category/lock', 'id'=>$c['id']]);?>"><?=($c['status'] == 1) ? 'Заблокировать' : 'Разблокировать';?></a></li>
+                                                                <?php if (Yii::$app->user->identity->role != \app\models\user\User::ROLE_MODERATOR): ?>
+                                                                <li><a href="javascript:;" class="add_category" data-value="<?=$c['id'];?>" data-toggle="modal" data-target="#add-category">Add subcategory</a></li>
                                                                 <li><a href="javascript:;" class="update_category" data-value="<?=$c['id'];?>" data-toggle="modal" data-target="#update-category">Edit</a></li>
                                                                 <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/category/remove', 'id'=>$c['id']]);?>" class="remove-object">Delete</a></li>
+                                                                <?php endif; ?>
                                                             </ul>
                                                         </div>
-                                                        <?=$c['name_ru'];?>
+                                                        <?=$c['name_ru'];?> 
                                                     </div>
                                                     <?php if (array_key_exists('children', $c)) {?>
                                                         <ol class="dd-list">
@@ -95,6 +99,7 @@ $this->params['breadcrumbs'][] = $this->title;
                             </div>
                         </div>
                     </div>
+                    <?php if (Yii::$app->user->identity->role != \app\models\user\User::ROLE_MODERATOR): ?>
                     <div class="col-sm-6">
                         <div class="box box-warning color-palette-box">
                             <div class="box-header with-border">
@@ -143,10 +148,12 @@ $this->params['breadcrumbs'][] = $this->title;
                             <?php ActiveForm::end();?>
                         </div>
                     </div>
+                    <?php endif; ?>
                 </div>
                 <hr/>
             </div>
         <?php } else {?>
+            <?php if (Yii::$app->user->identity->role != \app\models\user\User::ROLE_MODERATOR): ?>
             <div class="callout callout-warning text-center"> There are no categories yet, create the first category</div>
             <div class="box box-info color-palette-box">
                 <?php $form = ActiveForm::begin(); ?>
@@ -193,6 +200,7 @@ $this->params['breadcrumbs'][] = $this->title;
                     </div>
                 <?php ActiveForm::end()?>
             </div>
+            <?php endif; ?>
         <?php }?>
     </section>
 </div>
@@ -233,6 +241,21 @@ $this->params['breadcrumbs'][] = $this->title;
                         <strong id="category-popular-view"></strong>
                     </div>
                 </div>
+                <?php if (Yii::$app->user->identity->role === User::ROLE_MODERATOR): ?>
+                    <hr>
+                    <h4><i class="fa fa-comment"></i> Комментарий модератора</h4>
+                    <form method="post" id="moderator-comment-form">
+                        <?= Html::csrfMetaTags() ?>
+
+                        <textarea name="comment" class="form-control" rows="4" required placeholder="Укажите причину, почему категория остаётся заблокированной"></textarea>
+
+                        <br>
+
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="fa fa-paper-plane"></i> Отправить комментарий
+                        </button>
+                    </form>
+                <?php endif; ?>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
@@ -432,3 +455,6 @@ $this->params['breadcrumbs'][] = $this->title;
         </div>
     </div>
 </div>
+
+
+

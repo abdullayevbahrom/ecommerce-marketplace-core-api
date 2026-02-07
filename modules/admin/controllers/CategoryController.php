@@ -9,6 +9,8 @@ use yii\web\HttpException;
 use app\models\user\User;
 use app\models\filter\Filter;
 use app\models\Category;
+use app\models\moderator\ModerationComment;
+use GuzzleHttp\Client;
 
 class CategoryController extends Controller{
     public $user;
@@ -42,6 +44,14 @@ class CategoryController extends Controller{
     public function actionIndex($type = null) {
         $model = new Category;
 
+        $query = Category::find()->where(['type' => $type])
+            ->andWhere(['deleted_at' => null])
+            ->orderBy('sort');
+
+        if ($this->user->role === User::ROLE_MODERATOR) {
+            $query->andWhere(['status' => Category::STATUS_INACTIVE]);
+        }
+
         if ($model->load(Yii::$app->request->post()) && $model->validate()) {
             $model->type = Yii::$app->request->get('type');
             if ($model->saveCategory()) {
@@ -50,7 +60,8 @@ class CategoryController extends Controller{
             return $this->redirect(Yii::$app->request->referrer);
         }
 
-        $categories = $model->getCategories($model->find()->orderBy('sort')->asArray()->where(['type'=>$type])->all());
+        $categories = $model->getCategories($query->asArray()->all());
+        // $categories = $model->getCategories($model->find()->orderBy('sort')->asArray()->where(['type'=>$type])->all());
 
         $filters = Filter::find()->with('childs')->where(['parent_id'=>0])->all();
 
@@ -194,6 +205,123 @@ class CategoryController extends Controller{
                 'parent_id' => $parent_id
             ];
         }
+    }
+
+    public function actionLock($id) {
+        $model = Category::findOne($id);
+        
+        if (!$model) {
+            throw new HttpException(404, 'Page not found');
+        }
+
+        $user = Yii::$app->user->identity;
+
+        if ($user->role === User::ROLE_MODERATOR && $model->status != 0) {
+            throw new HttpException(403, 'Moderator can only unlock categories');
+        }
+
+        $oldStatus = $model->status;
+        $model->status = ($model->status == Category::STATUS_INACTIVE) ? Category::STATUS_ACTIVE : Category::STATUS_INACTIVE;
+        $model->save(false);
+
+        $this->sendToWarehouse([
+            'id' => $model->id,
+            'entity_type'  => 'category',
+            'entity_id'    => $model->id,
+            'action'       => $model->status == Category::STATUS_ACTIVE  ? 'approve' : 'reject',
+            'status_after' => $model->status == Category::STATUS_ACTIVE  ? 'approved' : 'rejected',
+            'comment'      => 'Ваша категория разблокирована',
+            'moderator_id' => $user->id,
+        ]);
+
+        Yii::$app->session->setFlash('category_locked', $model->status == 1 ? 'category unlocked' : 'category blocked');
+
+        if ($user->role === User::ROLE_MODERATOR) {
+            return $this->redirect(['admin/category?type=product']);
+        }
+
+        return $this->redirect(Yii::$app->request->referrer);
+    }
+
+    protected function sendToWarehouse(array $payload)
+    {
+        try {
+            $client = new Client(['timeout' => 5.0]);
+
+            $apiUrl = rtrim(Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com', '/') . '/api/moderation/sync';
+
+            $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
+
+            if (!$secretKey) {
+                return;
+            }
+
+            $token = md5($payload['id'] . $secretKey);
+
+            $client->post($apiUrl, [
+                'json' => array_merge($payload, [
+                    'metadata' => [
+                        'source' => 'yii2',
+                    ],
+                ]),
+                'headers' => [
+                    'X-Api-Token' => $token,
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            \Yii::error($e->getMessage(), 'warehouse');
+        }
+    }
+
+    public function actionComment($id)
+    {
+        $model = Category::findOne($id);
+        if (!$model) {
+            throw new HttpException(404, 'category not found');
+        }
+
+        $user = Yii::$app->user->identity;
+
+        if ($user->role !== User::ROLE_MODERATOR) {
+            throw new HttpException(403, 'Access denied');
+        }
+
+        if ($model->status != 0) {
+            throw new HttpException(400, 'Comment allowed only for blocked categories');
+        }
+
+        $commentText = trim(Yii::$app->request->post('comment'));
+        if (!$commentText) {
+            Yii::$app->session->setFlash('error', 'Комментарий обязателен');
+            return $this->redirect(Yii::$app->request->referrer);
+        }
+
+        $comment = new ModerationComment();
+        $comment->entity_type  = 'category';
+        $comment->entity_id    = $model->id;
+        $comment->action       = 'reject';   // approve | reject | block
+        $comment->comment      = $commentText;
+        $comment->moderator_id = $user->id;
+        $comment->is_sent_to_warehouse = 1;
+        $comment->save(false);
+
+        $this->sendToWarehouse([
+            'id' => $model->id,
+            'entity_type'  => 'category',
+            'entity_id'    => $model->id,
+            'action'       => 'reject',
+            'status_after' => 'rejected',
+            'comment'      => $commentText,
+            'moderator_id' => $user->id,
+        ]);
+
+        Yii::$app->session->setFlash(
+            'info',
+            'Комментарий отправлен. категория остаётся заблокированным.'
+        );
+
+        return $this->redirect(['/admin/category?type=product']);
     }
 }
 ?>

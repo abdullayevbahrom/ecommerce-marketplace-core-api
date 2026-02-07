@@ -1,6 +1,7 @@
 <?php
 use app\widgets\admin_brand_menu\AdminBrandMenu;
 use app\widgets\admin_language_tab\AdminLanguageTab;
+use yii\helpers\Html;
 
 $this->title = $model ? $model->name_ru : 'Brand';
 $this->params['breadcrumbs'][] = $this->title;
@@ -56,6 +57,24 @@ $this->params['breadcrumbs'][] = $this->title;
                                     ?>
                                 </td>
                             </tr>
+                            <?php if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR): ?>
+                                <hr>
+                                <h4><i class="fa fa-comment"></i> Комментарий модератора</h4>
+                                <form method="post" action="<?=Yii::$app->urlManager->createUrl(['/admin/brand/comment', 'id'=>$model->id])?>">
+                                    <?= Html::csrfMetaTags() ?>
+                                    <textarea
+                                        name="comment"
+                                        class="form-control"
+                                        rows="4"
+                                        required
+                                        placeholder="Укажите причину, почему бренд остаётся заблокированным"
+                                    ></textarea>
+                                    <br>
+                                    <button type="submit" class="btn btn-warning btn-sm">
+                                        <i class="fa fa-paper-plane"></i> Отправить комментарий
+                                    </button>
+                                </form>
+                            <?php endif; ?>
                             <tr>
                                 <td>Category</td>
                                 <td>
@@ -80,6 +99,21 @@ $this->params['breadcrumbs'][] = $this->title;
                                 <td>Date</td>
                                 <td>
                                     <?=$model->date ? $model->date : '-';?>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Комментарий модератора:</strong></td>
+                                <td>
+                                    <?php if (!empty($model->moderationComments)): ?>
+                                        <?php $lastComment = end($model->moderationComments); ?>
+                                        <?= Html::encode($lastComment->comment) ?>
+                                        <br>
+                                        <small class="text-muted">
+                                            <?= Yii::$app->formatter->asDatetime($lastComment->created_at) ?>
+                                        </small>
+                                    <?php else: ?>
+                                        <span class="text-muted">Не указан</span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         </table>

@@ -30,6 +30,9 @@ class CategoryBrand extends \yii\db\ActiveRecord
     public $imageFiles = [];
     public $sub_category_id = [];
 
+    const STATUS_ACTIVE = 1;
+    const STATUS_INACTIVE = 2;
+
     /**
      * {@inheritdoc}
      */
@@ -158,5 +161,12 @@ class CategoryBrand extends \yii\db\ActiveRecord
     public function getCategory()
     {
         return $this->hasOne(Category::className(), ['id' => 'category_id']);
+    }
+
+    public function getModerationComments()
+    {
+        return $this->hasMany(\app\models\moderator\ModerationComment::class,
+            ['entity_id' => 'id']
+        )->andWhere(['entity_type' => 'brand']);
     }
 }

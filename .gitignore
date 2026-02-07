@@ -11,6 +11,7 @@ runtime/
 .env
 .env.*
 web/assets/
+web/
 .vscode/
 
 # Compiled Java class files

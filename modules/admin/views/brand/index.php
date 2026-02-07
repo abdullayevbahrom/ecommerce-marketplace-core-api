@@ -24,10 +24,12 @@ $this->params['breadcrumbs'][] = $this->title;
         <div class="box box-info color-palette-box">
             <div class="box-header with-border">
                 <div class="box-title pull-right" style="font-size: 14px">
-                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/brand/create'])?>" class="btn btn-primary">
-                        <i class="fa fa-plus"></i>
-                        Add brand
-                    </a>
+                    <?php if (Yii::$app->user->identity->role != \app\models\user\User::ROLE_MODERATOR): ?>
+                        <a href="<?=Yii::$app->urlManager->createUrl(['/admin/brand/create'])?>" class="btn btn-primary">
+                            <i class="fa fa-plus"></i>
+                            Add brand
+                        </a>
+                    <?php endif; ?>
                 </div>
                 <div id="action-links">
                     <a href="javascript:;" class="btn btn-danger" data-value="remove"><i class="fa fa-trash"></i> Delete</a>

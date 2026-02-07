@@ -1054,6 +1054,14 @@ class SyncController extends Controller
             case 'product-type':
                 $model = ProductType::findOne($id);
                 break;
+
+            case 'category':
+                $model = Category::findOne($id);
+                break;
+
+            case 'brand':
+                $model = CategoryBrand::findOne($id);
+                break;
             
             default:
             $model = null;
@@ -1120,6 +1128,14 @@ class SyncController extends Controller
             case 'product_type':
                 $model = ProductType::findOne($id);
                 break;
+
+            case 'category':
+                $model = Category::findOne($id);
+                break;
+
+            case 'brand':
+                $model = CategoryBrand::findOne($id);
+                break;
             
             default:
             $model = null;
@@ -1162,7 +1178,12 @@ class SyncController extends Controller
         }elseif ($model instanceof ProductType){
             $model->status = ($status === 'approved') ? 1 : 0;
         }
+        elseif ($model instanceof Category) {
+            $model->status = ($status === 'approved') ? 1 : 0;
+        }
         elseif($model instanceof Color) {
+            $model->status = ($status === 'approved') ? 1 : 0;
+        } elseif($model instanceof CategoryBrand) {
             $model->status = ($status === 'approved') ? 1 : 0;
         } else {
             return;

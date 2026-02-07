@@ -31,6 +31,9 @@ class Category extends \yii\db\ActiveRecord
     public $imageFiles = [];
     public $filters = [];
 
+    const STATUS_ACTIVE = 1;
+    const STATUS_INACTIVE = 0;
+
     /**
      * {@inheritdoc}
      */
@@ -282,5 +285,12 @@ class Category extends \yii\db\ActiveRecord
 
     public function getProductTypes() {
         return $this->hasMany(ProductType::className(), ['category_id' => 'id']);
+    }
+
+    public function getModerationComments()
+    {
+        return $this->hasMany(\app\models\moderator\ModerationComment::class,
+            ['entity_id' => 'id']
+        )->andWhere(['entity_type' => 'category']);
     }
 }
