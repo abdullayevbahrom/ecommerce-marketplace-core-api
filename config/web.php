@@ -156,6 +156,10 @@ $config = [
                 'POST api/sync/moderation' => 'api/sync/moderation',
                 'POST api/sync/moderation-comment' => 'api/sync/moderation-comment',
 
+                'POST /api/merchant/question/create' => 'api/merchant-question/create',
+                'POST api/merchant/question/<id:\d+>/reply' => 'api/merchant-question/reply',
+                'POST api/merchant/question/<id:\d+>/close' => 'api/merchant-question/close',
+                'GET /api/merchant/question' => 'api/merchant-question',
 
                 // Wallet API
                 'GET api/wallet/balance' => 'api/wallet/balance',
