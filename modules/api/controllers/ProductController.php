@@ -1473,16 +1473,17 @@ class ProductController extends Controller
             'productProperties',
             'productColors',
             'productColors.color',
-            'color', // Load the main product's color
-            'productProductTypes', // Load product types relationships
-            'productProductTypes.productType', // Load the actual product type
-            'productProductTypes.productTypeValue', // Load the product type value
-            'products', // Load related products
-            'products.color', // Load color for related products  
-            'products.productProductTypes', // Load product types for related products
-            'products.productProductTypes.productType', // Load product type for related products
-            'products.productProductTypes.productTypeValue' // Load product type value for related products
-        ])->where(['id' => $id])->one();
+            'color',
+            'productProductTypes',
+            'productProductTypes.productType',
+            'productProductTypes.productTypeValue',
+            'products',
+            'products.image',
+            'products.color',
+            'products.productProductTypes',
+            'products.productProductTypes.productType',
+            'products.productProductTypes.productTypeValue'
+        ])->where(['id'=>$id])->one();
 
         if ($product === null) {
             throw new \yii\web\NotFoundHttpException('Товар не найден.');

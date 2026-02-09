@@ -226,10 +226,14 @@ class UserCart extends \yii\db\ActiveRecord
 
             if ($response && isset($response['success']) && $response['success'] && isset($response['data']['summaryPrice'])) {
                 return (float)$response['data']['summaryPrice'];
-            } else {
-                Yii::warning('BTS delivery calculation failed: ' . json_encode($response), __METHOD__);
-                return 0.0;
             }
+
+            // TODO: Remove this mock fallback once BTS service is stable and reliable
+            Yii::warning('BTS delivery calculation failed, using mock estimate. Response: ' . json_encode($response), __METHOD__);
+            $baseCost = 25000;
+            $weightCost = max(1.0, $totalWeight) * 5000;
+            return (float)($baseCost + $weightCost);
+            // END TODO: Remove mock fallback
             
         } catch (\Exception $e) {
             Yii::error('BTS delivery calculation error: ' . $e->getMessage(), __METHOD__);

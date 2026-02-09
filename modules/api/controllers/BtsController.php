@@ -72,11 +72,22 @@ class BtsController extends Controller {
     ];
 
     /**
-     * Calculate shipping price using BTS API
+     * Calculate shipping price using BTS API (order-calculator endpoint)
      * POST /api/bts/calculate
+     * 
+     * Required params:
+     * - product_id: Product ID
+     * - receiverCityId: Receiver BTS city ID
+     * 
+     * Optional params:
+     * - amount: Quantity of products (default: 1)
+     * - pickup_type: 'courier', 'branch', 'self' (default: 'branch')
+     * - dropoff_type: 'courier', 'branch', 'self' (default: 'courier')
+     * - is_multiple_cost: 0 or 1 (default: 0)
      */
     public function actionCalculate() {
         $post = Yii::$app->request->post();
+        
         // Validate required fields
         $requiredFields = ['product_id', 'receiverCityId'];
         foreach ($requiredFields as $field) {
@@ -116,55 +127,27 @@ class BtsController extends Controller {
         // Get sender city from product stock
         $senderCityId = $product->stock->bts_city_id;
 
-        // Calculate total weight for the amount of products
-        $totalWeight = $product->weight && $product->weight > 0 
-            ? $product->weight * $amount 
-            : 2 * $amount; // Default 2kg per product if weight not specified
+        // Calculate total weight for the amount of products (in kg)
+        $unitWeight = $product->weight && $product->weight > 0 ? $product->weight : 1.0;
+        $totalWeight = $unitWeight * $amount;
+        $totalWeight = max(1.0, $totalWeight); // Minimum 1kg
 
-        // Calculate total volume from product dimensions (length × height × width) × amount
-        $volume = null;
-        $singleProductVolume = null;
-        if ($product->length && $product->height && $product->width) {
-            // Calculate single product volume (convert cm to meters)
-            $singleProductVolume = ($product->length / 100) * ($product->height / 100) * ($product->width / 100);
-            // Multiply by amount to get total volume
-            $volume = $singleProductVolume * $amount;
-        }
-
-        // Set default date if not provided
-        $senderDate = isset($post['senderDate']) ? $post['senderDate'] : null;
+        // Calculate total volume from product dimensions (in cm³) × amount
+        // Then calculate equivalent cubic dimensions
+        $unitLength = $product->length ?: 10;
+        $unitWidth = $product->width ?: 10;
+        $unitHeight = $product->height ?: 10;
         
-        // Validate and set sender date
-        if (!$senderDate) {
-            // Default to tomorrow
-            $senderDate = date('Y-m-d', strtotime('+1 day'));
-        } else {
-            // Validate date format
-            $dateObj = \DateTime::createFromFormat('Y-m-d', $senderDate);
-            if (!$dateObj || $dateObj->format('Y-m-d') !== $senderDate) {
-                Yii::$app->response->statusCode = 422;
-                return ['errors' => ['senderDate' => ['Неверный формат даты. Используйте Y-m-d']]];
-            }
-
-            // Check if date is not too close (at least 1 day in future)
-            $minDate = new \DateTime('+1 day');
-            $providedDate = new \DateTime($senderDate);
-            
-            if ($providedDate < $minDate) {
-                Yii::$app->response->statusCode = 422;
-                return ['errors' => ['senderDate' => ['Дата отправки должна быть минимум завтра: ' . $minDate->format('Y-m-d')]]];
-            }
-
-            // Check if date is not too far (max 30 days in future)
-            $maxDate = new \DateTime('+30 days');
-            if ($providedDate > $maxDate) {
-                Yii::$app->response->statusCode = 422;
-                return ['errors' => ['senderDate' => ['Дата отправки не может быть позже чем: ' . $maxDate->format('Y-m-d')]]];
-            }
-        }
+        $singleProductVolumeCm3 = $unitLength * $unitWidth * $unitHeight;
+        $totalVolumeCm3 = $singleProductVolumeCm3 * $amount;
+        
+        // Smart stacking: keep base dimensions (length × width), stack by height
+        // This avoids inflating dimensions with a cube approximation
+        $volumeX = max(10, (int)$unitLength);
+        $volumeY = max(10, (int)$unitWidth);
+        $volumeZ = max(10, (int)($unitHeight * $amount)); // Stack products vertically
 
         // Validate city IDs exist
-        $regions = BTS::getRegions();
         $allCities = BTS::getCitiesDetailed();
         
         if (!isset($allCities[$senderCityId])) {
@@ -177,59 +160,113 @@ class BtsController extends Controller {
             return ['errors' => ['receiverCityId' => ['Неверный ID города получателя']]];
         }
 
+        // Get delivery type options from request or use defaults
+        $pickupType = isset($post['pickup_type']) && in_array($post['pickup_type'], ['courier', 'branch', 'self']) 
+            ? $post['pickup_type'] 
+            : 'branch';
+        $dropoffType = isset($post['dropoff_type']) && in_array($post['dropoff_type'], ['courier', 'branch', 'self']) 
+            ? $post['dropoff_type'] 
+            : 'courier';
+        $isMultipleCost = isset($post['is_multiple_cost']) ? (int)$post['is_multiple_cost'] : 0;
+
         try {
-            // Prepare data for BTS API
+            // Prepare data for BTS order-calculator API
             $calculationData = [
-                'senderCityId' => (int)$senderCityId,
-                'receiverCityId' => (int)$post['receiverCityId'],
+                'senderCityCode' => (string)$senderCityId,
+                'receiverCityCode' => (string)$post['receiverCityId'],
+                'pickup_type' => $pickupType,
+                'dropoff_type' => $dropoffType,
+                'is_multiple_cost' => $isMultipleCost,
                 'weight' => (float)$totalWeight,
-                'volume' => $volume ? (int)$volume : null,
-                'senderDate' => $senderDate,
-                'senderDelivery' => 1,
-                'receiverDelivery' => 1
+                'volume' => [
+                    'x' => $volumeX,
+                    'y' => $volumeY,
+                    'z' => $volumeZ
+                ]
             ];
 
-            error_log('Calculation data123: ' . json_encode($calculationData));
             // Call BTS API for calculation
             $btsService = new BTS();
-            $result = $btsService->calculateDelivery($calculationData);
-            error_log('Result2223: ' . json_encode($result));
-            if ($result && isset($result['data']['summaryPrice'])) {
+            $result = $btsService->calculateOrder($calculationData);
+            
+            if ($result && $result['success'] && isset($result['data'])) {
+                // Extract price based on pickup_type and dropoff_type combination
+                $priceKey = $pickupType . '_to_' . $dropoffType;
+                $price = null;
+                $allPrices = [];
+                
+                // Build all prices array and extract selected price
+                $priceKeys = ['branch_to_branch', 'branch_to_courier', 'courier_to_branch', 'courier_to_courier'];
+                foreach ($priceKeys as $key) {
+                    if (isset($result['data'][$key])) {
+                        $allPrices[$key] = $result['data'][$key];
+                        if ($key === $priceKey && isset($result['data'][$key]['price'])) {
+                            $price = $result['data'][$key]['price'];
+                        }
+                    }
+                }
+                
+                // Fallback: try direct price field (for single cost response)
+                if ($price === null && isset($result['data']['price'])) {
+                    $price = $result['data']['price'];
+                }
+                
+                // Fallback: get first available price
+                if ($price === null && !empty($allPrices)) {
+                    foreach ($allPrices as $priceData) {
+                        if (isset($priceData['available']) && $priceData['available'] && isset($priceData['price'])) {
+                            $price = $priceData['price'];
+                            break;
+                        }
+                    }
+                }
+                
                 return [
                     'data' => [
-                        'summaryPrice' => $result['data']['summaryPrice'],
+                        'price' => $price,
+                        'price_key' => $priceKey,
+                        'all_prices' => $isMultipleCost ? $allPrices : null,
                         'currency' => 'UZS',
+                        'bts_response' => $result['data'],
                         'requestData' => $calculationData,
                         'product' => [
                             'id' => $product->id,
                             'name' => $product->name_ru,
                             'amount' => $amount,
                             'single_product' => [
-                                'weight' => $product->weight ?: 2, // Show actual or default weight
+                                'weight' => $unitWeight,
                                 'dimensions' => [
-                                    'length' => $product->length,
-                                    'height' => $product->height,
-                                    'width' => $product->width,
-                                    'volume' => $singleProductVolume
+                                    'length' => $unitLength,
+                                    'width' => $unitWidth,
+                                    'height' => $unitHeight,
+                                    'volume_cm3' => $singleProductVolumeCm3
                                 ]
                             ],
-                            'total_calculation' => [
-                                'weight' => $totalWeight,
-                                'volume' => $volume
-                            ],
+                                'total_calculation' => [
+                                    'weight' => $totalWeight,
+                                    'volume_cm3' => $totalVolumeCm3,
+                                    'packed_dimensions' => [
+                                        'x' => $volumeX,
+                                        'y' => $volumeY,
+                                        'z' => $volumeZ
+                                    ]
+                                ],
                             'stock' => [
                                 'id' => $product->stock->id,
                                 'name' => $product->stock->name_ru,
                                 'city_id' => $product->stock->bts_city_id
                             ]
                         ],
-                        'senderCity' => $allCities[$senderCityId]['name'],
-                        'receiverCity' => $allCities[$post['receiverCityId']]['name']
+                        'senderCity' => $allCities[$senderCityId]['name'] ?? $senderCityId,
+                        'receiverCity' => $allCities[$post['receiverCityId']]['name'] ?? $post['receiverCityId']
                     ]
                 ];
             } else {
                 Yii::$app->response->statusCode = 500;
-                return ['errors' => ['general' => ['Ошибка при расчете стоимости доставки']]];
+                return [
+                    'errors' => ['general' => ['Ошибка при расчете стоимости доставки']],
+                    'bts_response' => $result
+                ];
             }
 
         } catch (\Exception $e) {
