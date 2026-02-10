@@ -21,12 +21,6 @@ class m260208_165307_create_merchant_questions_table extends Migration
             'merchant_id' => $this->integer()->notNull()
                 ->comment('Merchant who should answer'),
 
-            'entity_type' => $this->string(50)->null()
-                ->comment('product | order | general'),
-
-            'entity_id' => $this->integer()->null()
-                ->comment('Related entity ID'),
-
             'status' => $this->tinyInteger()->notNull()->defaultValue(0)
                 ->comment('0=open, 1=answered, 2=closed'),
 

@@ -157,9 +157,11 @@ $config = [
                 'POST api/sync/moderation-comment' => 'api/sync/moderation-comment',
 
                 'POST /api/merchant/question/create' => 'api/merchant-question/create',
-                'POST api/merchant/question/<id:\d+>/reply' => 'api/merchant-question/reply',
+                'POST api/warehouse/ticket/reply-from-warehouse' => 'api/warehouse-ticket/reply-from-warehouse',
                 'POST api/merchant/question/<id:\d+>/close' => 'api/merchant-question/close',
                 'GET /api/merchant/question' => 'api/merchant-question',
+
+                'POST api/warehouse/ticket/close-from-warehouse' => 'api/warehouse-ticket/close-from-warehouse',
 
                 // Wallet API
                 'GET api/wallet/balance' => 'api/wallet/balance',

@@ -30,16 +30,6 @@ class m260209_053838_create_merchant_question_messages_table extends Migration
             '{{%merchant_question_messages}}',
             'question_id'
         );
-
-        $this->addForeignKey(
-            'fk-mqm-question',
-            '{{%merchant_question_messages}}',
-            'question_id',
-            '{{%merchant_questions}}',
-            'id',
-            'CASCADE',
-            'CASCADE'
-        );
     }
 
     /**

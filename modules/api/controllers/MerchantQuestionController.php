@@ -115,24 +115,28 @@ class MerchantQuestionController extends Controller
         }
 
         $merchantId = (int) Yii::$app->request->post('merchant_id');
-
-        if (!$merchantId) {
+        $message    = trim(Yii::$app->request->post('message'));
+    
+        if (!$merchantId || !$message) {
             return [
                 'success' => false,
-                'message' => 'merchant_id is required'
+                'message' => 'merchant_id and message are required'
             ];
         }
-        if (!User::find()->where(['id' => $merchantId, 'role' => User::ROLE_SHOP])->exists()) {
+
+        $merchant = User::find()->where(['id'   => $merchantId, 'role' => User::ROLE_SHOP])->one();
+
+        if (!$merchant) {
             return [
                 'success' => false,
                 'message' => 'Merchant not found'
             ];
-        }   
+        }
 
         $exists = MerchantQuestion::find()
             ->where([
                 'client_id' => $user->id,
-                'merchant_id' => $merchantId,
+                'merchant_id' => $merchant->id,
                 'status' => MerchantQuestion::STATUS_OPEN
             ])
             ->exists();
@@ -144,101 +148,46 @@ class MerchantQuestionController extends Controller
             ];
         }
 
-        $model = new MerchantQuestion();
-        $model->client_id   = $user->id;
-        $model->merchant_id = Yii::$app->request->post('merchant_id');
-        $model->status      = MerchantQuestion::STATUS_OPEN;
-        $model->created_at  = time();
-
-        if (!$model->save()) {
-            return ['success' => false, 'errors' => $model->errors];
-        }
-
-        $msg = new MerchantQuestionMessage();
-        $msg->question_id = $model->id;
-        $msg->sender_role = MerchantQuestionMessage::ROLE_CLIENT;
-        $msg->sender_id   = $user->id;
-        $msg->message     = Yii::$app->request->post('message');
-        $msg->created_at  = time();
-        $msg->save(false);
-
-        NotificationService::notifyMerchantNewQuestion($model);
-        NotificationService::notifyModeratorsNewQuestion($model);
-
-
-        return ['success' => true, 'question_id' => $model->id];
-    }
-
-
-    // POST /merchant/questions/{id}/reply
-    public function actionReply($id)
-    {
-        $user = Yii::$app->user->identity;
-
-        if (!$user) {
-            throw new HttpException(401, 'Unauthorized');
-        }
-
-        /** @var MerchantQuestion $question */
-        $question = MerchantQuestion::findOne($id);
-
-        if (!$question) {
-            throw new HttpException(404, 'Question not found');
-        }
-
-        if ((int)$question->merchant_id !== (int)$user->id) {
-            throw new HttpException(403, 'Access denied');
-        }
-
-        if ($question->status !== MerchantQuestion::STATUS_OPEN) {
-            throw new HttpException(422, 'Question already answered');
-        }
-
-        $messageText = trim(Yii::$app->request->post('message'));
-
-        if (!$messageText) {
-            throw new HttpException(422, 'Message is required');
-        }
-
         $transaction = Yii::$app->db->beginTransaction();
 
         try {
 
-            $message = new MerchantQuestionMessage();
-            $message->question_id = $question->id;
-            $message->sender_id   = $user->id;
-            $message->sender_role = MerchantQuestionMessage::ROLE_MERCHANT;
-            $message->message     = $messageText;
-            $message->created_at = time();
+            $model = new MerchantQuestion();
+            $model->client_id   = $user->id;
+            $model->merchant_id = $merchant->id;//Yii::$app->request->post('merchant_id');
+            $model->status      = MerchantQuestion::STATUS_OPEN;
+            $model->created_at  = time();
 
-            if (!$message->save()) {
-                Yii::error($message->errors, 'merchant_question');
-                throw new \Exception('Failed to save message: ' . json_encode($message->errors));
+            if (!$model->save()) {
+                return ['success' => false, 'errors' => $model->errors];
             }
 
-            $question->status = MerchantQuestion::STATUS_ANSWERED;
-            $question->answered_at = time();
+            $msg = new MerchantQuestionMessage();
+            $msg->question_id = $model->id;
+            $msg->sender_role = MerchantQuestionMessage::ROLE_CLIENT;
+            $msg->sender_id   = $user->id;
+            $msg->message     = $message;//Yii::$app->request->post('message');
+            $msg->created_at  = time();
+            $msg->save(false);
 
-            if (!$question->save(false)) {
-                throw new \Exception('Failed to update question');
-            }
+            // NotificationService::notifyMerchantNewQuestion($model);
+            // NotificationService::notifyModeratorsNewQuestion($model);
 
-            NotificationService::notifyClientAnswered($question, $message);
-            NotificationService::notifyModeratorsAnswered($question);
+            $this->sendDataToWarehouse($user, $merchant, $model, $message);
 
             $transaction->commit();
 
-            return [
-                'success' => true,
-                'message' => 'Reply sent successfully',
-            ];
+
+            return ['success' => true, 'question_id' => $model->id];
+
         } catch (\Throwable $e) {
             $transaction->rollBack();
-            Yii::error($e->getMessage(), 'merchant_question');
+            Yii::error($e->getMessage(), 'create_question_for_merchant');
 
-            throw new HttpException(500, 'Internal server error');
+            return ['success' => false, 'message' => $e->getMessage()];
         }
     }
+
 
     // POST /merchant/questions/{id}/close
     public function actionClose($id)
@@ -256,41 +205,122 @@ class MerchantQuestionController extends Controller
             throw new HttpException(404, 'Question not found');
         }
 
-        // доступ: клиент, мерчант, модератор, админ
-        $isClient    = $user->id == $question->client_id;
-        $isMerchant  = $user->id == $question->merchant_id;
-        $isModerator = in_array($user->role, [
-            User::ROLE_MODERATOR,
-            User::ROLE_ADMIN,
-            User::ROLE_ADMIN,
-        ]);
-
-        if (!$isClient && !$isMerchant && !$isModerator) {
-            throw new HttpException(403, 'Access denied');
+        if ($user->id !== $question->client_id) {
+            throw new HttpException(403, 'Only client can close this ticket');
         }
 
-        if ($question->status === MerchantQuestion::STATUS_CLOSED) {
-            throw new HttpException(422, 'Question already closed');
+        $transaction = Yii::$app->db->beginTransaction();
+
+        try {
+
+            if ($question->status === MerchantQuestion::STATUS_CLOSED) {
+                throw new HttpException(422, 'Question already closed');
+            }
+
+            if ($question->status === MerchantQuestion::STATUS_OPEN) {
+                throw new HttpException(422, 'Cannot close unanswered question');
+            }
+
+            $question->status = MerchantQuestion::STATUS_CLOSED;
+            $question->closed_at = time();
+            $question->save(false);
+
+            $this->syncCloseToWarehouse($user, $question);
+
+            $transaction->commit();
+
+            // NotificationService::notifyQuestionClosed($question, $user);
+
+            return [
+                'success' => true,
+                'message' => 'Question closed successfully',
+            ];
+
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            Yii::error($e->getMessage(), 'close_question_for_merchant');
+
+            return ['success' => false, 'message' => $e->getMessage()];
         }
+    }
 
-        if ($question->status === MerchantQuestion::STATUS_OPEN) {
-            throw new HttpException(422, 'Cannot close unanswered question');
-        }
+    private function syncCloseToWarehouse(User $user, MerchantQuestion $question)
+    {
+        $baseUrl   = Yii::$app->params['warehouseApiUrl'];
+        $secretKey = Yii::$app->params['apiSecretKey'];
 
-        $question->status = MerchantQuestion::STATUS_CLOSED;
-        $question->closed_at = time();
-
-        if (!$question->save(false)) {
-            throw new HttpException(500, 'Failed to close question');
-        }
-
-        NotificationService::notifyQuestionClosed($question, $user);
-
-        return [
-            'success' => true,
-            'message' => 'Question closed successfully',
+        $payload = [
+            'id' => $user->id,
+            'ticket_id' => $question->id,
+            'closed_by'     => 'client',
+            'closed_at'     => time(),
         ];
+
+        $token = md5($user->id . $secretKey);
+
+        try {
+            $client = new \GuzzleHttp\Client([
+                'timeout' => 5,
+            ]);
+
+            $response = $client->post(
+                rtrim($baseUrl, '/') . '/api/tickets/close-from-shop',
+                [
+                    'json' => $payload,
+                    'headers' => [
+                        'X-Api-Token' => $token,
+                        'Accept' => 'application/json',
+                    ],
+                ]
+            );
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (\Throwable $e) {
+            Yii::error($e->getMessage(), 'merchant_ticket_closed');
+        }
     }
 
 
+    private function sendDataToWarehouse(User $user, $merchant, MerchantQuestion $ticket, $message)
+    {
+        $baseUrl   = Yii::$app->params['warehouseApiUrl'] ?? null;
+        $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
+        
+        $payload = [
+            'id'    => $merchant->shop_id,
+            'client_id' => $user->id,
+            'client_name'  => trim($user->name . ' ' . $user->lastname),
+            'client_phone' => $user->phone,
+            'merchant_id'  => $merchant->id,
+            'ticket_id' => $ticket->id,
+            'message'      => $message,
+        ];
+
+        $token = md5($merchant->shop_id . $secretKey);
+
+        try {
+            $client = new \GuzzleHttp\Client([
+                'timeout' => 5,
+            ]);
+
+            $response = $client->post(rtrim($baseUrl, '/') . '/api/tickets/from-shop',
+            [
+                    'json' => $payload,
+                    'headers' => [
+                        'X-Api-Token' => $token,
+                        'Accept' => 'application/json',
+                    ],
+                ]
+            );
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (\Throwable $e) {
+            Yii::error($e->getMessage(), 'merchant_ticket');
+
+            return [
+                'success' => false,
+                'message' => 'Failed to send ticket to warehouse',
+            ];
+        }
+    }
 }
