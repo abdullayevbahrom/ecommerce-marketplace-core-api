@@ -294,7 +294,7 @@ class SyncController extends Controller
 
         $categoryId = $request->post('category_id');
         $brandId = $request->post('brand_id');
-        $colorId = $request->post('color_id');
+        // $colorId = $request->post('color_id');
 
 
         if (!$shopId && !$userId && !$tokenKey) {
@@ -326,11 +326,11 @@ class SyncController extends Controller
             return ['error' => 'brand not found'];
         }
 
-        $color = Color::findOne($colorId);
-        if (!$color) {
-            Yii::$app->response->statusCode = 404;
-            return ['error' => 'color not found'];
-        }
+        // $color = Color::findOne($colorId);
+        // if (!$color) {
+        //     Yii::$app->response->statusCode = 404;
+        //     return ['error' => 'color not found'];
+        // }
 
         $product = Product::find()->where([
             'id'   => $productId,
@@ -370,7 +370,7 @@ class SyncController extends Controller
 
         $product->category_id = $category->id;
         $product->brand_id    = $brand->id;
-        $product->color_id    = $color->id;
+        // $product->color_id    = $color->id;
         $product->sync_status = 1;
 
         // $product->status      = (int)$request->post('status', 1);

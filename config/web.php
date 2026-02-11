@@ -166,6 +166,12 @@ $config = [
                 // Wallet API
                 'GET api/wallet/balance' => 'api/wallet/balance',
                 'POST api/wallet/deploy' => 'api/wallet/deploy',
+
+                'POST /api/session/profile' => 'api/session-profile',
+                'POST /api/session/sessions' => 'api/session-sessions',
+                'POST /api/session/refresh' => 'api/session-refresh',
+                'POST /api/session/logout' => 'api/session-logout',
+                'POST /api/session/logout-all' => 'api/session-logout-all'
                 
             ],
         ],

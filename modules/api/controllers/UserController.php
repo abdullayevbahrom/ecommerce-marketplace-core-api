@@ -13,6 +13,7 @@ use app\models\user\card\UserCard;
 use app\models\user\address\UserAddress;
 use app\models\Images;
 use app\models\Category;
+use app\models\session\WebSession;
 use app\services\Sms\Sms;
 use yii\caching\FileCache;
 use app\services\DidoxService;
@@ -193,17 +194,27 @@ class UserController extends Controller {
         $user->phone_code = null;
         $user->sms_live = null;
 
-        if ($user->save()) {
-            $user = User::find()->with('image')->where(['id'=>$user->id])->one();
-            $userData = $user->toArray();
-            $userData['bts_region_id'] = $user->bts_region_id;
-            $userData['bts_city_id'] = $user->bts_city_id;
-            $userData['bts_region_name'] = \yii\services\BTS::getRegionName($user->bts_region_id, $post['language'] ?? 'ru');
-            $userData['bts_city_name'] = \yii\services\BTS::getCityName($user->bts_city_id, $post['language'] ?? 'ru');
-            return $this->sendSuccess($userData);
+
+        if (!$user->save()) {
+            return $this->sendError(
+                ErrorCodes::ERROR_SERVER,
+                'Произошла ошибка при сохранении пользователя.',
+                ['server' => ['Ошибка сохранения']]
+            );
         }
-        
-        return $this->sendError(ErrorCodes::ERROR_SERVER, 'Произошла ошибка при сохранении пользователя.', ['server'=>['Произошла ошибка при сохранении пользователя.']]);
+
+        $webSession = WebSession::createSession($user);
+
+        $user = User::find()->with('image')->where(['id'=>$user->id])->one();
+        $userData = $user->toArray();
+        $userData['bts_region_id'] = $user->bts_region_id;
+        $userData['bts_city_id'] = $user->bts_city_id;
+        $userData['bts_region_name'] = \yii\services\BTS::getRegionName($user->bts_region_id, $post['language'] ?? 'ru');
+        $userData['bts_city_name'] = \yii\services\BTS::getCityName($user->bts_city_id, $post['language'] ?? 'ru');
+
+        $userData['web_session_token'] = $webSession->access_token;
+
+        return $this->sendSuccess($userData);
     }
 
     public function actionRecoverPassword() {

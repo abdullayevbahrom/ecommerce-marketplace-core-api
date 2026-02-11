@@ -8,6 +8,7 @@ use app\models\Notification;
 use app\models\user\User;
 use app\services\NotificationService;
 use Yii;
+use yii\data\ActiveDataProvider;
 use yii\filters\auth\HttpBearerAuth;
 use yii\rest\Controller;
 use yii\web\HttpException;
@@ -41,7 +42,7 @@ class MerchantQuestionController extends Controller
 
         $query = MerchantQuestion::find()
         ->with([
-            'messages',
+            'messages', 
             'client' => function ($q) {
                 $q->select(['id', 'phone', 'name']);
             },
@@ -62,47 +63,27 @@ class MerchantQuestionController extends Controller
             throw new HttpException(403, 'Access denied');
         }
 
-        $questions = $query->all();
+        $dataProvider = new ActiveDataProvider([
+            'query' => $query,
+            'pagination' => [
+                'pageSize' => Yii::$app->request->get('per_page', 15),
+                'page' => max(0, Yii::$app->request->get('page', 1) - 1),
+            ],
+        ]);
 
         return [
             'success' => true,
-            'data' => $questions,
-            //'data' => array_map([$this, 'serializeQuestion'], $questions),
+            'data' => $dataProvider->getModels(),
+            'meta' => [
+                'total' => $dataProvider->getTotalCount(),
+                'page' => $dataProvider->pagination->page + 1,
+                'per_page' => $dataProvider->pagination->pageSize,
+                'page_count' => $dataProvider->pagination->getPageCount(),
+            ],
         ];
+        
     }
 
-    protected function serializeQuestion(MerchantQuestion $q): array
-    {
-        return [
-            'id' => $q->id,
-            'status' => $q->status,
-            'created_at' => $q->created_at,
-            'answered_at' => $q->answered_at,
-            'closed_at' => $q->closed_at,
-
-            'client' => $q->client ? [
-                'id' => $q->client->id,
-                'name' => $q->client->name,
-                'phone' => $q->client->phone,
-            ] : null,
-
-            'merchant' => $q->merchant ? [
-                'id' => $q->merchant->id,
-                'name' => $q->merchant->name,
-                'phone' => $q->merchant->phone,
-            ] : null,
-
-            'messages' => array_map(function ($m) {
-                return [
-                    'id' => $m->id,
-                    'sender_id' => $m->sender_id,
-                    'sender_role' => $m->sender_role,
-                    'message' => $m->message,
-                    'created_at' => $m->created_at,
-                ];
-            }, $q->messages),
-        ];
-    }
 
     public function actionCreate()
     {
