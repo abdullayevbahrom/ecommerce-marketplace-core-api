@@ -15,7 +15,7 @@ return [
     'bts_inn' => '123456789', // Add your company INN for BTS authentication
 
     // Base URL
-    'baseUrl' => 'http://shop.test',
+    'baseUrl' => 'http://localhost:8080',//'http://shop.test',
     'apiSecretKey' => '123',
     'warehouseSyncEnabled' => false,
     'warehouseApiUrl' => 'http://localhost:8000', // Default warehouse API URL

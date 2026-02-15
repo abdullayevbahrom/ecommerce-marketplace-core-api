@@ -508,7 +508,10 @@ class Product extends \yii\db\ActiveRecord
                 if ($product->image) {
                     $product->image->removeImageSize();
                 }
-                $image->uploadPhoto($product->id, 'product');
+                // $image->uploadPhoto($product->id, 'product');
+
+                $image->uploadPhoto($product->token_key, 'product');
+
                 $hasUploadedImages = true;
             }
 
@@ -698,7 +701,8 @@ class Product extends \yii\db\ActiveRecord
                 if ($this->image) {
                     $this->image->removeImageSize();
                 }
-                $image->uploadPhoto($this->id, 'product');
+                // $image->uploadPhoto($this->id, 'product');
+                $image->uploadPhoto($this->token_key, 'product');
             }
 
             if ($image->imageFiles = UploadedFile::getInstances($this, 'imageGallery')) {
@@ -736,7 +740,10 @@ class Product extends \yii\db\ActiveRecord
             if ($this->image->web == 1) {
                 return $this->image->photo;
             }
-            $path = Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
+            // $path = Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
+
+            $path = Images::PHOTO_PRODUCT_PATH.$this->token_key.'/'.$s.'/'.$this->image->photo;
+
             if (is_file($path)) {
                 return '/'.$path;
             // $imageManager = new ImageManager();
@@ -965,6 +972,21 @@ class Product extends \yii\db\ActiveRecord
                 }
                 return null;
             },
+            'user' => function() {
+                return $this->user ? [
+                    'id' => $this->user->id,
+                    'role' => $this->user->role,
+                    'type' => $this->user->type,
+                    'shop' => $this->user->shop_id,
+                    'name' => $this->user->name,
+                    'phone' => $this->user->phone,
+                ] : null;
+            },
+            'images' => function () {
+                return \app\models\Images::find()->where(['token_key' => $this->token_key])
+                ->asArray()
+                ->all();
+            },
             'tag',
             'name_ru',
             'name_en',
@@ -978,6 +1000,12 @@ class Product extends \yii\db\ActiveRecord
             'delivery',
             'discount',
             'amount',
+            'unit' => function() {
+                        return $this->unit ? [
+                            'id' => $this->unit->id,
+                            'name' => $this->unit->name_ru
+                        ] : null;
+                    },
             'brand',
             'category',
             'category_full' => function(){return $this->getCategoryFull();},
@@ -1218,12 +1246,23 @@ class Product extends \yii\db\ActiveRecord
     }
 
     // images
+    // public function getImage() {
+    //     return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'product', 'main'=>1]);
+    // }
+
     public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'product', 'main'=>1]);
+        return $this->hasOne(Images::className(), ['token_key'=>'token_key'])
+            ->andOnCondition(['type'=>'product', 'main'=>1]);
     }
 
+
+    // public function getGallery() {
+    //     return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type'=>'product', 'main'=>2]);
+    // }
+
     public function getGallery() {
-        return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type'=>'product', 'main'=>2]);
+        return $this->hasMany(Images::className(), ['token_key'=>'token_key'])
+            ->andOnCondition(['type'=>'product', 'main'=>2]);
     }
 
     // brand
@@ -1296,6 +1335,25 @@ class Product extends \yii\db\ActiveRecord
             ->via('productProductTypes');
     }
 
+    public function getUnit()
+    {
+        return $this->hasOne(Category::className(), ['id' => 'unit_id'])
+            ->andOnCondition(['type' => 'unit']);
+    }
+
+    public function getCurrency()
+    {
+        return $this->hasOne(Category::className(), ['id' => 'unit_id'])
+            ->andOnCondition(['type' => 'currency']);
+    }
+
+    public function get()
+    {
+        return $this->hasOne(Category::className(), ['id' => 'unit_id'])
+            ->andOnCondition(['type' => 'currency']);
+    }
+
+
     /**
      * Get IKPU name with fallback to cached value
      *
@@ -1352,6 +1410,10 @@ class Product extends \yii\db\ActiveRecord
      */
     public function beforeSave($insert)
     {
+        if ($insert && empty($this->token_key)) {
+            $this->token_key = Yii::$app->security->generateRandomString(32);
+        }
+
         if (parent::beforeSave($insert)) {
             // Update IKPU cache if code changed
             if ($this->isAttributeChanged('ikpu_code')) {

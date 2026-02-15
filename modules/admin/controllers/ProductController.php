@@ -220,8 +220,10 @@ class ProductController extends Controller {
         error_log("🔧 DEBUG: Shop IDs with warehouses: " . implode(', ', array_keys($warehousesByShop)));
         
         $tags = ArrayHelper::map(Category::find()->where(['type'=>'tag'])->all(), 'id', 'name_ru');
+        $units = ArrayHelper::map(Category::find()->where(['type' => 'unit', 'status' => 1])->all(), 'id', 'name_ru');
         $colors = ArrayHelper::map(Color::find()->all(), 'id', 'name_ru');
         $colors_object = Color::find()->all();
+        $currencies = ArrayHelper::map(Category::find()->where(['type' => 'currency', 'status' => 1])->all(), 'id', 'name_ru');
 
         // Product types will be loaded dynamically via AJAX
         $product_types = [];
@@ -246,6 +248,8 @@ class ProductController extends Controller {
             'shops' => $shops,
             'warehousesByShop' => $warehousesByShop,
             'tags' => $tags,
+            'units' => $units,
+            'currencies' => $currencies,
             'product_types' => $product_types,
             'product_type_values' => $product_type_values
         ]);

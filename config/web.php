@@ -109,6 +109,8 @@ $config = [
                 'GET api/product-attribute/region' => 'api/product-attribute/region-list',
                 'GET api/product-attribute/delivery' => 'api/product-attribute/delivery-list',
                 'GET api/product-attribute/office' => 'api/product-attribute/office-list',
+                'GET api/product-attribute/unit' => 'api/product-attribute/unit-list',
+                'GET api/product-attribute/currency' => 'api/product-attribute/currency-list',
                 
                 // Product Management (Sklad Integration)
                 'POST api/product/create' => 'api/product/create',
@@ -167,11 +169,11 @@ $config = [
                 'GET api/wallet/balance' => 'api/wallet/balance',
                 'POST api/wallet/deploy' => 'api/wallet/deploy',
 
-                'POST /api/session/profile' => 'api/session-profile',
-                'POST /api/session/sessions' => 'api/session-sessions',
-                'POST /api/session/refresh' => 'api/session-refresh',
-                'POST /api/session/logout' => 'api/session-logout',
-                'POST /api/session/logout-all' => 'api/session-logout-all'
+                'POST /api/session/profile' => 'api/session/profile',
+                'POST /api/session/sessions' => 'api/session/sessions',
+                'POST /api/session/refresh' => 'api/session/refresh',
+                'POST /api/session/logout' => 'api/session/logout',
+                'POST /api/session/logout-all' => 'api/session/logout-all'
                 
             ],
         ],

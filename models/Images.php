@@ -13,10 +13,26 @@ use yii\helpers\FileHelper;
 use Jenssegers\ImageHash\ImageHash;
 use Jenssegers\ImageHash\Implementations\DifferenceHash;
 
+/**
+ * @property int $id
+ * @property int|null $object_id
+ * @property string|null $type
+ * @property string|null $photo
+ * @property int|null $main
+ * @property int|null $sort
+ * @property int|null $status
+ * @property string|null $hash
+ * @property string|null $token_key
+ */
+
 class Images extends \yii\db\ActiveRecord {
     const PHOTO_USER_PATH = 'uploads/user/';
     const PHOTO_CATEGORY_PATH = 'uploads/category/';
-    const PHOTO_PRODUCT_PATH = 'uploads/product/';
+
+    // const PHOTO_PRODUCT_PATH = 'uploads/product/';
+
+    const PHOTO_PRODUCT_PATH = '/var/www/shared_storage/uploads/product/';
+
     const PHOTO_NEWS_PATH = 'uploads/news/';
     const PHOTO_DELIVERY_PATH = 'uploads/delivery/';
     const PHOTO_SLIDER_PATH = 'uploads/slider/';
@@ -74,6 +90,7 @@ class Images extends \yii\db\ActiveRecord {
             [['type', 'photo', 'number_image'], 'string', 'max' => 255],
             [['colors'], 'safe'],
             [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, svg', 'maxSize' => 2048000],
+            [['token_key'], 'string', 'max' => 64],
         ];
     }
 
@@ -92,98 +109,164 @@ class Images extends \yii\db\ActiveRecord {
         ];
     }
 
-    public function uploadPhoto($object_id, $type, $main = 1, $type_image = null, $check = true) 
+    // public function uploadPhoto($object_id, $type, $main = 1, $type_image = null, $check = true) 
+    // {
+    //     if (!array_key_exists($type, $this->object)) {
+    //         return false;
+    //     }
+    
+    //     $path = $this->object[$type];
+    
+    //     // Функция для создания директории, если она не существует
+    //     $createDir = function($dir) {
+    //         if (!is_dir($dir)) {
+    //             if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
+    //                 throw new \RuntimeException(sprintf('Directory "%s" was not created', $dir));
+    //             }
+    //         }
+    //     };
+        
+    
+    //     if (is_array($object_id)) {
+    //         foreach ($object_id as $v) {
+    //             $createDir($path.$v);
+    //             $createDir($path.$v.'/original');
+    //         }
+    //     } else {
+    //         $createDir($path.$object_id);
+    //         $createDir($path.$object_id.'/original');
+    //     }
+        
+    //     foreach ($this->imageFiles as $key => $file) {
+    //         // Если $file это массив, то берём файл по ключу
+    //         $file = is_array($file) ? $file[$key] : $file;
+    
+    //         if (is_array($object_id)) {
+    //             $id = $object_id[$key];
+    //         } else {
+    //             $id = $object_id;
+    //         }
+    
+    //         $rnd = mt_rand(0, 1000000);
+    //         $name = time() + $rnd.'.'.$file->extension;
+    //         $original = $path.$id.'/original/'.$name;
+    
+    //         if ($file->saveAs($original)) {
+    //             $hasher = new ImageHash(new DifferenceHash());
+    //             // $hash = $hasher->hash(Yii::$app->params['baseUrl'].'/'.$original);
+
+    //             $absolutePath = Yii::getAlias('@webroot') . '/' . $original;
+    //             if (!file_exists($absolutePath)) {
+    //                 throw new \Exception('File not found: ' . $absolutePath);
+    //             }
+    //             $hash = $hasher->hash($absolutePath);
+    
+    //             // Если файл не является видео или SVG, создаем миниатюры
+    //             if ($file->extension != 'mp4' && $file->extension != 'svg') {
+    //                 foreach ($this->image_sizes as $sizeKey => $img) {
+    //                     $sizePath = $path.$id.'/'.$sizeKey.'x'.$img;
+    //                     $createDir($sizePath); // Создаем директорию для миниатюр, если её нет
+    //                     Image::thumbnail($original, $sizeKey, $img)->save(Yii::getAlias($sizePath.'/'.$name), ['quality' => 80]);
+    //                 }
+    //             }
+    
+    //             $status = (Yii::$app->user->identity->role == User::ROLE_ADMIN) ? 1 : 0;
+    
+    //             if ($this->photo && $check) {
+    //                 $original = $path.$id.'/original/'.$this->photo;
+    //                 if (is_file($original)) {
+    //                     unlink($original);
+    //                 }
+    //                 if ($file->extension != 'mp4' && $file->extension != 'svg') {
+    //                     foreach ($this->image_sizes as $sizeKey => $img) {
+    //                         $photo = $path.$id.'/'.$sizeKey.'x'.$img.'/'.$this->photo;
+    //                         if (is_file($photo)) {
+    //                             unlink($photo);
+    //                         }
+    //                     }
+    //                 }
+    
+    //                 Yii::$app->db->createCommand()->update('image', ['photo' => $name], ['id' => $this->id, 'hash' => $hash])->execute();
+    //             } else {
+    //                 Yii::$app->db->createCommand()->insert('image', [
+    //                     'type' => $type_image ? $type_image : $type,
+    //                     'object_id' => $id,
+    //                     'photo' => $name,
+    //                     'main' => $main,
+    //                     'sort' => 0,
+    //                     'web' => 0,
+    //                     'status' => $status,
+    //                     'hash' => $hash
+    //                 ])->execute();
+    //             }
+    //         } else {
+    //             // Обработка ошибки сохранения файла
+    //             return false;
+    //         }
+    //     }
+    
+    //     return true;
+    // }
+
+    public function uploadPhoto($tokenKey, $type, $main = 1, $type_image = null, $check = true)
     {
         if (!array_key_exists($type, $this->object)) {
             return false;
         }
-    
-        $path = $this->object[$type];
-    
-        // Функция для создания директории, если она не существует
+
+        $basePath = $this->object[$type];
+        $productPath = $basePath . $tokenKey;
+
         $createDir = function($dir) {
             if (!is_dir($dir)) {
-                if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
-                    throw new \RuntimeException(sprintf('Directory "%s" was not created', $dir));
-                }
+                mkdir($dir, 0755, true);
             }
         };
-        
-    
-        if (is_array($object_id)) {
-            foreach ($object_id as $v) {
-                $createDir($path.$v);
-                $createDir($path.$v.'/original');
-            }
-        } else {
-            $createDir($path.$object_id);
-            $createDir($path.$object_id.'/original');
-        }
-        
-        foreach ($this->imageFiles as $key => $file) {
-            // Если $file это массив, то берём файл по ключу
-            $file = is_array($file) ? $file[$key] : $file;
-    
-            if (is_array($object_id)) {
-                $id = $object_id[$key];
-            } else {
-                $id = $object_id;
-            }
-    
+
+        $createDir($productPath);
+        $createDir($productPath . '/original');
+
+        foreach ($this->imageFiles as $file) {
+
             $rnd = mt_rand(0, 1000000);
-            $name = time() + $rnd.'.'.$file->extension;
-            $original = $path.$id.'/original/'.$name;
-    
-            if ($file->saveAs($original)) {
+            $name = time() . '_' . $rnd . '.' . $file->extension;
+
+            $originalPath = $productPath . '/original/' . $name;
+
+            if ($file->saveAs($originalPath)) {
+
+                $absolutePath = Yii::getAlias('@webroot') . '/' . $originalPath;
+
                 $hasher = new ImageHash(new DifferenceHash());
-                $hash = $hasher->hash(Yii::$app->params['baseUrl'].'/'.$original);
-    
-                // Если файл не является видео или SVG, создаем миниатюры
-                if ($file->extension != 'mp4' && $file->extension != 'svg') {
-                    foreach ($this->image_sizes as $sizeKey => $img) {
-                        $sizePath = $path.$id.'/'.$sizeKey.'x'.$img;
-                        $createDir($sizePath); // Создаем директорию для миниатюр, если её нет
-                        Image::thumbnail($original, $sizeKey, $img)->save(Yii::getAlias($sizePath.'/'.$name), ['quality' => 80]);
-                    }
+                $hash = $hasher->hash($absolutePath);
+
+                // Миниатюры
+                foreach ($this->image_sizes as $sizeKey => $img) {
+
+                    $sizeFolder = $productPath . '/' . $sizeKey . 'x' . $img;
+                    $createDir($sizeFolder);
+
+                    \yii\imagine\Image::thumbnail($originalPath, $sizeKey, $img)
+                        ->save($sizeFolder . '/' . $name, ['quality' => 80]);
                 }
-    
-                $status = (Yii::$app->user->identity->role == User::ROLE_ADMIN) ? 1 : 0;
-    
-                if ($this->photo && $check) {
-                    $original = $path.$id.'/original/'.$this->photo;
-                    if (is_file($original)) {
-                        unlink($original);
-                    }
-                    if ($file->extension != 'mp4' && $file->extension != 'svg') {
-                        foreach ($this->image_sizes as $sizeKey => $img) {
-                            $photo = $path.$id.'/'.$sizeKey.'x'.$img.'/'.$this->photo;
-                            if (is_file($photo)) {
-                                unlink($photo);
-                            }
-                        }
-                    }
-    
-                    Yii::$app->db->createCommand()->update('image', ['photo' => $name], ['id' => $this->id, 'hash' => $hash])->execute();
-                } else {
-                    Yii::$app->db->createCommand()->insert('image', [
-                        'type' => $type_image ? $type_image : $type,
-                        'object_id' => $id,
-                        'photo' => $name,
-                        'main' => $main,
-                        'sort' => 0,
-                        'web' => 0,
-                        'status' => $status,
-                        'hash' => $hash
-                    ])->execute();
-                }
-            } else {
-                // Обработка ошибки сохранения файла
-                return false;
+
+                Yii::$app->db->createCommand()->insert('image', [
+                    'type' => $type_image ?: $type,
+                    'token_key' => $tokenKey,
+                    'photo' => $name,
+                    'main' => $main,
+                    'sort' => 0,
+                    'web' => 0,
+                    'status' => 1,
+                    'hash' => (string)$hash
+                ])->execute();
             }
         }
-    
+
         return true;
     }
+
+
 
 
     public function removeImage() {

@@ -18,6 +18,7 @@ use app\models\stock\Stock;
 use app\models\Region;
 use app\models\delivery\Delivery;
 use app\models\office\Office;
+use yii\filters\ContentNegotiator;
 
 /**
  * ProductAttributeController handles READ-ONLY access for auxiliary product data
@@ -29,9 +30,17 @@ class ProductAttributeController extends Controller
 
     public function behaviors()
     {
-        $behaviors = parent::behaviors();
-        $behaviors['contentNegotiator']['formats']['application/json'] = Response::FORMAT_JSON;
-        return $behaviors;
+        // $behaviors = parent::behaviors();
+        // $behaviors['contentNegotiator']['formats']['application/json'] = Response::FORMAT_JSON;
+        // return $behaviors;
+        return [
+            'contentNegotiator' => [
+                'class' => ContentNegotiator::class,
+                'formats' => [
+                    'application/json' => Response::FORMAT_JSON,
+                ],
+            ],
+        ];
     }
 
     /**
@@ -113,6 +122,34 @@ class ProductAttributeController extends Controller
         $this->checkAuth();
         
         $query = Category::find()->where(['type' => 'product'])->asArray();
+        $this->applySyncFilter($query);
+        
+        return $this->paginate($query, $page, $pageSize);
+    }
+
+    /**
+     * Get list of Units
+     * GET /api/product-attribute/unit
+     */
+    public function actionUnitList($page = 1, $pageSize = 50)
+    {
+        $this->checkAuth();
+        
+        $query = Category::find()->where(['type' => 'unit'])->asArray();
+        $this->applySyncFilter($query);
+        
+        return $this->paginate($query, $page, $pageSize);
+    }
+
+    /**
+     * Get list of Units
+     * GET /api/product-attribute/unit
+     */
+    public function actionCurrencyList($page = 1, $pageSize = 50)
+    {
+        $this->checkAuth();
+        
+        $query = Category::find()->where(['type' => 'currency'])->asArray();
         $this->applySyncFilter($query);
         
         return $this->paginate($query, $page, $pageSize);

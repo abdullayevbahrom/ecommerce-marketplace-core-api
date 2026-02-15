@@ -2,16 +2,32 @@
 
 namespace app\modules\api\controllers;
 
+use app\components\WebSessionAuth;
 use app\models\session\WebSession;
 use app\models\user\User;
 use Yii;
-use yii\console\Response;
+use yii\filters\ContentNegotiator;
 use yii\rest\Controller;
 use yii\web\HttpException;
-use yii\web\Response as WebResponse;
+use yii\web\Response;
 
 class SessionController extends Controller
 {
+    public function behaviors()
+    {
+        return [
+            'authenticator' => [
+                'class' => WebSessionAuth::class,
+            ],
+            'contentNegotiator' => [
+                'class' => ContentNegotiator::class,
+                'formats' => [
+                    'application/json' => Response::FORMAT_JSON,
+                ],
+            ],
+        ];
+    }
+
     public function actionSessions()
     {
         $user = Yii::$app->user->identity;
@@ -32,16 +48,19 @@ class SessionController extends Controller
 
     public function actionProfile()
     {
-        Yii::$app->response->format = WebResponse::FORMAT_JSON;
+        Yii::$app->response->format = Response::FORMAT_JSON;
 
-        $token = Yii::$app->request->headers->get('web_session');
+        $token = Yii::$app->request->headers->get('Web-Session');
 
         if (!$token) {
             return ['success' => false, 'message' => 'Session token missing'];
         }
 
         $session = WebSession::find()
-            ->where(['token' => $token])
+            ->where([
+                'access_token' => $token,
+                'is_revoked' => 0
+            ])
             ->andWhere(['>', 'expires_at', time()])
             ->one();
 
@@ -53,13 +72,7 @@ class SessionController extends Controller
 
         return [
             'success' => true,
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'lastname' => $user->lastname,
-                'phone' => $user->phone,
-                'role' => $user->role,
-            ]
+            'data' => $user
         ];
     }
 
@@ -100,6 +113,9 @@ class SessionController extends Controller
 
     public function actionLogoutAll()
     {
+        $currentToken = Yii::$app->request->headers->get('Authorization');
+        $currentToken = str_replace('Bearer ', '', $currentToken);
+
         $user = Yii::$app->user->identity;
 
         WebSession::updateAll(
