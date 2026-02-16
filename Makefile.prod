@@ -4,10 +4,10 @@ DB = $(DC) exec db
 
 dc_up:
 	@$(DC) up -d --build --remove-orphans shop
-	@sleep 60
+	#@sleep 60
 	@$(SHOP) composer install --optimize-autoloader --no-interaction --no-dev --prefer-dist --no-progress --no-suggest --no-scripts
-	@$(SHOP) php yii migrate --interactive=0 || true
-	@$(SHOP) php yii asset --interactive=0 || true
+	#@$(SHOP) php yii migrate --interactive=0 || true
+	#@$(SHOP) php yii asset --interactive=0 || true
 dc_ps:
 	@$(DC) ps
 
