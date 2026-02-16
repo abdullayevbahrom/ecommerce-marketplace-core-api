@@ -2,14 +2,8 @@
 
 use yii\db\Migration;
 
-/**
- * Class m220119_130050_delivery
- */
 class m220119_130050_delivery extends Migration
 {
-    /**
-     * {@inheritdoc}
-     */
     public function safeUp()
     {
         $this->createTable('delivery', [
@@ -29,28 +23,8 @@ class m220119_130050_delivery extends Migration
         $this->createIndex('id', 'delivery', 'id', true);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function safeDown()
     {
-        echo "m220119_130050_delivery cannot be reverted.\n";
-
-        return false;
+        $this->dropTable('delivery');
     }
-
-    /*
-    // Use up()/down() to run migration code without a transaction.
-    public function up()
-    {
-
-    }
-
-    public function down()
-    {
-        echo "m220119_130050_delivery cannot be reverted.\n";
-
-        return false;
-    }
-    */
 }

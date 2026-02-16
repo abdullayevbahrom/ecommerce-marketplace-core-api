@@ -63,6 +63,35 @@ class WebSession extends \yii\db\ActiveRecord
         ];
     }
 
+    public function fields()
+    {
+        return [
+            'id',
+            'user_id',
+            'access_token',
+            'refresh_token',
+            'device_name',
+            'platform',
+            'browser',
+            'ip',
+            'user_agent',
+            'is_revoked',            
+            'created_at' => function () {
+                return Yii::$app->formatter->asDatetime($this->created_at, 'php:Y-m-d H:i:s');
+            },
+            'expired_at' => function () {
+                return $this->expires_at
+                    ? Yii::$app->formatter->asDatetime($this->expires_at, 'php:Y-m-d H:i:s')
+                    : null;
+            },
+            'updated_at' => function () {
+                return $this->updated_at
+                    ? Yii::$app->formatter->asDatetime($this->updated_at, 'php:Y-m-d H:i:s')
+                    : null;
+            },
+        ];
+    }
+
     public function getUser()
     {
         return $this->hasOne(User::class, ['id' => 'user_id']);

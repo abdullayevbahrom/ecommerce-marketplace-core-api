@@ -2,14 +2,16 @@
 
 use yii\db\Migration;
 
-class m220323_065224_category_brand extends Migration
+/**
+ * Class m250126_130300_create_stock_table
+ */
+class m250126_130300_create_stock_table extends Migration
 {
     public function safeUp()
     {
-        $this->createTable('category_brand', [
+        $this->createTable('{{%stock}}', [
             'id' => $this->primaryKey(),
-            'category_id' => $this->integer(),
-            'category_tree' => $this->string(),
+            'shop_id' => $this->integer(),
             'name_ru' => $this->string(),
             'name_en' => $this->string(),
             'name_uz' => $this->string(),
@@ -18,18 +20,14 @@ class m220323_065224_category_brand extends Migration
             'description_uz' => $this->text(),
             'status' => $this->integer()->notNull()->defaultValue(1),
             'sort' => $this->integer()->notNull()->defaultValue(0),
-            'date' => $this->timestamp(),
-            'deleted_at' => $this->dateTime()->null()
-        ]);
+            'date' => $this->timestamp()->defaultExpression('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
+        ], 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
 
-        $this->addForeignKey('category_brand_c_fk', 'category_brand', 'category_id', 'category', 'id');
-        
+        $this->createIndex('stock_u_fk', '{{%stock}}', 'shop_id');
     }
 
     public function safeDown()
     {
-        $this->dropForeignKey('category_brand_c_fk', 'category_brand');
-        $this->dropTable('category_brand');
+        $this->dropTable('{{%stock}}');
     }
-
 }

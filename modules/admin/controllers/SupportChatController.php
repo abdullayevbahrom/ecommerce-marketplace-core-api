@@ -3,19 +3,15 @@
 namespace app\modules\admin\controllers;
 
 
-use Yii;
-use yii\web\Controller;
-use yii\web\NotFoundHttpException;
-use yii\web\HttpException;
-use yii\filters\VerbFilter;
-use yii\helpers\ArrayHelper;
-
-use app\models\support-chat\SupportChat;
 use app\models\chat\Messages;
+use app\models\support\SupportChat;
+use app\models\user\User;
+use Yii;
+
 use yii\data\ActiveDataProvider;
 use yii\web\Controller;
+use yii\web\HttpException;
 use yii\web\NotFoundHttpException;
-use yii\filters\VerbFilter;
 
 /**
  * SupportChatController implements the CRUD actions for SupportChat model.

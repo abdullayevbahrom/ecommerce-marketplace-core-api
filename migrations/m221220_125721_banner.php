@@ -2,14 +2,8 @@
 
 use yii\db\Migration;
 
-/**
- * Class m221220_125721_banner
- */
 class m221220_125721_banner extends Migration
 {
-    /**
-     * {@inheritdoc}
-     */
     public function safeUp()
     {
         $this->createTable('banner', [
@@ -20,32 +14,13 @@ class m221220_125721_banner extends Migration
             'description_uz' => $this->text(),
             'sort' => $this->integer()->notNull()->defaultValue(0),
             'status' => $this->integer()->notNull()->defaultValue(1),
-            'date' => $this->timestamp()
+            'date' => $this->timestamp(),
+            'hash' => $this->text(),
         ]);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function safeDown()
     {
-        echo "m221220_125721_banner cannot be reverted.\n";
-
-        return false;
+        $this->dropTable('banner');
     }
-
-    /*
-    // Use up()/down() to run migration code without a transaction.
-    public function up()
-    {
-
-    }
-
-    public function down()
-    {
-        echo "m221220_125721_banner cannot be reverted.\n";
-
-        return false;
-    }
-    */
 }

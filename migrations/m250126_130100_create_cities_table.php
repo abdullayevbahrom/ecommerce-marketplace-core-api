@@ -2,14 +2,8 @@
 
 use yii\db\Migration;
 
-/**
- * Handles the creation of table `{{%cities}}`.
- */
 class m250126_130100_create_cities_table extends Migration
 {
-    /**
-     * {@inheritdoc}
-     */
     public function safeUp()
     {
         $this->createTable('{{%cities}}', [
@@ -42,39 +36,13 @@ class m250126_130100_create_cities_table extends Migration
         );
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function safeDown()
     {
-        // Drop foreign key first
         $this->dropForeignKey('fk-cities-region_id', '{{%cities}}');
+        $this->dropIndex('idx-cities-bts_id', '{{%cities}}');
+        $this->dropIndex('idx-cities-region_id', '{{%cities}}');
+        $this->dropIndex('idx-cities-bts_region_id', '{{%cities}}');
+        $this->dropIndex('idx-cities-status', '{{%cities}}');
         $this->dropTable('{{%cities}}');
     }
-
-    /*
-    // Manual SQL for adjustments if needed:
-    CREATE TABLE `cities` (
-      `id` int(11) NOT NULL AUTO_INCREMENT,
-      `bts_id` int(11) NOT NULL COMMENT 'BTS system city ID',
-      `region_id` int(11) NOT NULL COMMENT 'Reference to regions table',
-      `bts_region_id` int(11) NOT NULL COMMENT 'BTS system region ID',
-      `name_ru` varchar(255) NOT NULL COMMENT 'Russian name',
-      `name_uz` varchar(255) NOT NULL COMMENT 'Uzbek name',
-      `name_en` varchar(255) NOT NULL COMMENT 'English name',
-      `status` int(11) DEFAULT 1 COMMENT 'Status: 1=active, 0=inactive',
-      `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
-      `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (`id`),
-      UNIQUE KEY `bts_id` (`bts_id`),
-      KEY `idx-cities-bts_id` (`bts_id`),
-      KEY `idx-cities-region_id` (`region_id`),
-      KEY `idx-cities-bts_region_id` (`bts_region_id`),
-      KEY `idx-cities-status` (`status`),
-      CONSTRAINT `fk-cities-region_id` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-    // To rollback:
-    DROP TABLE `cities`;
-    */
 }

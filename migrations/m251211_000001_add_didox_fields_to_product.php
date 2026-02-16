@@ -18,8 +18,8 @@ class m251211_000001_add_didox_fields_to_product extends Migration
      */
     public function safeUp()
     {
-        // $this->addColumn('product', 'package_code', $this->string(50)->null()->after('ikpu_name'));
-        // $this->addColumn('product', 'package_name', $this->string(100)->null()->after('package_code'));
+        $this->addColumn('product', 'package_code', $this->string(50)->null()->after('ikpu_name'));
+        $this->addColumn('product', 'package_name', $this->string(100)->null()->after('package_code'));
         
         echo "Please execute the SQL manually:\n";
         echo "ALTER TABLE `product` ADD COLUMN `package_code` VARCHAR(50) NULL DEFAULT NULL AFTER `ikpu_name`;\n";
@@ -31,7 +31,7 @@ class m251211_000001_add_didox_fields_to_product extends Migration
      */
     public function safeDown()
     {
-        echo "m240101_000001_add_didox_fields_to_product cannot be reverted.\n";
-        return false;
+        $this->dropColumn('product', 'package_name');
+        $this->dropColumn('product', 'package_code');
     }
 }

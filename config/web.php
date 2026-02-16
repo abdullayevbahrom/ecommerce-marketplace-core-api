@@ -109,13 +109,13 @@ $config = [
                 'GET api/product-attribute/region' => 'api/product-attribute/region-list',
                 'GET api/product-attribute/delivery' => 'api/product-attribute/delivery-list',
                 'GET api/product-attribute/office' => 'api/product-attribute/office-list',
-                
+
                 // Product Management (Sklad Integration)
                 'POST api/product/create' => 'api/product/create',
                 'PUT api/product/update' => 'api/product/update',
                 'POST api/product/delete' => 'api/product/delete',
                 'OPTIONS api/product/update' => 'product/update',
-                
+
                 'POST /api/category/create' => 'api/category/create',
                 'PUT  /api/category/update' => 'api/category/update',
                 'POST /api/category/delete' => 'api/category/delete',
@@ -167,12 +167,12 @@ $config = [
                 'GET api/wallet/balance' => 'api/wallet/balance',
                 'POST api/wallet/deploy' => 'api/wallet/deploy',
 
-                'POST /api/session/profile' => 'api/session-profile',
-                'POST /api/session/sessions' => 'api/session-sessions',
-                'POST /api/session/refresh' => 'api/session-refresh',
-                'POST /api/session/logout' => 'api/session-logout',
-                'POST /api/session/logout-all' => 'api/session-logout-all'
-                
+                'POST /api/session/profile' => 'api/session/profile',
+                'POST /api/session/sessions' => 'api/session/sessions',
+                'POST /api/session/refresh' => 'api/session/refresh',
+                'POST /api/session/logout' => 'api/session/logout',
+                'POST /api/session/logout-all' => 'api/session/logout-all'
+
             ],
         ],
         'image' => [
@@ -183,19 +183,13 @@ $config = [
 ];
 
 if (YII_ENV_DEV) {
-    // configuration adjustments for 'dev' environment
     $config['bootstrap'][] = 'debug';
     $config['modules']['debug'] = [
         'class' => 'yii\debug\Module',
-        // uncomment the following to add your IP if you are not connecting from localhost.
-        //'allowedIPs' => ['127.0.0.1', '::1'],
     ];
-
     $config['bootstrap'][] = 'gii';
     $config['modules']['gii'] = [
         'class' => 'yii\gii\Module',
-        // uncomment the following to add your IP if you are not connecting from localhost.
-        //'allowedIPs' => ['127.0.0.1', '::1'],
     ];
 }
 

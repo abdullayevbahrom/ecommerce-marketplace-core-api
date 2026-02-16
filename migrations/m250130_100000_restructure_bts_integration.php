@@ -37,28 +37,28 @@ class m250130_100000_restructure_bts_integration extends Migration
         // Add foreign key for stock_id if stock table exists
         try {
             $this->addForeignKey('fk-order_product-stock_id', 'order_product', 'stock_id', 'stock', 'id', 'SET NULL');
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             // Stock table might not exist yet, ignore this error
             echo "Warning: Could not create foreign key for stock_id. Stock table might not exist.\n";
         }
         
         // Migrate existing data from order.bts_* fields to order_product
-        $this->execute("
-            UPDATE order_product op 
-            INNER JOIN `order` o ON op.order_id = o.id 
-            SET 
-                op.bts_id = o.bts_id,
-                op.bts_status = o.bts_status,
-                op.bts_status_info = o.bts_status_info,
-                op.bts_price = o.bts_price
-            WHERE o.bts_id IS NOT NULL
-        ");
+        // $this->execute("
+        //     UPDATE order_product op 
+        //     INNER JOIN `order` o ON op.order_id = o.id 
+        //     SET 
+        //         op.bts_id = o.bts_id,
+        //         op.bts_status = o.bts_status,
+        //         op.bts_status_info = o.bts_status_info,
+        //         op.bts_price = o.bts_price
+        //     WHERE o.bts_id IS NOT NULL
+        // ");
         
-        // Remove old BTS fields from order table
-        $this->dropColumn('order', 'bts_id');
-        $this->dropColumn('order', 'bts_status');
-        $this->dropColumn('order', 'bts_status_info');
-        $this->dropColumn('order', 'bts_price');
+        // // Remove old BTS fields from order table
+        // $this->dropColumn('order', 'bts_id');
+        // $this->dropColumn('order', 'bts_status');
+        // $this->dropColumn('order', 'bts_status_info');
+        // $this->dropColumn('order', 'bts_price');
     }
 
     /**
@@ -67,35 +67,35 @@ class m250130_100000_restructure_bts_integration extends Migration
     public function safeDown()
     {
         // Re-add BTS fields to order table
-        $this->addColumn('order', 'bts_id', $this->string()->null()->comment('BTS tracking ID'));
-        $this->addColumn('order', 'bts_status', $this->string()->null()->comment('BTS status'));
-        $this->addColumn('order', 'bts_status_info', $this->text()->null()->comment('BTS status information'));
-        $this->addColumn('order', 'bts_price', $this->decimal(10,2)->null()->comment('BTS delivery cost'));
+        // $this->addColumn('order', 'bts_id', $this->string()->null()->comment('BTS tracking ID'));
+        // $this->addColumn('order', 'bts_status', $this->string()->null()->comment('BTS status'));
+        // $this->addColumn('order', 'bts_status_info', $this->text()->null()->comment('BTS status information'));
+        // $this->addColumn('order', 'bts_price', $this->decimal(10,2)->null()->comment('BTS delivery cost'));
         
-        // Migrate data back from order_product to order (take first non-null value)
-        $this->execute("
-            UPDATE `order` o 
-            INNER JOIN (
-                SELECT order_id, 
-                       MIN(bts_id) as bts_id,
-                       MIN(bts_status) as bts_status,
-                       MIN(bts_status_info) as bts_status_info,
-                       SUM(bts_price) as bts_price
-                FROM order_product 
-                WHERE bts_id IS NOT NULL 
-                GROUP BY order_id
-            ) op ON o.id = op.order_id
-            SET 
-                o.bts_id = op.bts_id,
-                o.bts_status = op.bts_status,
-                o.bts_status_info = op.bts_status_info,
-                o.bts_price = op.bts_price
-        ");
+        // // Migrate data back from order_product to order (take first non-null value)
+        // $this->execute("
+        //     UPDATE `order` o 
+        //     INNER JOIN (
+        //         SELECT order_id, 
+        //                MIN(bts_id) as bts_id,
+        //                MIN(bts_status) as bts_status,
+        //                MIN(bts_status_info) as bts_status_info,
+        //                SUM(bts_price) as bts_price
+        //         FROM order_product 
+        //         WHERE bts_id IS NOT NULL 
+        //         GROUP BY order_id
+        //     ) op ON o.id = op.order_id
+        //     SET 
+        //         o.bts_id = op.bts_id,
+        //         o.bts_status = op.bts_status,
+        //         o.bts_status_info = op.bts_status_info,
+        //         o.bts_price = op.bts_price
+        // ");
         
         // Drop foreign key first
         try {
             $this->dropForeignKey('fk-order_product-stock_id', 'order_product');
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             // Foreign key might not exist, ignore
         }
         
