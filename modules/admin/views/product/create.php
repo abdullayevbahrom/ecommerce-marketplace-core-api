@@ -229,6 +229,16 @@ $this->params['breadcrumbs'][] = $this->title;
                                 'placeholder' => '0'
                             ])->label('Количество');?>
                         </div>
+                        <div class="col-sm-3">
+                            <?=$form->field($model, 'unit_id')->dropDownList(
+                                $units,
+                                [
+                                    'class'=>'form-control select2',
+                                    'prompt'=>'Выберите ед. измерения'
+                                ]
+                            )->label('Единица измерения');?>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -271,6 +281,15 @@ $this->params['breadcrumbs'][] = $this->title;
                             ], [
                                 'class'=>'form-control'
                             ])->label('Статус');?>
+                        </div>
+                        <div class="col-sm-3">
+                            <?=$form->field($model, 'currency_id')->dropDownList(
+                                $currencies,
+                                [
+                                    'class'=>'form-control select2',
+                                    'prompt'=>'Выберите валюту'
+                                ]
+                            )->label('Тип валюты');?>
                         </div>
                     </div>
                 </div>

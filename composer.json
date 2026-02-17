@@ -21,11 +21,11 @@
         "mihaildev/yii2-ckeditor": "*",
         "kartik-v/yii2-widget-select2": "dev-master",
         "yiisoft/yii2-imagine": "^2.3",
-        "guzzlehttp/guzzle": "^6.2",
-        "paragraph1/php-fcm": "*",
+        "guzzlehttp/guzzle": "^7.4",
         "jenssegers/imagehash": "^0.8.0",
         "yoomoney/yookassa-sdk-php": "^2.9",
-        "kartik-v/yii2-mpdf": "dev-master"
+        "kartik-v/yii2-mpdf": "dev-master",
+        "aws/aws-sdk-php": "^3.0"
     },
     "require-dev": {
         "yiisoft/yii2-debug": "~2.1.0",
