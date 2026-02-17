@@ -1,5 +1,15 @@
 <?php
 
+$minioUser = getenv('MINIO_USER') ?: null;
+$minioPassword = getenv('MINIO_PASSWORD') ?: null;
+$minioPort = getenv('MINIO_PORT') ?: null;
+$minioUiPort = getenv('MINIO_UI_PORT') ?: null;
+$minioPublicEndpoint = getenv('MINIO_PUBLIC_ENDPOINT') ?: null;
+$minioEndpoint = getenv('MINIO_ENDPOINT') ?: null;
+$minioBucket = getenv('MINIO_BUCKET') ?: null;
+$minioRegion = getenv('MINIO_REGION') ?: null;
+$minioSecure = getenv('MINIO_SECURE') ?: null;
+
 return [
     'adminEmail' => 'admin@example.com',
     'senderEmail' => 'noreply@example.com',
@@ -13,7 +23,19 @@ return [
     'bts_username' => '8888', // Add your BTS username for token generation
     'bts_password' => '7132', // Add your BTS password for token generation  
     'bts_inn' => '123456789', // Add your company INN for BTS authentication
-
+    
+    // MinIO settings
+    'minio' => [
+        'user' => $minioUser,
+        'password' => $minioPassword,
+        'port' => $minioPort,
+        'uiPort' => $minioUiPort,
+        'publicEndpoint' => $minioPublicEndpoint,
+        'endpoint' => $minioEndpoint,
+        'bucket' => $minioBucket,
+        'region' => $minioRegion,
+        'secure' => $minioSecure
+    ]
     // Base URL
     'baseUrl' => 'http://shop.test',
     'apiSecretKey' => '123',
