@@ -173,7 +173,10 @@ $config = [
                 'POST /api/session/sessions' => 'api/session/sessions',
                 'POST /api/session/refresh' => 'api/session/refresh',
                 'POST /api/session/logout' => 'api/session/logout',
-                'POST /api/session/logout-all' => 'api/session/logout-all'
+                'POST /api/session/logout-all' => 'api/session/logout-all',
+
+                'GET api/promocode/my' => 'api/promocode/my',
+                'POST api/promocode/apply' => 'api/promocode/apply',
                 
             ],
         ],

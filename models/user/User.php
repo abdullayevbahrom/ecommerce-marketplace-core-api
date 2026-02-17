@@ -134,9 +134,10 @@ class User extends ActiveRecord implements IdentityInterface {
             // [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg', 'maxSize' => 3072000]
             [['phone', 'phone_code', 'status', 'token', 'role', 'sms_live'], 'safe'],
             
+            [['bts_region_id', 'bts_city_id'], 'string', 'max' => 10],
+            
             // BTS region and city validation
-            [['bts_region_id', 'bts_city_id'], 'integer'],
-            ['bts_city_id', 'validateCityRegion'],
+            // ['bts_city_id', 'validateCityRegion'],
 
             ['source', 'in', 'range' => [self::SOURCE_YII, self::SOURCE_SKLAD]],
         ];
