@@ -46,31 +46,24 @@ return [
     // Wallet Configuration
     'walletServiceUrl' => 'https://wallet.example.com', // External Wallet Service URL
 
-    // 's3' => [
-    //     'key' => '',
-    //     'secret' => 'YOUR_AWS_SECRET',
-    //     'region' => 'eu-central-1',
-    //     'bucket' => 'your-bucket-name',
-    //     'baseUrl' => 'https://your-bucket-name.s3.eu-central-1.amazonaws.com',
-    // ],
 
      // MinIO settings
     'minio' => [
-        // 'user' => $minioUser,
-        // 'password' => $minioPassword,
-        // 'port' => $minioPort,
-        // 'uiPort' => $minioUiPort,
-        // 'publicEndpoint' => $minioPublicEndpoint,
-        // 'endpoint' => $minioEndpoint,
-        // 'bucket' => $minioBucket,
-        // 'region' => $minioRegion,
-        // 'secure' => $minioSecure,
-        // 'use_path_style_endpoint' => true,
-        'user' => 'app',
-        'password' => 'password',
-        'endpoint' => 'http://minio:9000',
-        'publicEndpoint' => 'https://files.example.com',
-        'bucket' => 'uploads',
-        'region' => 'us-east-1',
+        'user' => $minioUser,
+        'password' => $minioPassword,
+        'port' => $minioPort,
+        'uiPort' => $minioUiPort,
+        'publicEndpoint' => $minioPublicEndpoint,
+        'endpoint' => $minioEndpoint,
+        'bucket' => $minioBucket,
+        'region' => $minioRegion,
+        'secure' => $minioSecure,
+        
+        // 'user' => 'app',
+        // 'password' => 'password',
+        // 'endpoint' => 'http://minio:9000',
+        // 'publicEndpoint' => 'https://files.example.com',
+        // 'bucket' => 'uploads',
+        // 'region' => 'us-east-1',
     ]
 ];
