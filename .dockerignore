@@ -26,8 +26,6 @@ requirements.php
 vagrant/
 Vagrantfile
 
-web/assets/*
-
 .DS_Store
 Thumbs.db
 
