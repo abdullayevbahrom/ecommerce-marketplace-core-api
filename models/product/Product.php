@@ -740,18 +740,25 @@ class Product extends \yii\db\ActiveRecord
             if ($this->image->web == 1) {
                 return $this->image->photo;
             }
+            if (!$this->token_key) {
+                return Images::PHOTO_DEFAULT;
+            }
+
+            $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
+
+            return $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
             // $path = Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
 
-            $path = Images::PHOTO_PRODUCT_PATH.$this->token_key.'/'.$s.'/'.$this->image->photo;
+            // $path = Images::PHOTO_PRODUCT_PATH.$this->token_key.'/'.$s.'/'.$this->image->photo;
 
-            if (is_file($path)) {
-                return '/'.$path;
-            // $imageManager = new ImageManager();
-            // $image = $imageManager->make($path);
-            // $image->encode('webp');
-            // $image->save(Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp');
-            //     return '/'.Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp';
-            }
+            // if (is_file($path)) {
+            //     return '/'.$path;
+            // // $imageManager = new ImageManager();
+            // // $image = $imageManager->make($path);
+            // // $image->encode('webp');
+            // // $image->save(Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp');
+            // //     return '/'.Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp';
+            // }
         }
 
         return Images::PHOTO_DEFAULT;
@@ -759,28 +766,35 @@ class Product extends \yii\db\ActiveRecord
 
     public function getPhotos($s = 'original') {
         $data = [];
+        $baseUrl = Yii::$app->params['minio']['publicEndpoint'];  
 
         if ($this->image) {
             if ($this->image->web == 1) {
                 $data[] = $this->image->photo;
-            } else {
-                $path = Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-                if (is_file($path)) {
-                    $data[] = '/'.$path;
-                }
+            } elseif ($this->token_key) {
+                $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
             }
+            //  else {
+            //     $path = Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
+            //     if (is_file($path)) {
+            //         $data[] = '/'.$path;
+            //     }
+            // }
         }
 
         if ($this->gallery) {
             foreach ($this->gallery as $photo) {
                 if ($photo->web == 1) {
                     $data[] = $photo->photo;
-                } else {
-                    $path = Images::PHOTO_PRODUCT_PATH.$photo->object_id.'/'.$s.'/'.$photo->photo;
-                    if (is_file($path)) {
-                        $data[] = '/'.$path;
-                    }
+                } elseif ($this->token_key) {
+                    $data[] = $baseUrl . '/uploads/product/'. $this->token_key. '/'. $s. '/'. $photo->photo;
                 }
+                // } else {
+                //     $path = Images::PHOTO_PRODUCT_PATH.$photo->object_id.'/'.$s.'/'.$photo->photo;
+                //     if (is_file($path)) {
+                //         $data[] = '/'.$path;
+                //     }
+                // }
             }
         }
 

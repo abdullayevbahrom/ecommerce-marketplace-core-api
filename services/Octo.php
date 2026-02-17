@@ -1,7 +1,7 @@
 <?php
 namespace yii\services;
 
-use paragraph1\phpFCM\Client;
+// use paragraph1\phpFCM\Client;
 
 class Octo {
     protected $url = 'https://secure.octo.uz';

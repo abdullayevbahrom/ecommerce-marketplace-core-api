@@ -41,7 +41,7 @@ class m250128_160001_create_didox_document_arbitrary extends Migration
             'buyer_branch_name' => $this->string(255)->comment('Наименование филиала покупателя'),
             
             // PDF Document
-            'pdf_file_content' => $this->longText()->comment('PDF content in base64 format'),
+            'pdf_file_content' => $this->text()->comment('PDF content in base64 format'),
             'pdf_file_name' => $this->string(255)->comment('Original PDF filename'),
             'pdf_file_size' => $this->integer()->comment('PDF file size in bytes'),
             

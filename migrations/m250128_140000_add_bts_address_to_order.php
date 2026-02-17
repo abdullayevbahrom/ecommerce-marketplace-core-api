@@ -3,9 +3,9 @@
 use yii\db\Migration;
 
 /**
- * Class m250126_140000_add_location_fields_to_stock
+ * Class m250128_140000_add_bts_address_to_order
  */
-class m250126_140000_add_location_fields_to_stock extends Migration
+class m250128_140000_add_bts_address_to_order extends Migration
 {
     /**
      * {@inheritdoc}

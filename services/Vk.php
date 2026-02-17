@@ -2,7 +2,7 @@
 
 namespace yii\services;
 
-use paragraph1\phpFCM\Client;
+// use paragraph1\phpFCM\Client;
 
 class Vk {
     public $url = 'http://oauth.vk.com/authorize';

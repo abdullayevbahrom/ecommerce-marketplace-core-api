@@ -29,9 +29,9 @@ class Images extends \yii\db\ActiveRecord {
     const PHOTO_USER_PATH = 'uploads/user/';
     const PHOTO_CATEGORY_PATH = 'uploads/category/';
 
-    // const PHOTO_PRODUCT_PATH = 'uploads/product/';
+    const PHOTO_PRODUCT_PATH = 'product/';
 
-    const PHOTO_PRODUCT_PATH = '/var/www/shared_storage/uploads/product/';
+    //const PHOTO_PRODUCT_PATH = '/var/www/shared_storage/uploads/product/';
 
     const PHOTO_NEWS_PATH = 'uploads/news/';
     const PHOTO_DELIVERY_PATH = 'uploads/delivery/';
@@ -215,40 +215,33 @@ class Images extends \yii\db\ActiveRecord {
         }
 
         $basePath = $this->object[$type];
-        $productPath = $basePath . $tokenKey;
-
-        $createDir = function($dir) {
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
-        };
-
-        $createDir($productPath);
-        $createDir($productPath . '/original');
 
         foreach ($this->imageFiles as $file) {
 
             $rnd = mt_rand(0, 1000000);
             $name = time() . '_' . $rnd . '.' . $file->extension;
 
-            $originalPath = $productPath . '/original/' . $name;
+            $localTemp = Yii::getAlias('@runtime') . '/' . $name;
+            $file->saveAs($localTemp);
 
-            if ($file->saveAs($originalPath)) {
-
-                $absolutePath = Yii::getAlias('@webroot') . '/' . $originalPath;
-
-                $hasher = new ImageHash(new DifferenceHash());
-                $hash = $hasher->hash($absolutePath);
+            $originalKey = $basePath . $tokenKey . '/original/' . $name;
+            Yii::$app->s3->upload($originalKey, $localTemp);
 
                 // Миниатюры
                 foreach ($this->image_sizes as $sizeKey => $img) {
 
-                    $sizeFolder = $productPath . '/' . $sizeKey . 'x' . $img;
-                    $createDir($sizeFolder);
+                    $thumbPath = Yii::getAlias('@runtime') . "/{$sizeKey}_{$name}";
 
-                    \yii\imagine\Image::thumbnail($originalPath, $sizeKey, $img)
-                        ->save($sizeFolder . '/' . $name, ['quality' => 80]);
+                    \yii\imagine\Image::thumbnail($localTemp, $sizeKey, $img)->save($thumbPath, ['quality' => 80]);
+
+                    $thumbKey = $basePath . $tokenKey . "/{$sizeKey}x{$img}/" . $name;
+
+                    Yii::$app->s3->upload($thumbKey, $thumbPath);
+
+                    unlink($thumbPath);
                 }
+
+                unlink($localTemp);
 
                 Yii::$app->db->createCommand()->insert('image', [
                     'type' => $type_image ?: $type,
@@ -258,9 +251,8 @@ class Images extends \yii\db\ActiveRecord {
                     'sort' => 0,
                     'web' => 0,
                     'status' => 1,
-                    'hash' => (string)$hash
+                    // 'hash' => (string)$hash
                 ])->execute();
-            }
         }
 
         return true;
@@ -358,18 +350,41 @@ class Images extends \yii\db\ActiveRecord {
 
     public function getPhoto($type, $size = 'original') {
         if ($this->web == 1) {
-            return $this->photo;
-        }
-        $path = 'uploads/'.$type.'/'.$this->object_id.'/'.$size.'/'.$this->photo;
+            //return $this->photo;
+                    $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
 
-        if (is_file($path)) {
-            return '/'.$path;
+        return $baseUrl . "/uploads/$type/" . $this->token_key . '/' . $size . '/' . $this->photo;
         }
+        // $path = 'uploads/'.$type.'/'.$this->object_id.'/'.$size.'/'.$this->photo;
+
+        // if (is_file($path)) {
+        //     return '/'.$path;
+        // }
+
+
 
         return self::PHOTO_DEFAULT;
     }
 
     public function fields() {
         return ['id', 'photo'];
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        if (!$this->token_key || !$this->photo) {
+            return;
+        }
+
+        $sizes = ['original', '50x50', '100x100', '200x200', '300x300'];
+
+        foreach ($sizes as $size) {
+
+            $key = "{$this->type}/{$this->token_key}/{$size}/{$this->photo}";
+
+            Yii::$app->s3->deleteObject($key);
+        }
     }
 }

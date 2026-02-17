@@ -180,6 +180,10 @@ $config = [
         'image' => [
             'class' => 'Intervention\Image\ImageManager',
         ],
+
+        's3' => [
+            'class' => 'app\components\S3Component',
+        ],
     ],
     'params' => $params,
 ];

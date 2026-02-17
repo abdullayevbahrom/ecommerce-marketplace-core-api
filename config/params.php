@@ -1,5 +1,16 @@
 <?php
 
+
+$minioUser = getenv('MINIO_USER') ?: null;
+$minioPassword = getenv('MINIO_PASSWORD') ?: null;
+$minioPort = getenv('MINIO_PORT') ?: null;
+$minioUiPort = getenv('MINIO_UI_PORT') ?: null;
+$minioPublicEndpoint = getenv('MINIO_PUBLIC_ENDPOINT') ?: null;
+$minioEndpoint = getenv('MINIO_ENDPOINT') ?: null;
+$minioBucket = getenv('MINIO_BUCKET') ?: null;
+$minioRegion = getenv('MINIO_REGION') ?: null;
+$minioSecure = getenv('MINIO_SECURE') ?: null;
+
 return [
     'adminEmail' => 'admin@example.com',
     'senderEmail' => 'noreply@example.com',
@@ -35,4 +46,31 @@ return [
     // Wallet Configuration
     'walletServiceUrl' => 'https://wallet.example.com', // External Wallet Service URL
 
+    // 's3' => [
+    //     'key' => '',
+    //     'secret' => 'YOUR_AWS_SECRET',
+    //     'region' => 'eu-central-1',
+    //     'bucket' => 'your-bucket-name',
+    //     'baseUrl' => 'https://your-bucket-name.s3.eu-central-1.amazonaws.com',
+    // ],
+
+     // MinIO settings
+    'minio' => [
+        // 'user' => $minioUser,
+        // 'password' => $minioPassword,
+        // 'port' => $minioPort,
+        // 'uiPort' => $minioUiPort,
+        // 'publicEndpoint' => $minioPublicEndpoint,
+        // 'endpoint' => $minioEndpoint,
+        // 'bucket' => $minioBucket,
+        // 'region' => $minioRegion,
+        // 'secure' => $minioSecure,
+        // 'use_path_style_endpoint' => true,
+        'user' => 'app',
+        'password' => 'password',
+        'endpoint' => 'http://minio:9000',
+        'publicEndpoint' => 'https://files.example.com',
+        'bucket' => 'uploads',
+        'region' => 'us-east-1',
+    ]
 ];

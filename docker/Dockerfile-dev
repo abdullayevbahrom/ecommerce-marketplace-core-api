@@ -1,0 +1,56 @@
+FROM php:8.3-fpm-alpine3.20
+
+ARG PUID=1000
+ARG PGID=1000
+
+RUN apk add --no-cache \
+  nginx \
+  curl \
+  git \
+  supervisor \
+  zlib-dev \
+  oniguruma-dev \
+  bash \
+  zip \
+  libzip-dev \
+  icu-dev \
+  shadow \
+  openssl-dev \
+  freetype-dev \
+  libjpeg-turbo-dev \
+  libpng-dev \
+  && apk add --no-cache --virtual .build-deps \
+  build-base \
+  autoconf \
+  linux-headers \
+  && pecl install -o -f redis xdebug \
+  && docker-php-ext-enable redis \
+  && docker-php-ext-enable xdebug \
+  && docker-php-ext-configure gd --with-freetype --with-jpeg \
+  && docker-php-ext-configure intl \
+  && docker-php-ext-install \
+  gd \
+  intl \
+  mysqli \
+  pdo_mysql \
+  mbstring \
+  pcntl \
+  opcache \
+  zip \
+  && groupmod -o -g ${PGID} www-data \
+  && usermod -o -u ${PUID} -g www-data www-data \
+  && apk del .build-deps \
+  && rm -rf /tmp/pear /var/cache/apk/* \
+  && mkdir -p /etc/supervisor/conf.d
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY php/php.ini /usr/local/etc/php/php.ini
+COPY php/www.conf /usr/local/etc/php-fpm.d/www.conf
+COPY php/xdebug.ini /usr/local/etc/php/conf.d/xdebug.ini
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+COPY nginx/default.conf /etc/nginx/conf.d/
+COPY supervisor /etc/supervisor
+
+WORKDIR /var/www/html
+
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

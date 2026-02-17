@@ -2,7 +2,7 @@
 
 namespace yii\services;
 
-use paragraph1\phpFCM\Client;
+// use paragraph1\phpFCM\Client;
 
 class Fcm {
     protected $url = 'https://fcm.googleapis.com/fcm/send';
@@ -48,20 +48,20 @@ class Fcm {
     public function send() {
         ob_start();
 
-        $client = new Client();
-        $client->setApiKey($this->key);
-        $client->injectHttpClient(new \GuzzleHttp\Client());
+        // $client = new Client();
+        // $client->setApiKey($this->key);
+        // $client->injectHttpClient(new \GuzzleHttp\Client());
 
-        return $client->guzzleClient->post(
-            $this->url,
-            [
-                'headers' => [
-                    'Authorization' => sprintf('key=%s', $this->key),
-                    'Content-Type' => 'application/json'
-                ],
-                'body' => json_encode($this->message)
-            ]
-        );
+        // return $client->guzzleClient->post(
+        //     $this->url,
+        //     [
+        //         'headers' => [
+        //             'Authorization' => sprintf('key=%s', $this->key),
+        //             'Content-Type' => 'application/json'
+        //         ],
+        //         'body' => json_encode($this->message)
+        //     ]
+        // );
     }
 
     public function pushNotification($notification, $data, $device_tokens, $priority) {

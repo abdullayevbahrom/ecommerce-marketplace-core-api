@@ -2,14 +2,8 @@
 
 use yii\db\Migration;
 
-/**
- * Class m220629_043815_color
- */
 class m220629_043815_color extends Migration
 {
-    /**
-     * {@inheritdoc}
-     */
     public function safeUp()
     {
         $this->createTable('color', [
@@ -18,34 +12,18 @@ class m220629_043815_color extends Migration
             'name_en' => $this->string(),
             'name_uz' => $this->string(),
             'color' => $this->string(),
-            'date' => $this->timestamp()
+            'date' => $this->timestamp(),
+            'deleted_at' => $this->dateTime()->null(),
+            'status' => $this->integer()->notNull()->defaultValue(1)->comment('1=active, 0=inactive')
         ]);
 
         $this->createIndex('id', 'color', 'id', true);
+        $this->createIndex('idx-color-status', '{{%color}}', 'status');
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function safeDown()
     {
-        echo "m220629_043815_color cannot be reverted.\n";
-
-        return false;
+        $this->dropIndex('idx-color-status', '{{%color}}');
+        $this->dropTable('color');
     }
-
-    /*
-    // Use up()/down() to run migration code without a transaction.
-    public function up()
-    {
-
-    }
-
-    public function down()
-    {
-        echo "m220629_043815_color cannot be reverted.\n";
-
-        return false;
-    }
-    */
 }
