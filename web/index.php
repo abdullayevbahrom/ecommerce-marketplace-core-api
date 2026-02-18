@@ -1,5 +1,6 @@
 <?php
-error_reporting(0);
+error_reporting(1);
+ini_set('display_errors', 'stderr');
 // comment out the following two lines when deployed to production
 defined('YII_ENV') or define('YII_ENV', getenv('YII_ENV') ?: 'prod');
 defined('YII_DEBUG') or define('YII_DEBUG', getenv('YII_DEBUG') === 'true');
