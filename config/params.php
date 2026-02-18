@@ -1,14 +1,14 @@
 <?php
 
-$minioUser = getenv('MINIO_USER') ?: null;
-$minioPassword = getenv('MINIO_PASSWORD') ?: null;
-$minioPort = getenv('MINIO_PORT') ?: null;
-$minioUiPort = getenv('MINIO_UI_PORT') ?: null;
-$minioPublicEndpoint = getenv('MINIO_PUBLIC_ENDPOINT') ?: null;
-$minioEndpoint = getenv('MINIO_ENDPOINT') ?: null;
-$minioBucket = getenv('MINIO_BUCKET') ?: null;
-$minioRegion = getenv('MINIO_REGION') ?: null;
-$minioSecure = getenv('MINIO_SECURE') ?: null;
+$minioUser = getenv('MINIO_USER') ?: 'app';
+$minioPassword = getenv('MINIO_PASSWORD') ?: 'password';
+$minioPort = getenv('MINIO_PORT') ?: 9000;
+$minioUiPort = getenv('MINIO_UI_PORT') ?: 9001;
+$minioPublicEndpoint = getenv('MINIO_PUBLIC_ENDPOINT') ?: 'https://files.example.com';
+$minioEndpoint = getenv('MINIO_ENDPOINT') ?: 'http://minio:9000';
+$minioBucket = getenv('MINIO_BUCKET') ?: 'uploads';
+$minioRegion = getenv('MINIO_REGION') ?: 'us-east-1';
+$minioSecure = getenv('MINIO_SECURE') ?: true;
 
 return [
     'adminEmail' => 'admin@example.com',
@@ -56,25 +56,4 @@ return [
 
     // Wallet Configuration
     'walletServiceUrl' => 'https://wallet.example.com', // External Wallet Service URL
-
-
-     // MinIO settings
-    'minio' => [
-        'user' => $minioUser,
-        'password' => $minioPassword,
-        'port' => $minioPort,
-        'uiPort' => $minioUiPort,
-        'publicEndpoint' => $minioPublicEndpoint,
-        'endpoint' => $minioEndpoint,
-        'bucket' => $minioBucket,
-        'region' => $minioRegion,
-        'secure' => $minioSecure,
-        
-        // 'user' => 'app',
-        // 'password' => 'password',
-        // 'endpoint' => 'http://minio:9000',
-        // 'publicEndpoint' => 'https://files.example.com',
-        // 'bucket' => 'uploads',
-        // 'region' => 'us-east-1',
-    ]
 ];
