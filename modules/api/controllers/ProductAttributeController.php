@@ -346,7 +346,7 @@ class ProductAttributeController extends Controller
         $query = Stock::find()
             ->select([
                 'stock.*',
-                'user.username AS username',
+                'user.name AS username',
             ])
             ->join('shop', 'shop.id = stock.shop_id')
             ->join('user', 'user.id = shop.user_id')
