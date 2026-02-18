@@ -4,6 +4,7 @@
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 ini_set('error_log', 'php://stderr');
+error_reporting(E_ALL);
 // comment out the following two lines when deployed to production
 defined('YII_ENV') or define('YII_ENV', getenv('YII_ENV') ?: 'prod');
 defined('YII_DEBUG') or define('YII_DEBUG', getenv('YII_DEBUG') === 'true');
