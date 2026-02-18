@@ -183,7 +183,6 @@ $config = [
         'image' => [
             'class' => 'Intervention\Image\ImageManager',
         ],
-
         's3' => [
             'class' => 'app\components\S3Component',
         ],
@@ -204,11 +203,12 @@ if (YII_ENV_DEV) {
     ];
 } else {
     $config['components']['log'] = [
-        'traceLevel' => YII_DEBUG ? 3 : 0,
         'targets' => [
             [
                 'class' => 'yii\log\StreamTarget',
-                'levels' => ['error', 'warning', 'trace'],
+                'levels' => ['error', 'warning', 'info'],
+                'logVars' => [],
+                'enabled' => true,
                 'stream' => 'php://stderr',
             ],
         ],
