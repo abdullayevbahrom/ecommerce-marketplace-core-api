@@ -348,8 +348,8 @@ class ProductAttributeController extends Controller
                 'stock.*',
                 'user.name AS username',
             ])
-            ->join('shop', 'shop.id = stock.shop_id')
-            ->join('user', 'user.id = shop.user_id')
+            ->leftJoin('shop', 'shop.id = stock.shop_id')
+            ->leftJoin('user', 'user.id = shop.user_id')
             ->where(['stock.shop_id' => $shopId])
             ->andWhere(['stock.deleted_at' => null])
             ->asArray();
