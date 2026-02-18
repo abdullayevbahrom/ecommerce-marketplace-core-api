@@ -35,7 +35,7 @@ return [
         'bucket' => $minioBucket,
         'region' => $minioRegion,
         'secure' => $minioSecure
-    ]
+    ],
     // Base URL
     'baseUrl' => 'http://localhost:8080',//'http://shop.test',
     'apiSecretKey' => '123',
