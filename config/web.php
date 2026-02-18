@@ -111,7 +111,7 @@ $config = [
                 'GET api/product-attribute/office' => 'api/product-attribute/office-list',
                 'GET api/product-attribute/unit' => 'api/product-attribute/unit-list',
                 'GET api/product-attribute/currency' => 'api/product-attribute/currency-list',
-                
+
                 // Product Management (Sklad Integration)
                 'POST api/product/create' => 'api/product/create',
                 'PUT api/product/update' => 'api/product/update',
@@ -177,7 +177,7 @@ $config = [
 
                 'GET api/promocode/my' => 'api/promocode/my',
                 'POST api/promocode/apply' => 'api/promocode/apply',
-                
+
             ],
         ],
         'image' => [
@@ -190,6 +190,30 @@ $config = [
     ],
     'params' => $params,
 ];
+
+if (YII_ENV_DEV) {
+    $config['components']['log'] = [
+        'traceLevel' => YII_DEBUG ? 3 : 0,
+        'targets' => [
+            [
+                'class' => 'yii\log\FileTarget',
+                'levels' => ['info', 'trace', 'error', 'warning'],
+                'logFile' => '@app/runtime/logs/web.log',
+            ],
+        ],
+    ];
+} else {
+    $config['components']['log'] = [
+        'traceLevel' => YII_DEBUG ? 3 : 0,
+        'targets' => [
+            [
+                'class' => 'yii\log\StreamTarget',
+                'levels' => ['error', 'warning', 'trace'],
+                'stream' => 'php://stderr',
+            ],
+        ],
+    ];
+}
 
 if (YII_ENV_DEV) {
     $config['bootstrap'][] = 'debug';

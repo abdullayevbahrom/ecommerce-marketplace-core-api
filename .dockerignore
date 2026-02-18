@@ -1,4 +1,5 @@
 .git
+.github
 .gitignore
 
 .vscode
@@ -38,3 +39,7 @@ tmp/
 .user.ini
 
 docs
+
+/shop_warehouse
+codeception.yml
+yii.bat
