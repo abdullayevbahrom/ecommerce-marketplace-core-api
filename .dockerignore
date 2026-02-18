@@ -41,5 +41,6 @@ tmp/
 docs
 
 /shop_warehouse
+/sql
 codeception.yml
 yii.bat

@@ -80,9 +80,17 @@ $config = [
         'log' => [
             'traceLevel' => YII_DEBUG ? 3 : 0,
             'targets' => [
+                // [
+                //     'class' => 'yii\log\FileTarget',
+                //     'levels' => ['error', 'warning'],
+                // ],
                 [
                     'class' => 'yii\log\FileTarget',
-                    'levels' => ['error', 'warning'],
+                    'levels' => ['error', 'warning', 'info'],
+                    'logFile' => 'php://stderr',
+                    'enableRotation' => false,
+                    'exportInterval' => 1,
+                    'logVars' => [],
                 ],
             ],
         ],
