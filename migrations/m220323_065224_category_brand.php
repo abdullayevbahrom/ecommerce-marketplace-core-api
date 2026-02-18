@@ -23,7 +23,6 @@ class m220323_065224_category_brand extends Migration
         ]);
 
         $this->addForeignKey('category_brand_c_fk', 'category_brand', 'category_id', 'category', 'id');
-
     }
 
     public function safeDown()

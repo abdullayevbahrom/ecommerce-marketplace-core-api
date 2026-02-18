@@ -3,7 +3,6 @@ namespace app\modules\shop\controllers;
 
 use Yii;
 use yii\web\Controller;
-use yii\rest\Controller;
 
 class PaymentController extends Controller
 {

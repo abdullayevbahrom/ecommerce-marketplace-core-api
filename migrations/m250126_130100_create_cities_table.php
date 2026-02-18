@@ -39,7 +39,7 @@ class m250126_130100_create_cities_table extends Migration
     public function safeDown()
     {
         $this->dropForeignKey('fk-cities-region_id', '{{%cities}}');
-         $this->dropIndex('idx-cities-bts_id', '{{%cities}}');
+        $this->dropIndex('idx-cities-bts_id', '{{%cities}}');
         $this->dropIndex('idx-cities-region_id', '{{%cities}}');
         $this->dropIndex('idx-cities-bts_region_id', '{{%cities}}');
         $this->dropIndex('idx-cities-status', '{{%cities}}');

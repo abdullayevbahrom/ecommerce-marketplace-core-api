@@ -117,7 +117,7 @@ $config = [
                 'PUT api/product/update' => 'api/product/update',
                 'POST api/product/delete' => 'api/product/delete',
                 'OPTIONS api/product/update' => 'product/update',
-                
+
                 'POST /api/category/create' => 'api/category/create',
                 'PUT  /api/category/update' => 'api/category/update',
                 'POST /api/category/delete' => 'api/category/delete',
@@ -192,19 +192,13 @@ $config = [
 ];
 
 if (YII_ENV_DEV) {
-    // configuration adjustments for 'dev' environment
     $config['bootstrap'][] = 'debug';
     $config['modules']['debug'] = [
         'class' => 'yii\debug\Module',
-        // uncomment the following to add your IP if you are not connecting from localhost.
-        //'allowedIPs' => ['127.0.0.1', '::1'],
     ];
-
     $config['bootstrap'][] = 'gii';
     $config['modules']['gii'] = [
         'class' => 'yii\gii\Module',
-        // uncomment the following to add your IP if you are not connecting from localhost.
-        //'allowedIPs' => ['127.0.0.1', '::1'],
     ];
 }
 

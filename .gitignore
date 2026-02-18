@@ -5,13 +5,10 @@
 
 # Node artifact files
 node_modules/
-dist/
 vendor/
 runtime/
 .env
 .env.*
-web/assets/
-web/
 .vscode/
 
 # Compiled Java class files
@@ -28,7 +25,6 @@ web/
 
 # Maven
 target/
-dist/
 
 # JetBrains IDE
 .idea/
