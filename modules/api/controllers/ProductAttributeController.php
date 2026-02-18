@@ -346,10 +346,10 @@ class ProductAttributeController extends Controller
         $query = Stock::find()
             ->select([
                 'stock.*',
-                'user.name AS username',
+                'shop.contact_user AS contact_user',
+                'shop.contact_phone AS contact_phone',
             ])
             ->leftJoin('shop', 'shop.id = stock.shop_id')
-            ->leftJoin('user', 'user.id = shop.user_id')
             ->where(['stock.shop_id' => $shopId])
             ->andWhere(['stock.deleted_at' => null])
             ->asArray();
