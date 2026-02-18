@@ -102,10 +102,10 @@ class ProductAttributeController extends Controller
     public function actionColorList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Color::find()->asArray();
         $this->applySyncFilter($query);
-        
+
         return $this->paginate($query, $page, $pageSize);
     }
 
@@ -120,10 +120,10 @@ class ProductAttributeController extends Controller
     public function actionCategoryList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Category::find()->where(['type' => 'product'])->asArray();
         $this->applySyncFilter($query);
-        
+
         return $this->paginate($query, $page, $pageSize);
     }
 
@@ -134,10 +134,10 @@ class ProductAttributeController extends Controller
     public function actionUnitList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Category::find()->where(['type' => 'unit'])->asArray();
         $this->applySyncFilter($query);
-        
+
         return $this->paginate($query, $page, $pageSize);
     }
 
@@ -148,10 +148,10 @@ class ProductAttributeController extends Controller
     public function actionCurrencyList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Category::find()->where(['type' => 'currency'])->asArray();
         $this->applySyncFilter($query);
-        
+
         return $this->paginate($query, $page, $pageSize);
     }
 
@@ -162,10 +162,10 @@ class ProductAttributeController extends Controller
     public function actionTagList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Category::find()->where(['type' => 'tag'])->asArray();
         $this->applySyncFilter($query);
-        
+
         return $this->paginate($query, $page, $pageSize);
     }
 
@@ -180,10 +180,10 @@ class ProductAttributeController extends Controller
     public function actionBrandList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = CategoryBrand::find()->where(['status' => 1])->asArray();
         $this->applySyncFilter($query);
-        
+
         if ($catId = Yii::$app->request->get('category_id')) {
             $query->andWhere(['category_id' => $catId]);
         }
@@ -204,14 +204,14 @@ class ProductAttributeController extends Controller
         $query = ProductType::find()->with('productTypeValues');
         //$this->applySyncFilter($query);
         $count = $query->count();
-    
+
         $items = $query
             ->orderBy(['id' => SORT_ASC])
             ->offset(($page - 1) * $pageSize)
             ->limit($pageSize)
             ->asArray()
             ->all();
-    
+
         return [
             'success' => true,
             'page' => $page,
@@ -236,19 +236,19 @@ class ProductAttributeController extends Controller
         // Only fetch parents (admin panel uses parent_id=0 for root)
         $query = Filter::find()->where(['or', ['parent_id' => null], ['parent_id' => 0]])->with('childs')->asArray();
         $this->applySyncFilter($query);
-        
+
         if ($catId = Yii::$app->request->get('category_id')) {
             // Include filters from parent category as well (inheritance)
             $categoryIds = [$catId];
             $category = Category::findOne($catId);
-            
+
             if ($category && $category->parent_id) {
-                 $categoryIds[] = $category->parent_id;
+                $categoryIds[] = $category->parent_id;
             }
-            
+
             $query->andWhere(['category_id' => $categoryIds]);
         }
-        
+
         return $this->paginate($query, $page, $pageSize);
     }
 
@@ -263,20 +263,21 @@ class ProductAttributeController extends Controller
     public function actionIkpuList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Ikpu::find()->asArray();
         $this->applySyncFilter($query);
-        
+
         // Optional search by code or name
         if ($q = Yii::$app->request->get('q')) {
-             $query->andWhere(['or', 
-                 ['like', 'code', $q],
-                 ['like', 'name_ru', $q],
-                 ['like', 'name_uz', $q],
-                 ['like', 'name_en', $q]
-             ]);
+            $query->andWhere([
+                'or',
+                ['like', 'code', $q],
+                ['like', 'name_ru', $q],
+                ['like', 'name_uz', $q],
+                ['like', 'name_en', $q]
+            ]);
         }
-        
+
         return $this->paginate($query, $page, $pageSize);
     }
 
@@ -291,7 +292,7 @@ class ProductAttributeController extends Controller
     public function actionUserList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = User::find()->andWhere([
             'role' => [
                 User::ROLE_ADMIN,
@@ -299,7 +300,7 @@ class ProductAttributeController extends Controller
                 User::ROLE_SHOP,
             ]
         ]);
-        
+
         $this->applySyncFilter($query);
 
         return $this->paginate($query, $page, $pageSize);
@@ -316,7 +317,7 @@ class ProductAttributeController extends Controller
     public function actionShopList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Shop::find()->asArray();
         $this->applySyncFilter($query);
 
@@ -340,8 +341,19 @@ class ProductAttributeController extends Controller
         }
 
         $this->checkAuth();
-        
-        $query = Stock::find()->where(['shop_id' => $shopId])->andWhere(['deleted_at' => null])->asArray();
+
+        // $query = Stock::find()->where(['shop_id' => $shopId])->andWhere(['deleted_at' => null])->asArray();
+        $query = Stock::find()
+            ->select([
+                'stock.*',
+                'user.username AS username',
+            ])
+            ->join('shop', 'shop.id = stock.shop_id')
+            ->join('user', 'user.id = shop.user_id')
+            ->where(['stock.shop_id' => $shopId])
+            ->andWhere(['stock.deleted_at' => null])
+            ->asArray();
+
         $this->applySyncFilter($query);
 
         return $this->paginate($query, $page, $pageSize);
@@ -358,7 +370,7 @@ class ProductAttributeController extends Controller
     public function actionRegionList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Region::find()->asArray();
         $this->applySyncFilter($query);
 
@@ -376,7 +388,7 @@ class ProductAttributeController extends Controller
     public function actionDeliveryList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Delivery::find()->asArray();
         $this->applySyncFilter($query);
 
@@ -394,7 +406,7 @@ class ProductAttributeController extends Controller
     public function actionOfficeList($page = 1, $pageSize = 50)
     {
         $this->checkAuth();
-        
+
         $query = Office::find()->asArray();
         $this->applySyncFilter($query);
 
