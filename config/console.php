@@ -37,30 +37,6 @@ $config = [
     */
 ];
 
-if (YII_ENV_DEV) {
-    $config['components']['log'] = [
-        'traceLevel' => YII_DEBUG ? 3 : 0,
-        'targets' => [
-            [
-                'class' => 'yii\log\FileTarget',
-                'levels' => ['info', 'trace', 'error', 'warning'],
-                'logFile' => '@app/runtime/logs/console.log',
-            ],
-        ],
-    ];
-} else {
-    $config['components']['log'] = [
-        'targets' => [
-            [
-                'class' => 'yii\log\StreamTarget',
-                'levels' => ['error', 'warning', 'info'],
-                'logVars' => [],
-                'enabled' => true,
-                'stream' => 'php://stderr',
-            ],
-        ],
-    ];
-}
 
 if (YII_ENV_DEV) {
     $config['bootstrap'][] = 'gii';
