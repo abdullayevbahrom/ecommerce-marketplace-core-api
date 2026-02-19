@@ -121,6 +121,9 @@ class CartController extends Controller {
             $variantData = [
                 'id' => $item->id,
                 'product_id' => $item->product->id,
+                'name_ru' => $item->product->name_ru,
+                'name_uz' => $item->product->name_uz,
+                'name_en' => $item->product->name_en,
                 'amount' => $item->amount,
                 'price' => $item->price,
                 'unit_price' => $item->amount > 0 ? $item->price / $item->amount : 0,

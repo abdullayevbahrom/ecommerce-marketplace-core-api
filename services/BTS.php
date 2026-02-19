@@ -1744,7 +1744,7 @@ class BTS
             $this->tokenExpiresAt = $cache->get(self::CACHE_KEY_TOKEN_EXPIRES);
         }
     }
-    
+
     /**
      * Save tokens to cache storage
      */
@@ -1844,10 +1844,12 @@ class BTS
         }
         
         $data = json_decode($response, true);
-        
-        if ($httpCode === 200 && isset($data['access_token'])) {
-            $this->accessToken = $data['access_token'];
-            $this->refreshToken = $data['refresh_token'] ?? null;
+
+        // BTS API wraps tokens in data: {status, message, data: {access_token, refresh_token}}
+        $tokenData = $data['data'] ?? $data;
+        if ($httpCode === 200 && isset($tokenData['access_token'])) {
+            $this->accessToken = $tokenData['access_token'];
+            $this->refreshToken = $tokenData['refresh_token'] ?? null;
             $this->tokenExpiresAt = time() + self::ACCESS_TOKEN_DURATION - 300; // 5 min buffer
             
             // Also set legacy token for backward compatibility
@@ -1903,29 +1905,32 @@ class BTS
             ]),
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
-                'Accept: application/json'
+                'Accept: application/json',
+                'Authorization: Bearer ' . ($this->accessToken ?: $this->token),
             ],
             CURLOPT_TIMEOUT => 30,
             CURLOPT_SSL_VERIFYPEER => false,
         ]);
-        
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
-        
+
         if ($error) {
             Yii::error('BTS Token Refresh cURL Error: ' . $error, __METHOD__);
             // Fall back to full re-authentication
             return $this->authenticate();
         }
-        
+
         $data = json_decode($response, true);
-        
-        if ($httpCode === 200 && isset($data['access_token'])) {
-            $this->accessToken = $data['access_token'];
-            if (isset($data['refresh_token'])) {
-                $this->refreshToken = $data['refresh_token'];
+
+        // BTS API wraps tokens in data: {status, message, data: {access_token, refresh_token}}
+        $tokenData = $data['data'] ?? $data;
+        if ($httpCode === 200 && isset($tokenData['access_token'])) {
+            $this->accessToken = $tokenData['access_token'];
+            if (isset($tokenData['refresh_token'])) {
+                $this->refreshToken = $tokenData['refresh_token'];
             }
             $this->tokenExpiresAt = time() + self::ACCESS_TOKEN_DURATION - 300;
             
@@ -2271,8 +2276,8 @@ class BTS
 
         $response = $this->makeRequest('POST', 'auth/get-token', $data, false);
         
-        if ($response['success'] && isset($response['data']['data']['token'])) {
-            $this->token = $response['data']['data']['token'];
+        if ($response['success'] && isset($response['data']['token'])) {
+            $this->token = $response['data']['token'];
         }
         
         return $response;
@@ -2320,13 +2325,13 @@ class BTS
     }
 
     /**
-     * Calculate delivery cost using new order-calculator endpoint
+     * Calculate delivery cost using new order-calculate endpoint
      * @param array $data
      * @return array
      */
     public function calculateOrder($data)
     {
-        return $this->makeRequest('POST', 'order-calculator', $data);
+        return $this->makeRequest('POST', 'order-calculate', $data);
     }
 
     /**
@@ -2461,18 +2466,14 @@ class BTS
             'Accept: application/json'
         ];
         
-        // Use new authentication system if available
+        // Authenticate before making request
         if ($useAuth) {
-            // Ensure we have a valid token before making the request
-            if ($this->accessToken || $this->token) {
-                $tokenToUse = $this->accessToken ?: $this->token;
-                $headers[] = 'Authorization: Bearer ' . $tokenToUse;
-            } elseif ($this->username && $this->password) {
-                // Auto-authenticate if credentials are available
-                $this->ensureAuthenticated();
-                if ($this->accessToken) {
-                    $headers[] = 'Authorization: Bearer ' . $this->accessToken;
-                }
+            $this->ensureAuthenticated();
+            if ($this->accessToken) {
+                $headers[] = 'Authorization: Bearer ' . $this->accessToken;
+            } elseif ($this->token) {
+                // Legacy token fallback only if JWT auth is not available
+                $headers[] = 'Authorization: Bearer ' . $this->token;
             }
         }
 
@@ -2507,15 +2508,14 @@ class BTS
 
         $decodedResponse = json_decode($response, true);
         
-        // Handle 401 Unauthorized - try to refresh token and retry once
+        // Handle 401 Unauthorized - clear stale tokens, re-authenticate and retry once
         if ($httpCode === 401 && $useAuth && !$isRetry) {
-            Yii::warning('BTS API returned 401, attempting token refresh', __METHOD__);
-            
-            // Clear current tokens and try to refresh
-            $refreshResult = $this->refreshAccessToken();
-            
-            if ($refreshResult['success']) {
-                // Retry the request with new token
+            Yii::warning('BTS API returned 401, clearing tokens and re-authenticating', __METHOD__);
+
+            $this->clearTokensFromCache();
+
+            $authResult = $this->authenticate();
+            if ($authResult['success']) {
                 return $this->makeRequest($method, $endpoint, $data, $useAuth, true);
             }
         }
@@ -2523,7 +2523,8 @@ class BTS
         return [
             'success' => $httpCode >= 200 && $httpCode < 300,
             'httpCode' => $httpCode,
-            'data' => $decodedResponse,
+            'data' => $decodedResponse['data'] ?? $decodedResponse,
+            'raw' => $decodedResponse,
             'error' => $this->getErrorMessage($httpCode, $decodedResponse)
         ];
     }
@@ -2599,37 +2600,69 @@ class BTS
      */
     public function validateOrderData($data)
     {
-        $required = [
-            'senderCityId', 'senderAddress', 'senderReal', 'senderPhone',
-            'weight', 'packageId', 'postTypeId', 'receiver', 'receiverAddress',
-            'receiverCityId', 'receiverPhone'
-        ];
-
         $errors = [];
-        foreach ($required as $field) {
-            if (!isset($data[$field]) || empty($data[$field])) {
-                $errors[$field] = "The '{$field}' field is required";
+
+        // Validate required top-level fields
+        if (!isset($data['pickup_type']) || !in_array($data['pickup_type'], ['courier', 'self', 'branch'])) {
+            $errors['pickup_type'] = "pickup_type is required (courier, self, or branch)";
+        }
+        if (!isset($data['dropoff_type']) || !in_array($data['dropoff_type'], ['courier', 'self', 'branch'])) {
+            $errors['dropoff_type'] = "dropoff_type is required (courier, self, or branch)";
+        }
+
+        // Validate sender object
+        if (!isset($data['sender']) || !is_array($data['sender'])) {
+            $errors['sender'] = "sender object is required";
+        } else {
+            foreach (['name', 'phone', 'address', 'city_code'] as $field) {
+                if (empty($data['sender'][$field])) {
+                    $errors["sender.{$field}"] = "sender.{$field} is required";
+                }
             }
         }
 
-        // Validate city IDs with new structure
-        if (isset($data['senderCityId']) && !isset(self::CITIES[$data['senderCityId']])) {
-            $errors['senderCityId'] = "Invalid sender city ID";
-        }
-        
-        if (isset($data['receiverCityId']) && !isset(self::CITIES[$data['receiverCityId']])) {
-            $errors['receiverCityId'] = "Invalid receiver city ID";
+        // Validate receiver object
+        if (!isset($data['receiver']) || !is_array($data['receiver'])) {
+            $errors['receiver'] = "receiver object is required";
+        } else {
+            foreach (['name', 'phone', 'address', 'city_code'] as $field) {
+                if (empty($data['receiver'][$field])) {
+                    $errors["receiver.{$field}"] = "receiver.{$field} is required";
+                }
+            }
         }
 
-        // Validate package and post type IDs
-        if (isset($data['packageId']) && !isset(self::PACKAGE_TYPES[$data['packageId']])) {
-            $errors['packageId'] = "Invalid package type ID";
-        }
-        
-        if (isset($data['postTypeId']) && !isset(self::POST_TYPES[$data['postTypeId']])) {
-            $errors['postTypeId'] = "Invalid post type ID";
+        // Validate cargo object
+        if (!isset($data['cargo']) || !is_array($data['cargo'])) {
+            $errors['cargo'] = "cargo object is required";
+        } else {
+            if (empty($data['cargo']['weight'])) {
+                $errors['cargo.weight'] = "cargo.weight is required";
+            }
+            if (empty($data['cargo']['piece'])) {
+                $errors['cargo.piece'] = "cargo.piece is required";
+            }
         }
 
         return $errors;
+    }
+
+    /**
+     * Fetch regions from BTS API
+     * @return array
+     */
+    public function fetchRegions()
+    {
+        return $this->makeRequest('GET', 'directory/regions');
+    }
+
+    /**
+     * Fetch cities from BTS API for a given region code
+     * @param string $regionCode Region code (e.g. "01" for Tashkent)
+     * @return array
+     */
+    public function fetchCities($regionCode)
+    {
+        return $this->makeRequest('GET', 'directory/cities', ['regionCode' => $regionCode]);
     }
 }

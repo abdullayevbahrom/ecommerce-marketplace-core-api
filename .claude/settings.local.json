@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"c:\\\\laragon\\\\www\\\\shop\" diff HEAD modules/api/controllers/WalletController.php)",
+      "WebFetch(domain:docs.logistics.example.com)",
+      "WebFetch(domain:docs.identity.example.com)"
+    ]
+  }
+}

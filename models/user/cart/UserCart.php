@@ -176,65 +176,83 @@ class UserCart extends \yii\db\ActiveRecord
 
     /**
      * Calculate BTS delivery cost from product stock to user location
+     * Uses the new BTS order-calculate API with string city codes
      * @param Product $product
      * @param User $user
      * @param int $amount
-     * @return float|null
+     * @return float
      */
     public function calculateBtsDeliveryCost($product, $user, $amount = 1) {
         // Check if user has BTS city set
         if (empty($user->bts_city_id)) {
             Yii::warning('User BTS city not set for delivery calculation', __METHOD__);
-            return 0.0; // Return 0 instead of failing
+            return 0.0;
         }
 
-        // Get sender city ID from product's stock location
-        $senderCityId = $this->getProductStockCityId($product);
-        
-        if (!$senderCityId) {
+        // Get sender city code from product's stock location
+        $senderCityCode = $this->getProductStockCityId($product);
+
+        if (!$senderCityCode) {
             Yii::warning('Product stock BTS city not configured for delivery calculation', __METHOD__);
-            return 0.0; // Return 0 instead of failing
+            return 0.0;
         }
 
         // Skip calculation if same city (no delivery needed)
-        if ($senderCityId == $user->bts_city_id) {
+        if ($senderCityCode == $user->bts_city_id) {
             return 0.0;
         }
 
         try {
             // Calculate total weight based on quantity in cart
             $totalWeight = $this->calculateTotalWeight($product, $amount);
-            
-            // Prepare calculation data
+
+            // Smart stacking: keep base dimensions, stack by height
+            $unitLength = $product->length ?: 10;
+            $unitWidth = $product->width ?: 10;
+            $unitHeight = $product->height ?: 10;
+
+            $volumeX = max(10, (int)$unitLength);
+            $volumeY = max(10, (int)$unitWidth);
+            $volumeZ = max(10, (int)($unitHeight * $amount));
+
+            // Prepare calculation data using new API format
             $calculatorData = [
-                'senderCityId' => (int)$senderCityId,
-                'receiverCityId' => (int)$user->bts_city_id,
-                'weight' => max(4.0, $totalWeight), // Use total weight with 4kg minimum
-                'senderDelivery' => 2, // Default BTS delivery method
-                'receiverDelivery' => 2, // Default BTS delivery method
+                'senderCityCode' => (string)$senderCityCode,
+                'receiverCityCode' => (string)$user->bts_city_id,
+                'pickup_type' => 'branch',
+                'dropoff_type' => 'courier',
+                'is_multiple_cost' => 0,
+                'weight' => (float)max(1.0, $totalWeight),
+                'volume' => [
+                    'x' => $volumeX,
+                    'y' => $volumeY,
+                    'z' => $volumeZ
+                ]
             ];
 
-            // Calculate total volume based on quantity in cart
-            if ($product->length && $product->width && $product->height) {
-                $unitVolume = ($product->length * $product->width * $product->height) / 1000000; // Convert to cubic meters
-                $calculatorData['volume'] = $unitVolume * $this->amount; // Multiply by quantity
-            }
-
-            // Calculate delivery cost using BTS service
+            // Calculate delivery cost using BTS service (new order-calculate endpoint)
             $bts = new BTS();
-            $response = $bts->calculateDelivery($calculatorData);
+            $response = $bts->calculateOrder($calculatorData);
 
-            if ($response && isset($response['success']) && $response['success'] && isset($response['data']['summaryPrice'])) {
-                return (float)$response['data']['summaryPrice'];
+            if ($response && isset($response['success']) && $response['success'] && isset($response['data'])) {
+                // Extract price: prefer branch_to_courier, fallback to any available price
+                if (isset($response['data']['branch_to_courier']['price'])) {
+                    return (float)$response['data']['branch_to_courier']['price'];
+                }
+                if (isset($response['data']['price'])) {
+                    return (float)$response['data']['price'];
+                }
+                // Try any available delivery option
+                foreach (['branch_to_branch', 'branch_to_courier', 'courier_to_branch', 'courier_to_courier'] as $key) {
+                    if (isset($response['data'][$key]['available']) && $response['data'][$key]['available'] && isset($response['data'][$key]['price'])) {
+                        return (float)$response['data'][$key]['price'];
+                    }
+                }
             }
 
-            // TODO: Remove this mock fallback once BTS service is stable and reliable
-            Yii::warning('BTS delivery calculation failed, using mock estimate. Response: ' . json_encode($response), __METHOD__);
-            $baseCost = 25000;
-            $weightCost = max(1.0, $totalWeight) * 5000;
-            return (float)($baseCost + $weightCost);
-            // END TODO: Remove mock fallback
-            
+            Yii::warning('BTS delivery calculation returned no price. Response: ' . json_encode($response), __METHOD__);
+            return 0.0;
+
         } catch (\Exception $e) {
             Yii::error('BTS delivery calculation error: ' . $e->getMessage(), __METHOD__);
             return 0.0;
@@ -242,9 +260,9 @@ class UserCart extends \yii\db\ActiveRecord
     }
 
     /**
-     * Get product stock BTS city ID
+     * Get product stock BTS city code
      * @param Product $product
-     * @return int|null
+     * @return string|null
      */
     protected function getProductStockCityId($productWithStock) {
         if (!$productWithStock) {

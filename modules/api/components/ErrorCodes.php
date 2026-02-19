@@ -29,6 +29,16 @@ class ErrorCodes
     const ERROR_CART_ITEM_NOT_FOUND = -22;
     const ERROR_PRODUCT_NOT_FOUND = -23;
 
+    // MyID Errors
+    const ERROR_MYID_NOT_CONFIGURED = -30;
+    const ERROR_MYID_CODE_REQUIRED = -31;
+    const ERROR_MYID_TOKEN_EXCHANGE_FAILED = -32;
+    const ERROR_MYID_USER_DATA_FAILED = -33;
+    const ERROR_MYID_PINFL_MISSING = -34;
+    const ERROR_MYID_PINFL_LINKED = -35;
+    const ERROR_MYID_SESSION_FAILED = -36;
+    const ERROR_MYID_VERIFICATION_FAILED = -37;
+
     // Error Messages
     public static $messages = [
         self::SUCCESS => 'Success',
@@ -50,6 +60,15 @@ class ErrorCodes
         self::ERROR_MIN_ORDER_QUANTITY => 'Minimum order quantity not met',
         self::ERROR_CART_ITEM_NOT_FOUND => 'Cart item not found',
         self::ERROR_PRODUCT_NOT_FOUND => 'Product not found',
+
+        self::ERROR_MYID_NOT_CONFIGURED => 'MyID service is not configured',
+        self::ERROR_MYID_CODE_REQUIRED => 'Authorization code is required',
+        self::ERROR_MYID_TOKEN_EXCHANGE_FAILED => 'Failed to exchange authorization code',
+        self::ERROR_MYID_USER_DATA_FAILED => 'Failed to retrieve user data from MyID',
+        self::ERROR_MYID_PINFL_MISSING => 'MyID response missing PINFL',
+        self::ERROR_MYID_PINFL_LINKED => 'This PINFL is already linked to another account',
+        self::ERROR_MYID_SESSION_FAILED => 'Failed to create MyID verification session',
+        self::ERROR_MYID_VERIFICATION_FAILED => 'MyID verification failed',
     ];
 
     // HTTP Status Codes Map
@@ -73,6 +92,15 @@ class ErrorCodes
         self::ERROR_MIN_ORDER_QUANTITY => 422,
         self::ERROR_CART_ITEM_NOT_FOUND => 404,
         self::ERROR_PRODUCT_NOT_FOUND => 404,
+
+        self::ERROR_MYID_NOT_CONFIGURED => 500,
+        self::ERROR_MYID_CODE_REQUIRED => 422,
+        self::ERROR_MYID_TOKEN_EXCHANGE_FAILED => 502,
+        self::ERROR_MYID_USER_DATA_FAILED => 502,
+        self::ERROR_MYID_PINFL_MISSING => 502,
+        self::ERROR_MYID_PINFL_LINKED => 409,
+        self::ERROR_MYID_SESSION_FAILED => 502,
+        self::ERROR_MYID_VERIFICATION_FAILED => 500,
     ];
 
     public static function getMessage($code)

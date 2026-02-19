@@ -8,6 +8,7 @@ use yii\helpers\ArrayHelper;
 
 use app\models\user\User;
 use app\models\user\favorite\UserFavorite;
+use app\models\user\cart\UserCart;
 use app\models\product\review\ProductReview;
 use app\models\product\ProductProperty;
 use app\models\product\ProductFilter;
@@ -1334,6 +1335,13 @@ class Product extends \yii\db\ActiveRecord
                 'products' => function() {return $this->getOtherProducts();},
                 'variants' => function() use($language) {
                     return $this->getVariantsData($language);
+                },
+                'cart_amount' => function() {
+                    if (Yii::$app->user->isGuest) {
+                        return 0;
+                    }
+                    $cartItem = UserCart::findOne(['user_id' => Yii::$app->user->id, 'product_id' => $this->id]);
+                    return $cartItem ? (int)$cartItem->amount : 0;
                 },
                 'shop'
             ];

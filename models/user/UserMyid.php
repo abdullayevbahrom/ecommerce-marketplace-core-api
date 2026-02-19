@@ -245,9 +245,15 @@ class UserMyid extends ActiveRecord
     }
 
     /**
-     * Create or update verification from MyID data
-     * @param array $myidData - Data from MyID API
-     * @param int|null $userId - User ID to link (optional)
+     * Create or update verification from normalized MyID data.
+     *
+     * Expects flat data from MyidService::normalizeUserData():
+     *   pinfl, first_name, last_name, middle_name, birth_date, birth_place,
+     *   gender, nationality, passport_series, passport_number,
+     *   living_address, photo, sdk_hash
+     *
+     * @param array $myidData Normalized flat data from MyidService
+     * @param int|null $userId User ID to link (optional)
      * @return static|null
      */
     public static function createFromMyidData($myidData, $userId = null)
@@ -268,50 +274,30 @@ class UserMyid extends ActiveRecord
             $model->user_id = $userId;
         }
 
-        // Map MyID data to model attributes
-        $model->first_name = $myidData['first_name'] ?? $myidData['firstNameLatin'] ?? null;
-        $model->last_name = $myidData['last_name'] ?? $myidData['lastNameLatin'] ?? null;
-        $model->middle_name = $myidData['middle_name'] ?? $myidData['middleNameLatin'] ?? null;
-        $model->birth_date = $myidData['birth_date'] ?? $myidData['birthDate'] ?? null;
-        
+        // Map normalized flat fields
+        $model->first_name = $myidData['first_name'] ?? null;
+        $model->last_name = $myidData['last_name'] ?? null;
+        $model->middle_name = $myidData['middle_name'] ?? null;
+        $model->birth_date = $myidData['birth_date'] ?? null;
+        $model->birth_place = $myidData['birth_place'] ?? null;
+        $model->nationality = $myidData['nationality'] ?? null;
+        $model->living_address = $myidData['living_address'] ?? null;
+        $model->passport_series = $myidData['passport_series'] ?? null;
+        $model->passport_number = $myidData['passport_number'] ?? null;
+        $model->photo = $myidData['photo'] ?? null;
+        $model->sdk_hash = $myidData['sdk_hash'] ?? null;
+
         // Gender mapping
         if (isset($myidData['gender'])) {
-            $gender = strtolower($myidData['gender']);
-            if ($gender === 'male' || $gender === '1' || $gender === 1) {
+            $gender = strtolower((string)$myidData['gender']);
+            if ($gender === 'male' || $gender === '1') {
                 $model->gender = self::GENDER_MALE;
-            } elseif ($gender === 'female' || $gender === '2' || $gender === 2) {
+            } elseif ($gender === 'female' || $gender === '2') {
                 $model->gender = self::GENDER_FEMALE;
             }
         }
 
-        $model->nationality = $myidData['nationality'] ?? null;
-        $model->birth_place = $myidData['birth_place'] ?? $myidData['birthPlace'] ?? null;
-        
-        // Address
-        if (isset($myidData['address'])) {
-            $model->living_address = is_array($myidData['address']) 
-                ? ($myidData['address']['living'] ?? $myidData['address']['permanent'] ?? json_encode($myidData['address']))
-                : $myidData['address'];
-        } elseif (isset($myidData['livingAddress'])) {
-            $model->living_address = $myidData['livingAddress'];
-        }
-
-        // Passport
-        if (isset($myidData['passport'])) {
-            $model->passport_series = $myidData['passport']['series'] ?? null;
-            $model->passport_number = $myidData['passport']['number'] ?? null;
-        } elseif (isset($myidData['passportSerial'])) {
-            $model->passport_series = $myidData['passportSerial'];
-            $model->passport_number = $myidData['passportNumber'] ?? null;
-        }
-
-        // Photo
-        $model->photo = $myidData['photo'] ?? $myidData['userPhoto'] ?? null;
-
-        // SDK hash
-        $model->sdk_hash = $myidData['sdk_hash'] ?? $myidData['sdkHash'] ?? null;
-
-        // Store full response
+        // Store full response for audit
         $model->setMyidResponseArray($myidData);
 
         // Set verified status

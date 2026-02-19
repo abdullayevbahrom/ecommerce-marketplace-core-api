@@ -26,6 +26,7 @@ use yii\services\BTS;
 use yii\caching\FileCache;
 use yii\helpers\FileHelper;
 use yii\web\BadRequestHttpException;
+use app\services\WalletService;
 
 class OrderController extends Controller
 {
@@ -135,7 +136,7 @@ class OrderController extends Controller
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
-        $cart = UserCart::find()->with('cartFilter')->where(['user_id' => $user->id])->all();
+        $cart = UserCart::find()->with(['cartFilter', 'product'])->where(['user_id' => $user->id])->all();
         if (!$cart) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['cart' => 'Your cart is empty']];
@@ -144,6 +145,36 @@ class OrderController extends Controller
         $model = new Order;
         $model->load($post, '');
 
+        // Prevent direct promocode_id injection — must use code string
+        $model->promocode_id = null;
+        $model->discount_amount = null;
+
+        // Validate and resolve promocode from code string (non-blocking)
+        $promocodeWarning = null;
+        if (!empty($post['promocode'])) {
+            $promocode = \app\models\Promocode::findOne(['code' => $post['promocode']]);
+
+            if (!$promocode) {
+                $promocodeWarning = 'Promocode not accepted';
+            } else {
+                $cartTotal = 0;
+                foreach ($cart as $item) {
+                    if ($item->product) {
+                        $unitPrice = $item->product->getPriceByQuantity($item->amount);
+                        $cartTotal += $unitPrice * $item->amount;
+                    }
+                }
+
+                list($isValid, $error) = $promocode->checkValidity($user, $cartTotal, $cart);
+
+                if (!$isValid) {
+                    $promocodeWarning = $error ?: 'Promocode not accepted';
+                } else {
+                    $model->promocode_id = $promocode->id;
+                }
+            }
+        }
+
         if (!$model->validate()) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => $model->errors];
@@ -151,7 +182,7 @@ class OrderController extends Controller
 
         $saveResult = $model->saveObject($cart);
         if ($saveResult) {
-            $order = Order::find()->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image')->where(['id' => $model->id])->one();
+            $order = Order::find()->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image', 'shop')->where(['id' => $model->id])->one();
 
             // Auto-create Didox documents
             try {
@@ -161,8 +192,70 @@ class OrderController extends Controller
                 \app\models\Log::log('didox_order', "Auto-creation exception for Order #{$order->id}", $e->getMessage(), 'error');
             }
 
+            // Process wallet payment if payment_id matches wallet type
+            $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
+            if ($walletPaymentId && $order->payment_id == $walletPaymentId) {
+                $walletToken = $post['wallet_token'] ?? Yii::$app->params['walletDefaultToken'] ?? 'USDT';
+                $merchantId = $order->shop ? $order->shop->user_id : null;
+
+                if (!$merchantId) {
+                    $order->status_payment = 0;
+                    $order->save(false);
+                    Yii::$app->response->statusCode = 422;
+                    return ['errors' => ['wallet' => 'Shop owner not found for wallet payment']];
+                }
+
+                try {
+                    $walletService = new WalletService();
+                    $walletService->init();
+                    $result = $walletService->pay($user->id, $merchantId, (string)$order->price, $walletToken);
+
+                    // Payment succeeded — mark as paid and create transaction
+                    $order->status_payment = 1;
+                    $order->save(false);
+
+                    $transaction = new Transaction();
+                    $transaction->user_id = $user->id;
+                    $transaction->order_id = $order->id;
+                    $transaction->shop_id = $order->shop_id;
+                    $transaction->type_transaction = 'payment';
+                    $transaction->type_payment = 'wallet';
+                    $transaction->amount = $order->price;
+                    $transaction->status = 1;
+                    $transaction->save(false);
+                } catch (\Exception $e) {
+                    // Wallet payment failed — mark order as unpaid
+                    $order->status_payment = 0;
+                    $order->save(false);
+                    Yii::$app->response->statusCode = 422;
+                    return ['errors' => ['wallet' => 'Wallet payment failed: ' . $e->getMessage()], 'data' => $order];
+                }
+            }
+
             Yii::$app->response->statusCode = 200;
-            return ['data' => $order];
+            $response = ['data' => $order];
+
+            // Build promocode status for the response
+            if (!empty($post['promocode'])) {
+                if ($order->promocode_id && $order->discount_amount > 0) {
+                    $appliedPromo = $order->promocode;
+                    $response['promocode_status'] = [
+                        'applied' => true,
+                        'code' => $appliedPromo ? $appliedPromo->code : $post['promocode'],
+                        'discount_amount' => $order->discount_amount,
+                        'message' => 'Promocode applied successfully',
+                    ];
+                } else {
+                    // Promo was rejected either in controller or during saveObject re-validation
+                    $response['promocode_status'] = [
+                        'applied' => false,
+                        'code' => $post['promocode'],
+                        'discount_amount' => 0,
+                        'message' => $promocodeWarning ?: 'Promocode not accepted',
+                    ];
+                }
+            }
+            return $response;
         }
 
         // Check if there are validation errors (like minimum order violations)
@@ -579,7 +672,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Calculate delivery cost using BTS order-calculator API
+     * Calculate delivery cost using BTS order-calculate API
      * POST /api/order/calculate
      * 
      * Required params:
@@ -672,7 +765,7 @@ class OrderController extends Controller
                 : 'courier';
             $isMultipleCost = isset($post['is_multiple_cost']) ? (int)$post['is_multiple_cost'] : 0;
 
-            // Prepare data for BTS order-calculator API
+            // Prepare data for BTS order-calculate API
             $calculatorData = [
                 'senderCityCode' => (string)$senderCityId,
                 'receiverCityCode' => (string)$receiverCityId,

@@ -372,7 +372,11 @@ class User extends ActiveRecord implements IdentityInterface {
     }
 
     public function validatePassword($password){
-        return Yii::$app->security->validatePassword($password, $this->password);
+        try {
+            return Yii::$app->security->validatePassword($password, $this->password);
+        } catch (\yii\base\InvalidArgumentException $e) {
+            return false;
+        }
     }
 
     public function checkOldPassword($attribute, $params) {
