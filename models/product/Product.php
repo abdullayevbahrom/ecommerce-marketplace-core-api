@@ -1350,26 +1350,26 @@ class Product extends \yii\db\ActiveRecord
     }
 
     // images
-    // public function getImage() {
-    //     return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'product', 'main'=>1]);
-    // }
-
-    public function getImage()
-    {
-        return $this->hasOne(Images::className(), ['token_key' => 'token_key'])
-            ->andOnCondition(['type' => 'product', 'main' => 1]);
+    public function getImage() {
+        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'product', 'main'=>1]);
     }
 
-
-    // public function getGallery() {
-    //     return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type'=>'product', 'main'=>2]);
+    // public function getImage()
+    // {
+    //     return $this->hasOne(Images::className(), ['token_key' => 'token_key'])
+    //         ->andOnCondition(['type' => 'product', 'main' => 1]);
     // }
 
-    public function getGallery()
-    {
-        return $this->hasMany(Images::className(), ['token_key' => 'token_key'])
-            ->andOnCondition(['type' => 'product', 'main' => 2]);
+
+    public function getGallery() {
+        return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type'=>'product', 'main'=>2]);
     }
+
+    // public function getGallery()
+    // {
+    //     return $this->hasMany(Images::className(), ['token_key' => 'token_key'])
+    //         ->andOnCondition(['type' => 'product', 'main' => 2]);
+    // }
 
     // brand
     public function getBrand()
