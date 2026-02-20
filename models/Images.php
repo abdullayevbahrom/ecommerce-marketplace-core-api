@@ -30,7 +30,7 @@ class Images extends \yii\db\ActiveRecord
     const PHOTO_USER_PATH = 'uploads/user/';
     const PHOTO_CATEGORY_PATH = 'uploads/category/';
 
-    const PHOTO_PRODUCT_PATH = 'product/';
+    const PHOTO_PRODUCT_PATH = 'uploads/product/';
 
     //const PHOTO_PRODUCT_PATH = '/var/www/shared_storage/uploads/product/';
 
