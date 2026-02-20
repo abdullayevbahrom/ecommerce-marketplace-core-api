@@ -463,7 +463,7 @@ class Shop extends \yii\db\ActiveRecord
 
         $exception = ['detail'];
 
-        if (($controller == 'shop') && in_array($action, $exception) || (Yii::$app->user->identity->role == User::ROLE_SHOP)) {
+        if (($controller == 'shop') && in_array($action, $exception) || (Yii::$app->user->identity?->role == User::ROLE_SHOP)) {
             $detail = [
                 'description' => function() use($language) { return $this->{'description_'.$language} ? $this->{'description_'.$language} : $this->description_ru;},
                 'user',
@@ -474,7 +474,7 @@ class Shop extends \yii\db\ActiveRecord
             $data = array_merge($data, $detail);
         }
 
-        if (Yii::$app->user->identity->role == User::ROLE_SHOP) {
+        if (Yii::$app->user->identity?->role == User::ROLE_SHOP) {
             $detail = [
                 'product_count' => function() { return count($this->products); },
                 'advertisment_count' => function() { return count($this->shopAdvertisings); },
