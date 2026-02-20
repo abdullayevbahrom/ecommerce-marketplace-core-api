@@ -25,7 +25,8 @@ use Jenssegers\ImageHash\Implementations\DifferenceHash;
  * @property string|null $token_key
  */
 
-class Images extends \yii\db\ActiveRecord {
+class Images extends \yii\db\ActiveRecord
+{
     const PHOTO_USER_PATH = 'uploads/user/';
     const PHOTO_CATEGORY_PATH = 'uploads/category/';
 
@@ -73,18 +74,21 @@ class Images extends \yii\db\ActiveRecord {
     );
 
     public $image_sizes = array(
-        '50'=>'50',
-        '100'=>'100',
-        '150'=>'150',
-        '200'=>'200',
-        '250'=>'250',
-        '300'=>'300');
+        '50' => '50',
+        '100' => '100',
+        '150' => '150',
+        '200' => '200',
+        '250' => '250',
+        '300' => '300'
+    );
 
-    public static function tableName() {
+    public static function tableName()
+    {
         return 'image';
     }
 
-    public function rules() {
+    public function rules()
+    {
         return [
             [['object_id', 'main', 'sort', 'status'], 'integer'],
             [['type', 'photo', 'number_image'], 'string', 'max' => 255],
@@ -114,9 +118,9 @@ class Images extends \yii\db\ActiveRecord {
     //     if (!array_key_exists($type, $this->object)) {
     //         return false;
     //     }
-    
+
     //     $path = $this->object[$type];
-    
+
     //     // Функция для создания директории, если она не существует
     //     $createDir = function($dir) {
     //         if (!is_dir($dir)) {
@@ -125,8 +129,8 @@ class Images extends \yii\db\ActiveRecord {
     //             }
     //         }
     //     };
-        
-    
+
+
     //     if (is_array($object_id)) {
     //         foreach ($object_id as $v) {
     //             $createDir($path.$v);
@@ -136,21 +140,21 @@ class Images extends \yii\db\ActiveRecord {
     //         $createDir($path.$object_id);
     //         $createDir($path.$object_id.'/original');
     //     }
-        
+
     //     foreach ($this->imageFiles as $key => $file) {
     //         // Если $file это массив, то берём файл по ключу
     //         $file = is_array($file) ? $file[$key] : $file;
-    
+
     //         if (is_array($object_id)) {
     //             $id = $object_id[$key];
     //         } else {
     //             $id = $object_id;
     //         }
-    
+
     //         $rnd = mt_rand(0, 1000000);
     //         $name = time() + $rnd.'.'.$file->extension;
     //         $original = $path.$id.'/original/'.$name;
-    
+
     //         if ($file->saveAs($original)) {
     //             $hasher = new ImageHash(new DifferenceHash());
     //             // $hash = $hasher->hash(Yii::$app->params['baseUrl'].'/'.$original);
@@ -160,7 +164,7 @@ class Images extends \yii\db\ActiveRecord {
     //                 throw new \Exception('File not found: ' . $absolutePath);
     //             }
     //             $hash = $hasher->hash($absolutePath);
-    
+
     //             // Если файл не является видео или SVG, создаем миниатюры
     //             if ($file->extension != 'mp4' && $file->extension != 'svg') {
     //                 foreach ($this->image_sizes as $sizeKey => $img) {
@@ -169,9 +173,9 @@ class Images extends \yii\db\ActiveRecord {
     //                     Image::thumbnail($original, $sizeKey, $img)->save(Yii::getAlias($sizePath.'/'.$name), ['quality' => 80]);
     //                 }
     //             }
-    
+
     //             $status = (Yii::$app->user->identity->role == User::ROLE_ADMIN) ? 1 : 0;
-    
+
     //             if ($this->photo && $check) {
     //                 $original = $path.$id.'/original/'.$this->photo;
     //                 if (is_file($original)) {
@@ -185,7 +189,7 @@ class Images extends \yii\db\ActiveRecord {
     //                         }
     //                     }
     //                 }
-    
+
     //                 Yii::$app->db->createCommand()->update('image', ['photo' => $name], ['id' => $this->id, 'hash' => $hash])->execute();
     //             } else {
     //                 Yii::$app->db->createCommand()->insert('image', [
@@ -204,7 +208,7 @@ class Images extends \yii\db\ActiveRecord {
     //             return false;
     //         }
     //     }
-    
+
     //     return true;
     // }
 
@@ -227,32 +231,32 @@ class Images extends \yii\db\ActiveRecord {
             $originalKey = $basePath . $tokenKey . '/original/' . $name;
             Yii::$app->s3->upload($originalKey, $localTemp);
 
-                // Миниатюры
-                foreach ($this->image_sizes as $sizeKey => $img) {
+            // Миниатюры
+            foreach ($this->image_sizes as $sizeKey => $img) {
 
-                    $thumbPath = Yii::getAlias('@runtime') . "/{$sizeKey}_{$name}";
+                $thumbPath = Yii::getAlias('@runtime') . "/{$sizeKey}_{$name}";
 
-                    \yii\imagine\Image::thumbnail($localTemp, $sizeKey, $img)->save($thumbPath, ['quality' => 80]);
+                \yii\imagine\Image::thumbnail($localTemp, $sizeKey, $img)->save($thumbPath, ['quality' => 80]);
 
-                    $thumbKey = $basePath . $tokenKey . "/{$sizeKey}x{$img}/" . $name;
+                $thumbKey = $basePath . $tokenKey . "/{$sizeKey}x{$img}/" . $name;
 
-                    Yii::$app->s3->upload($thumbKey, $thumbPath);
+                Yii::$app->s3->upload($thumbKey, $thumbPath);
 
-                    unlink($thumbPath);
-                }
+                unlink($thumbPath);
+            }
 
-                unlink($localTemp);
+            unlink($localTemp);
 
-                Yii::$app->db->createCommand()->insert('image', [
-                    'type' => $type_image ?: $type,
-                    'token_key' => $tokenKey,
-                    'photo' => $name,
-                    'main' => $main,
-                    'sort' => 0,
-                    'web' => 0,
-                    'status' => 1,
-                    // 'hash' => (string)$hash
-                ])->execute();
+            Yii::$app->db->createCommand()->insert('image', [
+                'type' => $type_image ?: $type,
+                'token_key' => $tokenKey,
+                'photo' => $name,
+                'main' => $main,
+                'sort' => 0,
+                'web' => 0,
+                'status' => 1,
+                // 'hash' => (string)$hash
+            ])->execute();
         }
 
         return true;
@@ -261,10 +265,11 @@ class Images extends \yii\db\ActiveRecord {
 
 
 
-    public function removeImage() {
+    public function removeImage()
+    {
         $path = $this->object[$this->type];
 
-        $image = $path.$this->object_id.'/'.$this->photo;
+        $image = $path . $this->object_id . '/' . $this->photo;
 
         if (is_file($image)) {
             unlink($image);
@@ -274,10 +279,11 @@ class Images extends \yii\db\ActiveRecord {
     }
 
     // color
-    public function uploadPhotoColor($object_id) {
+    public function uploadPhotoColor($object_id)
+    {
         if ($this->colors) {
             foreach ($this->colors as $k => $color) {
-                $c = ProductColor::findOne(['product_id'=>$object_id, 'color_id'=>$color]);
+                $c = ProductColor::findOne(['product_id' => $object_id, 'color_id' => $color]);
                 if (!$c) {
                     $c = new ProductColor;
                 }
@@ -286,15 +292,15 @@ class Images extends \yii\db\ActiveRecord {
                 $c->status = 1;
                 if ($c->save(false)) {
                     $image = $this->imageFiles[$k];
-                         
-                    $img = self::findOne(['object_id'=>$c->id, 'type'=>'color']);
+
+                    $img = self::findOne(['object_id' => $c->id, 'type' => 'color']);
                     if ($img) {
                         $img->removeImageSize('color');
                     }
                     $path = 'uploads/color/';
                     $rnd = mt_rand(0, 1000000);
-                    $name = time() + $rnd.'.'.$image->extension;
-                    $original = $path.$name;
+                    $name = time() + $rnd . '.' . $image->extension;
+                    $original = $path . $name;
 
                     $image->saveAs($original);
 
@@ -313,10 +319,11 @@ class Images extends \yii\db\ActiveRecord {
     }
     // end color
 
-    public function removeImageSize() {
+    public function removeImageSize()
+    {
         $path = $this->object[$this->type];
 
-        $original = $path.$this->object_id.'/original/'.$this->photo;
+        $original = $path . $this->object_id . '/original/' . $this->photo;
 
         if (is_file($original)) {
             unlink($original);
@@ -325,48 +332,50 @@ class Images extends \yii\db\ActiveRecord {
         $dir_empty = false;
 
         foreach ($this->image_sizes as $k => $v) {
-            $image = $path.$this->object_id.'/'.$k.'x'.$v.'/'.$this->photo;
+            $image = $path . $this->object_id . '/' . $k . 'x' . $v . '/' . $this->photo;
             if (is_file($image)) {
                 unlink($image);
             }
 
-            $dir_empty = (glob($image.'*')) ? false : true;
+            $dir_empty = (glob($image . '*')) ? false : true;
         }
 
         $dir_empty = false;
 
         if ($dir_empty === true) {
-            if (!is_file($path.$this->object_id.'/original/'.$this->photo)) {
+            if (!is_file($path . $this->object_id . '/original/' . $this->photo)) {
                 foreach ($this->image_sizes as $k => $v) {
-                    rmdir($path.$this->object_id.'/'.$k.'x'.$v);
+                    rmdir($path . $this->object_id . '/' . $k . 'x' . $v);
                 }
-                rmdir($path.$this->object_id.'/original');
-                rmdir($path.$this->object_id);
+                rmdir($path . $this->object_id . '/original');
+                rmdir($path . $this->object_id);
             }
         }
 
         return $this->delete() ? true : false;
     }
 
-    public function getPhoto($type, $size = 'original') {
+    public function getPhoto($type, $size = 'original')
+    {
         if ($this->web == 1) {
-            //return $this->photo;
-                    $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
+            return $this->photo;
+            // $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
 
-        return $baseUrl . "/uploads/$type/" . $this->token_key . '/' . $size . '/' . $this->photo;
+            // return $baseUrl . "/uploads/$type/" . $this->token_key . '/' . $size . '/' . $this->photo;
         }
-        // $path = 'uploads/'.$type.'/'.$this->object_id.'/'.$size.'/'.$this->photo;
+        $path = 'uploads/' . $type . '/' . $this->object_id . '/' . $size . '/' . $this->photo;
 
-        // if (is_file($path)) {
-        //     return '/'.$path;
-        // }
+        if (is_file($path)) {
+            return '/' . $path;
+        }
 
 
 
         return self::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         return ['id', 'photo'];
     }
 
