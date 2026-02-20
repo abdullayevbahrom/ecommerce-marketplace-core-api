@@ -579,20 +579,6 @@ class ProductController extends Controller
 
     public function actionBestProducts()
     {
-        // $query = Product::find()
-        //     ->alias('p')
-        //     ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
-        //     ->leftJoin('order_product op', 'op.product_id = p.id')
-        //     ->leftJoin('order o', 'op.order_id = o.id AND o.status IN (1, 2, 3)')
-        //     ->leftJoin('product_review pr', 'pr.product_id = p.id AND pr.status IN (1, 3)')
-        //     ->where(['p.status' => 1])
-        //     ->andWhere(['>=', 'p.views', 100])
-        //     ->groupBy('p.id')
-        //     ->having('COUNT(DISTINCT o.id) >= 30')
-        //     ->andHaving('COUNT(DISTINCT CASE WHEN pr.rate >= 4 THEN pr.id END) >= 10')
-        //     ->andHaving('AVG(pr.rate) >= 4.5')
-        //     ->andHaving('COUNT(DISTINCT pr.id) >= 10');
-
         $query = Product::find()
             ->alias('p')
             ->select([
@@ -615,26 +601,6 @@ class ProductController extends Controller
             ->andHaving(['>=', 'reviews_count', 10]);
 
         if ($sort = Yii::$app->request->get('sort')) {
-            // switch ($sort) {
-            //     case 'rating':
-            //         $query->orderBy('AVG(pr.rate) DESC, p.views DESC');
-            //         break;
-            //     case 'popular':
-            //         $query->orderBy('p.views DESC, AVG(pr.rate) DESC');
-            //         break;
-            //     case 'orders':
-            //         $query->orderBy('COUNT(DISTINCT o.id) DESC, AVG(pr.rate) DESC');
-            //         break;
-            //     case 'price_down':
-            //         $query->orderBy('p.price ASC');
-            //         break;
-            //     case 'price_up':
-            //         $query->orderBy('p.price DESC');
-            //         break;
-            //     default:
-            //         $query->orderBy('AVG(pr.rate) DESC, COUNT(DISTINCT o.id) DESC');
-            //         break;
-            // }
             switch ($sort) {
                 case 'rating':
                     $query->orderBy([
@@ -672,7 +638,10 @@ class ProductController extends Controller
                     ]);
             }
         } else {
-            $query->orderBy('AVG(pr.rate) DESC, COUNT(DISTINCT o.id) DESC');
+            $query->orderBy([
+                'avg_rate' => SORT_DESC,
+                'orders_count' => SORT_DESC
+            ]);
         }
 
         if ($category_id = Yii::$app->request->get('category_id')) {
