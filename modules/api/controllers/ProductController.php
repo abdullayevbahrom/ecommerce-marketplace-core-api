@@ -693,7 +693,7 @@ class ProductController extends Controller
         }
 
         // Price filtering with bounds calculation
-        $this->applyPriceFilterWithBounds($query, 'p.price');
+        $this->applyPriceFilterWithBounds($query, 'price');
 
         $perPage = Yii::$app->request->get('per-page', 12);
 
