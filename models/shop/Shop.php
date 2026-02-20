@@ -438,7 +438,7 @@ class Shop extends \yii\db\ActiveRecord
     }
 
     public function isFavorite() {
-        $favorite = UserShopFavorite::findOne(['shop_id'=>$this->id, 'user_id'=>Yii::$app->user->identity->id]);
+        $favorite = UserShopFavorite::findOne(['shop_id'=>$this->id, 'user_id'=>Yii::$app->user->identity?->id]);
         return $favorite ? true : false;
     }
 
