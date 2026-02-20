@@ -43,8 +43,9 @@ class SyncController extends Controller
 
     public function actionPending($page = 1, $pageSize = 50)
     {
-         $query = Product::find()
-             ->orderBy(['id' => SORT_ASC]);
+        $query = Product::find()
+            ->where('shop_id IS NOT NULL')
+            ->orderBy(['id' => SORT_ASC]);
 
         $count = $query->count();
 
@@ -53,37 +54,37 @@ class SyncController extends Controller
             ->limit($pageSize)
             ->all();
 
-         $data = [];
-         foreach ($products as $product) {
-             $item = $product->toArray();
-             $item['sku'] = $product->sku;
-             $item['barcode'] = $product->barcode;
-             $item['ikpu_code'] = $product->ikpu_code;
-             // Add related table IDs
-             $item['user_id'] = $product->user_id;
-             $item['category_id'] = $product->category_id;
-             $item['brand_id'] = $product->brand_id;
-             $item['shop_id'] = $product->shop_id;
-             $item['stock_id'] = $product->stock_id;
-             $item['region_id'] = $product->region_id;
-             $item['currency_id'] = $product->currency_id;
-             $item['unit_id'] = $product->unit_id;
-             $item['color_id'] = $product->color_id;
-             $item['delivery_id'] = $product->delivery_id;
-             $item['product_relation_id'] = $product->product_relation_id;
-             $item['office_id'] = $product->office_id;
-             $item['tag_id'] = $product->tag_id;
-             $data[] = $item;
+        $data = [];
+        foreach ($products as $product) {
+            $item = $product->toArray();
+            $item['sku'] = $product->sku;
+            $item['barcode'] = $product->barcode;
+            $item['ikpu_code'] = $product->ikpu_code;
+            // Add related table IDs
+            $item['user_id'] = $product->user_id;
+            $item['category_id'] = $product->category_id;
+            $item['brand_id'] = $product->brand_id;
+            $item['shop_id'] = $product->shop_id;
+            $item['stock_id'] = $product->stock_id;
+            $item['region_id'] = $product->region_id;
+            $item['currency_id'] = $product->currency_id;
+            $item['unit_id'] = $product->unit_id;
+            $item['color_id'] = $product->color_id;
+            $item['delivery_id'] = $product->delivery_id;
+            $item['product_relation_id'] = $product->product_relation_id;
+            $item['office_id'] = $product->office_id;
+            $item['tag_id'] = $product->tag_id;
+            $data[] = $item;
         }
 
         return [
-                'success' => true,
-                'page' => $page,
-                'pageSize' => $pageSize,
-                'total' => $count,
-                'hasMore' => ($page * $pageSize) < $count,
-                'products' => $data,
-            ];
+            'success' => true,
+            'page' => $page,
+            'pageSize' => $pageSize,
+            'total' => $count,
+            'hasMore' => ($page * $pageSize) < $count,
+            'products' => $data,
+        ];
     }
 
     /**
@@ -153,7 +154,7 @@ class SyncController extends Controller
                 'shop_id'  => $shop->id
             ])->one();
         }
-        
+
         if (!$user) {
             $user = new User();
             $user->shop_id = $shop->id;
@@ -238,7 +239,7 @@ class SyncController extends Controller
                 'shop_id'  => $shop->id
             ])->one();
         }
-        
+
         if (!$stock) {
             $stock = new Stock();
             $stock->shop_id = Yii::$app->request->post('shop_id');
@@ -257,7 +258,7 @@ class SyncController extends Controller
 
         return [
             'id' => $stock->id
-        ];  
+        ];
     }
 
     public function actionStockDelete()
@@ -342,7 +343,7 @@ class SyncController extends Controller
             'id'   => $productId,
             'token_key' => $tokenKey,
         ])
-        ->one();
+            ->one();
 
         $created = 0;
         $updated = 0;
@@ -394,11 +395,11 @@ class SyncController extends Controller
 
         foreach ($colors as $color_id) {
             if ($color_id) {
-                
+
                 $color = Color::findOne($color_id);
                 if (!$color) {
                     return ['error' => 'color not found on ProductColor'];
-                } 
+                }
 
                 (new ProductColor([
                     'product_id' => $product->id,
@@ -412,7 +413,7 @@ class SyncController extends Controller
 
         foreach ($types as $pt) {
 
-            $prTypeValue = ProductTypeValue::find()->where(['id' =>$pt['productTypeValue']['id']])->one();
+            $prTypeValue = ProductTypeValue::find()->where(['id' => $pt['productTypeValue']['id']])->one();
 
             if (!$prTypeValue) {
                 return ['error' => 'product type and pr value not found'];
@@ -469,7 +470,7 @@ class SyncController extends Controller
             Yii::$app->response->statusCode = 404;
             return ['error' => 'Product not found'];
         }
-        
+
         $exists->softDelete();
 
         return [
@@ -565,35 +566,35 @@ class SyncController extends Controller
     public function actionFilterDelete()
     {
         $request = Yii::$app->request;
-    
+
         $filterId = (int) $request->post('id');
-    
+
         if (!$filterId) {
             Yii::$app->response->statusCode = 422;
             return ['error' => 'shop_id and id are required'];
         }
-    
+
         $filter = Filter::find()
             ->where(['id' => $filterId])
             ->one();
-    
+
         if (!$filter) {
             Yii::$app->response->statusCode = 404;
             return ['error' => 'Filter not found'];
         }
-    
+
         // Если используется в товарах — деактивируем
         $inUse = ProductFilter::find()
             ->where(['filter_id' => $filterId])
             ->exists();
-    
+
         $now = date('Y-m-d H:i:s');
 
         if ($inUse) {
             $filter->status = 0;
             $filter->deleted_at = $now;
             $filter->save(false);
-    
+
             return [
                 'success' => true,
                 'message' => 'Filter in use, set to inactive',
@@ -603,16 +604,16 @@ class SyncController extends Controller
         $filter->status = 0;
         $filter->deleted_at = $now;
         $filter->save(false);
-    
+
         // Иначе удаляем полностью
         Filter::updateAll(
-        [
-            'status' => 0,
-            'deleted_at' => $now,
-        ],
-        ['parent_id' => $filter->id]
+            [
+                'status' => 0,
+                'deleted_at' => $now,
+            ],
+            ['parent_id' => $filter->id]
         );
-    
+
         return [
             'success' => true,
             'message' => 'Filter deleted',
@@ -784,7 +785,7 @@ class SyncController extends Controller
             Yii::$app->response->statusCode = 500;
             return [
                 'error'   => 'Failed to save category',
-                'details'=> $category->errors,
+                'details' => $category->errors,
             ];
         }
 
@@ -880,7 +881,7 @@ class SyncController extends Controller
             Yii::$app->response->statusCode = 500;
             return [
                 'error'   => 'Failed to save brand',
-                'details'=> $brand->errors,
+                'details' => $brand->errors,
             ];
         }
 
@@ -938,34 +939,34 @@ class SyncController extends Controller
     public function actionIkpu()
     {
         $request = Yii::$app->request;
-    
+
         $code = $request->post('code');
         if (!$code) {
             Yii::$app->response->statusCode = 422;
             return ['error' => 'code is required'];
         }
-    
+
         $ikpu = Ikpu::findOne(['code' => $code]);
         $created = false;
-    
+
         if (!$ikpu) {
             $ikpu = new Ikpu();
             $ikpu->code = $code;
             $created = true;
         }
-    
+
         // Prevent self-parent
         if ($request->post('parent_code') === $code) {
             Yii::$app->response->statusCode = 422;
             return ['error' => 'IKPU cannot be its own parent'];
         }
-    
+
         $ikpu->name_ru     = $request->post('name_ru');
         $ikpu->name_en     = $request->post('name_en');
         $ikpu->name_uz     = $request->post('name_uz');
         $ikpu->parent_code = $request->post('parent_code');
         $ikpu->status      = (int) $request->post('status', 1);
-    
+
         if (!$ikpu->save(false)) {
             Yii::$app->response->statusCode = 500;
             return [
@@ -973,7 +974,7 @@ class SyncController extends Controller
                 'details' => $ikpu->errors,
             ];
         }
-    
+
         return [
             'success' => true,
             'id'      => $ikpu->id,
@@ -1048,15 +1049,15 @@ class SyncController extends Controller
             case 'product':
                 $model = Product::findOne($id);
                 break;
-            
+
             case 'filter':
                 $model = Filter::findOne($id);
                 break;
-            
+
             case 'color':
                 $model = Color::findOne($id);
                 break;
-            
+
             case 'product-type':
                 $model = ProductType::findOne($id);
                 break;
@@ -1068,9 +1069,9 @@ class SyncController extends Controller
             case 'brand':
                 $model = CategoryBrand::findOne($id);
                 break;
-            
+
             default:
-            $model = null;
+                $model = null;
         }
 
         if (!$model) {
@@ -1122,15 +1123,15 @@ class SyncController extends Controller
             case 'product':
                 $model = Product::findOne($id);
                 break;
-            
+
             case 'filter':
                 $model = Filter::findOne($id);
                 break;
-            
+
             case 'color':
                 $model = Color::findOne($id);
                 break;
-            
+
             case 'product_type':
                 $model = ProductType::findOne($id);
                 break;
@@ -1142,9 +1143,9 @@ class SyncController extends Controller
             case 'brand':
                 $model = CategoryBrand::findOne($id);
                 break;
-            
+
             default:
-            $model = null;
+                $model = null;
         }
 
         if (!$model) {
@@ -1181,15 +1182,13 @@ class SyncController extends Controller
             $model instanceof Filter
         ) {
             $model->status = $newStatus;
-        }elseif ($model instanceof ProductType){
+        } elseif ($model instanceof ProductType) {
             $model->status = ($status === 'approved') ? 1 : 0;
-        }
-        elseif ($model instanceof Category) {
+        } elseif ($model instanceof Category) {
             $model->status = ($status === 'approved') ? 1 : 0;
-        }
-        elseif($model instanceof Color) {
+        } elseif ($model instanceof Color) {
             $model->status = ($status === 'approved') ? 1 : 0;
-        } elseif($model instanceof CategoryBrand) {
+        } elseif ($model instanceof CategoryBrand) {
             $model->status = ($status === 'approved') ? 1 : 0;
         } else {
             return;
@@ -1198,4 +1197,3 @@ class SyncController extends Controller
         $model->save(false);
     }
 }
-

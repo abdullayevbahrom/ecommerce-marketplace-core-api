@@ -342,7 +342,6 @@ class ProductAttributeController extends Controller
 
         $this->checkAuth();
 
-        // $query = Stock::find()->where(['shop_id' => $shopId])->andWhere(['deleted_at' => null])->asArray();
         $query = Stock::find()
             ->select([
                 'stock.*',

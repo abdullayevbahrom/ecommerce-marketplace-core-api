@@ -1,4 +1,5 @@
 <?php
+
 namespace app\modules\api\controllers;
 
 use Yii;
@@ -32,7 +33,8 @@ use Jenssegers\ImageHash\Hash;
 use app\modules\api\components\ErrorCodes;
 use app\modules\api\components\ApiResponseTrait;
 
-class ProductController extends Controller {
+class ProductController extends Controller
+{
     use ApiResponseTrait;
 
     public $minMaxPrices = [];
@@ -40,12 +42,12 @@ class ProductController extends Controller {
     protected function serializeData($data)
     {
         $result = parent::serializeData($data);
-        
+
         if (is_array($result) && isset($result['_meta']) && !empty($this->minMaxPrices)) {
             $result['_meta']['price_min'] = $this->minMaxPrices['min'];
             $result['_meta']['price_max'] = $this->minMaxPrices['max'];
         }
-        
+
         return $result;
     }
 
@@ -59,15 +61,15 @@ class ProductController extends Controller {
         $boundsQuery = clone $query;
         $boundsQuery->orderBy(null);
         $boundsQuery->limit(null)->offset(null);
-        
+
         // We need to ensure we don't select everything, just the aggregates
         // But if the query has with(), it might trigger extra queries or be slow?
         // Cloning ActiveQuery keeps 'with', but 'min'/'max' usually ignores eager loading unless joinWith is used.
         // If joinWith is used, we need it.
-        
+
         $min = $boundsQuery->min($column);
         $max = $boundsQuery->max($column);
-        
+
         $this->minMaxPrices = [
             'min' => $min !== null ? (float)$min : 0,
             'max' => $max !== null ? (float)$max : 0
@@ -82,7 +84,8 @@ class ProductController extends Controller {
         }
     }
 
-    public function beforeAction($action) {
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
 
         Yii::$app->response->getHeaders()->add('Access-Control-Allow-Origin', '*');
@@ -96,7 +99,8 @@ class ProductController extends Controller {
         return parent::beforeAction($action);
     }
 
-    public function behaviors() {
+    public function behaviors()
+    {
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
@@ -121,7 +125,7 @@ class ProductController extends Controller {
         $behaviors['authenticator']['except'] = ['options'];
 
         $behaviors['authenticator'] = $auth;
-        
+
         return $behaviors;
     }
 
@@ -137,16 +141,16 @@ class ProductController extends Controller {
     {
         $headers = Yii::$app->request->headers;
         $token = $headers->get('X-Api-Token');
-        
+
         if (!$token) {
             throw new \yii\web\UnauthorizedHttpException('Missing X-Api-Token header');
         }
-        
+
         $branchId = $headers->get('X-Branch-ID');
         if (!$branchId) {
             throw new \yii\web\UnauthorizedHttpException('Missing X-Branch-ID header');
         }
-        
+
         $expectedToken = md5($branchId . Yii::$app->params['apiSecretKey']);
         if ($token !== $expectedToken) {
             throw new \yii\web\UnauthorizedHttpException('Invalid API Token');
@@ -160,25 +164,25 @@ class ProductController extends Controller {
     public function actionCreate()
     {
         $this->checkSkladAuth();
-        
+
         $request = Yii::$app->request;
         $userId = $request->post('user_id');
-        
+
         if (!$userId) {
             return $this->sendError(400, 'user_id is required');
         }
-        
+
         $user = User::findOne($userId);
         if (!$user) {
             return $this->sendError(404, 'User not found');
         }
-        
+
         // Login the user so saveObject logic works
         Yii::$app->user->login($user);
-        
+
         $model = new Product();
         $post = $request->post();
-        
+
         // Ensure status is active by default
         if (!isset($post['status'])) {
             $post['status'] = 1;
@@ -186,173 +190,172 @@ class ProductController extends Controller {
 
         // Map Branch to Stock if needed
         if (isset($post['branch_id']) && !isset($post['stock_id'])) {
-             $post['stock_id'] = $post['branch_id']; 
+            $post['stock_id'] = $post['branch_id'];
         }
 
         // Validate basic load
         if ($model->load($post, '')) {
-             // Fix: shop_id is required but auto-detected in saveObject. 
-             // We need to set it here manually for $model->validate() to pass.
-             if (empty($model->shop_id)) {
-                 $shop = \app\models\shop\Shop::findOne(['user_id' => $user->id]);
-                 if (!$shop && $user->shop_id) {
-                     $shop = \app\models\shop\Shop::findOne($user->shop_id);
-                 }
-                 if ($shop) {
-                     $model->shop_id = $shop->id;
-                     $post['shop_id'] = $shop->id;
-                 }
-             }
+            // Fix: shop_id is required but auto-detected in saveObject. 
+            // We need to set it here manually for $model->validate() to pass.
+            if (empty($model->shop_id)) {
+                $shop = \app\models\shop\Shop::findOne(['user_id' => $user->id]);
+                if (!$shop && $user->shop_id) {
+                    $shop = \app\models\shop\Shop::findOne($user->shop_id);
+                }
+                if ($shop) {
+                    $model->shop_id = $shop->id;
+                    $post['shop_id'] = $shop->id;
+                }
+            }
 
-             // Update Request with modified POST data so saveObject sees it (stock_id, shop_id, etc.)
-             Yii::$app->request->setBodyParams($post);
+            // Update Request with modified POST data so saveObject sees it (stock_id, shop_id, etc.)
+            Yii::$app->request->setBodyParams($post);
 
-             if ($model->validate()) {
-                 $colors = $post['colors'] ?? ($post['color_id'] ? [$post['color_id']] : []);
-             $productTypes = $post['product_types'] ?? [];
-             $callbackUrl = $post['callback_url'] ?? null;
+            if ($model->validate()) {
+                $colors = $post['colors'] ?? ($post['color_id'] ? [$post['color_id']] : []);
+                $productTypes = $post['product_types'] ?? [];
+                $callbackUrl = $post['callback_url'] ?? null;
 
-             // Fix: Sklad sends product_types as a list of objects [{yii_product_type_id:1, yii_product_type_value_id:35}, ...]
-             // We need to convert this to the format expected by generateTypeCombinations: [type_id => [val1, val2]]
-             if (!empty($productTypes)) {
-                 // Check if first element is an object/array (Sklad format) vs associative map (Admin format)
-                 $firstItem = reset($productTypes);
-                 $isSkladFormat = is_array($firstItem) || is_object($firstItem);
-                 
-                 // Also check by looking for 'yii_product_type_id' key
-                 if ($isSkladFormat) {
-                     $firstItem = (array) $firstItem;
-                     $isSkladFormat = isset($firstItem['yii_product_type_id']);
-                 }
-                 
-                 if ($isSkladFormat) {
-                     $normalizedTypes = [];
-                     foreach ($productTypes as $item) {
-                         // Cast to array in case it's stdClass from JSON decode
-                         $item = (array) $item;
-                         
-                         $ptId = $item['yii_product_type_id'] ?? null;
-                         if (!$ptId) continue;
-                         
-                         // Use value_id if present and not null, otherwise custom_value
-                         // Note: array key can exist with null value, ?? handles this
-                         $val = null;
-                         if (isset($item['yii_product_type_value_id']) && $item['yii_product_type_value_id'] !== null) {
-                             $val = $item['yii_product_type_value_id'];
-                         } elseif (isset($item['custom_value']) && $item['custom_value'] !== null) {
-                             $val = $item['custom_value'];
-                         }
-                         
-                         if ($val !== null) {
-                             $normalizedTypes[$ptId][] = $val;
-                         }
-                     }
-                     $productTypes = $normalizedTypes;
-                 }
-             }
+                // Fix: Sklad sends product_types as a list of objects [{yii_product_type_id:1, yii_product_type_value_id:35}, ...]
+                // We need to convert this to the format expected by generateTypeCombinations: [type_id => [val1, val2]]
+                if (!empty($productTypes)) {
+                    // Check if first element is an object/array (Sklad format) vs associative map (Admin format)
+                    $firstItem = reset($productTypes);
+                    $isSkladFormat = is_array($firstItem) || is_object($firstItem);
 
-             $tokenKey = $post['token_key'] ?? Yii::$app->security->generateRandomString();
-             
-             // Calculate expected products count BEFORE sending response
-             $typeCombinations = [];
-             if (!empty($productTypes)) {
-                 $typeCombinations = $this->generateTypeCombinations($productTypes);
-             }
-             if (empty($typeCombinations)) {
-                 $typeCombinations = [null];
-             }
-             $colorsCount = !empty($colors) ? count($colors) : 1;
-             $expectedCount = count($typeCombinations) * $colorsCount;
+                    // Also check by looking for 'yii_product_type_id' key
+                    if ($isSkladFormat) {
+                        $firstItem = (array) $firstItem;
+                        $isSkladFormat = isset($firstItem['yii_product_type_id']);
+                    }
 
-             // Send SUCCESS response IMMEDIATELY (before creating products)
-             $responseData = [
-                 'success' => true,
-                 'message' => 'Product creation started',
-                 'data' => [
-                     'status' => 'processing',
-                     'token_key' => $tokenKey,
-                     'expected_count' => $expectedCount,
-                 ]
-             ];
-             
-             // Set response and send it
-             Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
-             Yii::$app->response->data = $responseData;
-             Yii::$app->response->send();
-             
-             // Close connection to client, continue processing in background
-             if (function_exists('fastcgi_finish_request')) {
-                 fastcgi_finish_request();
-             } else {
-                 // Fallback for non-FPM environments
-                 if (ob_get_level() > 0) {
-                     ob_end_flush();
-                 }
-                 flush();
-             }
-             
-             // ========== BACKGROUND PROCESSING ==========
-             // Client has already received response, now create products
-             
-             try {
-                 $createdProducts = [];
-                 $failedProducts = [];
+                    if ($isSkladFormat) {
+                        $normalizedTypes = [];
+                        foreach ($productTypes as $item) {
+                            // Cast to array in case it's stdClass from JSON decode
+                            $item = (array) $item;
 
-                 // Iterate Combinations (Types x Colors)
-                 foreach ($typeCombinations as $combination) {
-                     $colorsToLoop = !empty($colors) ? $colors : [null];
-                     
-                    foreach ($colorsToLoop as $colorId) {
-                        // Pass specific combination of types to saveObject
-                        $product = $model->saveObject(true, $colorId, $tokenKey, null, $combination);
-                        
-                        if ($product) {
-                            $createdProducts[] = $product;
-                        } else {
-                            $failedProducts[] = [
-                                'color_id' => $colorId,
-                                'combination' => $combination,
-                                'errors' => $model->errors
-                            ];
+                            $ptId = $item['yii_product_type_id'] ?? null;
+                            if (!$ptId) continue;
+
+                            // Use value_id if present and not null, otherwise custom_value
+                            // Note: array key can exist with null value, ?? handles this
+                            $val = null;
+                            if (isset($item['yii_product_type_value_id']) && $item['yii_product_type_value_id'] !== null) {
+                                $val = $item['yii_product_type_value_id'];
+                            } elseif (isset($item['custom_value']) && $item['custom_value'] !== null) {
+                                $val = $item['custom_value'];
+                            }
+
+                            if ($val !== null) {
+                                $normalizedTypes[$ptId][] = $val;
+                            }
+                        }
+                        $productTypes = $normalizedTypes;
+                    }
+                }
+
+                $tokenKey = $post['token_key'] ?? Yii::$app->security->generateRandomString();
+
+                // Calculate expected products count BEFORE sending response
+                $typeCombinations = [];
+                if (!empty($productTypes)) {
+                    $typeCombinations = $this->generateTypeCombinations($productTypes);
+                }
+                if (empty($typeCombinations)) {
+                    $typeCombinations = [null];
+                }
+                $colorsCount = !empty($colors) ? count($colors) : 1;
+                $expectedCount = count($typeCombinations) * $colorsCount;
+
+                // Send SUCCESS response IMMEDIATELY (before creating products)
+                $responseData = [
+                    'success' => true,
+                    'message' => 'Product creation started',
+                    'data' => [
+                        'status' => 'processing',
+                        'token_key' => $tokenKey,
+                        'expected_count' => $expectedCount,
+                    ]
+                ];
+
+                // Set response and send it
+                Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+                Yii::$app->response->data = $responseData;
+                Yii::$app->response->send();
+
+                // Close connection to client, continue processing in background
+                if (function_exists('fastcgi_finish_request')) {
+                    fastcgi_finish_request();
+                } else {
+                    // Fallback for non-FPM environments
+                    if (ob_get_level() > 0) {
+                        ob_end_flush();
+                    }
+                    flush();
+                }
+
+                // ========== BACKGROUND PROCESSING ==========
+                // Client has already received response, now create products
+
+                try {
+                    $createdProducts = [];
+                    $failedProducts = [];
+
+                    // Iterate Combinations (Types x Colors)
+                    foreach ($typeCombinations as $combination) {
+                        $colorsToLoop = !empty($colors) ? $colors : [null];
+
+                        foreach ($colorsToLoop as $colorId) {
+                            // Pass specific combination of types to saveObject
+                            $product = $model->saveObject(true, $colorId, $tokenKey, null, $combination);
+
+                            if ($product) {
+                                $createdProducts[] = $product;
+                            } else {
+                                $failedProducts[] = [
+                                    'color_id' => $colorId,
+                                    'combination' => $combination,
+                                    'errors' => $model->errors
+                                ];
+                            }
                         }
                     }
-                 }
-                 
-                 // Send callback to Sklad with results (if callback_url provided)
-                 if ($callbackUrl) {
-                     $callbackData = [
-                         'status' => 'completed',
-                         'user_id' => $userId,
-                         'token_key' => $tokenKey,
-                         'product_ids' => array_column($createdProducts, 'id'),
-                         'products' => $createdProducts,
-                         'count' => count($createdProducts),
-                         'failed' => $failedProducts,
-                     ];
-                     $this->sendCallbackToSklad($callbackUrl, $callbackData);
-                 }
-                 
-                 Yii::info("Background product creation completed: " . count($createdProducts) . " products created", 'api');
-                 
-             } catch (\Exception $e) {
-                 Yii::error("Background product creation failed: " . $e->getMessage(), 'api');
-                 
-                 // Send error callback if URL provided
-                 if ($callbackUrl) {
-                     $this->sendCallbackToSklad($callbackUrl, [
-                         'status' => 'error',
-                         'user_id' => $userId,
-                         'token_key' => $tokenKey,
-                         'error' => $e->getMessage(),
-                     ]);
-                 }
-             }
-             
-             // Exit to prevent Yii from trying to send response again
-             Yii::$app->end();
-             }
+
+                    // Send callback to Sklad with results (if callback_url provided)
+                    if ($callbackUrl) {
+                        $callbackData = [
+                            'status' => 'completed',
+                            'user_id' => $userId,
+                            'token_key' => $tokenKey,
+                            'product_ids' => array_column($createdProducts, 'id'),
+                            'products' => $createdProducts,
+                            'count' => count($createdProducts),
+                            'failed' => $failedProducts,
+                        ];
+                        $this->sendCallbackToSklad($callbackUrl, $callbackData);
+                    }
+
+                    Yii::info("Background product creation completed: " . count($createdProducts) . " products created", 'api');
+                } catch (\Exception $e) {
+                    Yii::error("Background product creation failed: " . $e->getMessage(), 'api');
+
+                    // Send error callback if URL provided
+                    if ($callbackUrl) {
+                        $this->sendCallbackToSklad($callbackUrl, [
+                            'status' => 'error',
+                            'user_id' => $userId,
+                            'token_key' => $tokenKey,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                // Exit to prevent Yii from trying to send response again
+                Yii::$app->end();
+            }
         }
-        
+
         return $this->sendError(422, 'Validation error', $model->errors);
     }
 
@@ -360,12 +363,12 @@ class ProductController extends Controller {
     public function actionChanged()
     {
         $this->checkSkladAuth();
-    
+
         $products = Product::find()
             ->where(['sync_status' => 0])
             ->limit(100)
             ->all();
-    
+
         return [
             'success' => true,
             'products' => $products,
@@ -392,16 +395,16 @@ class ProductController extends Controller {
                 CURLOPT_TIMEOUT => 10,
                 CURLOPT_CONNECTTIMEOUT => 5,
             ]);
-            
+
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            
+
             if (curl_errno($ch)) {
                 Yii::error('Sklad callback failed: ' . curl_error($ch), 'api');
             } else {
                 Yii::info("Sklad callback sent to {$callbackUrl}, HTTP {$httpCode}", 'api');
             }
-            
+
             curl_close($ch);
         } catch (\Exception $e) {
             Yii::error('Sklad callback exception: ' . $e->getMessage(), 'api');
@@ -413,9 +416,10 @@ class ProductController extends Controller {
      * @param array $product_types
      * @return array
      */
-    private function generateTypeCombinations($product_types) {
+    private function generateTypeCombinations($product_types)
+    {
         $combinations = [];
-        
+
         // If only one type is selected, return simple combinations
         if (count($product_types) == 1) {
             foreach ($product_types as $type_id => $values) {
@@ -429,7 +433,7 @@ class ProductController extends Controller {
             }
             return $combinations;
         }
-        
+
         // For multiple types, generate all combinations
         $type_arrays = [];
         foreach ($product_types as $type_id => $values) {
@@ -441,12 +445,12 @@ class ProductController extends Controller {
                 $type_arrays[$type_id][] = $values;
             }
         }
-        
+
         // Generate cartesian product of all type combinations
         $keys = array_keys($type_arrays);
         $values = array_values($type_arrays);
         $total = array_product(array_map('count', $values));
-        
+
         for ($i = 0; $i < $total; $i++) {
             $combination = [];
             $temp = $i;
@@ -456,13 +460,14 @@ class ProductController extends Controller {
             }
             $combinations[] = array_reverse($combination, true);
         }
-        
+
         return $combinations;
     }
 
     // general product methods
-    public function actionIndex() {
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1])->orderBy('id desc');
+    public function actionIndex()
+    {
+        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->orderBy('id desc');
 
         if ($sort = Yii::$app->request->get('sort')) {
             if (($sort == 'new') || ($sort == 'recently')) {
@@ -493,40 +498,41 @@ class ProductController extends Controller {
         }
 
         if ($tag_id = Yii::$app->request->get('tag_id')) {
-            $query->andWhere(['tag_id'=>$tag_id]);
+            $query->andWhere(['tag_id' => $tag_id]);
         }
 
         if ($brand_id = Yii::$app->request->get('brand_id')) {
-            $query->andWhere(['brand_id'=>$brand_id]);
+            $query->andWhere(['brand_id' => $brand_id]);
         }
 
         if ($shop_id = Yii::$app->request->get('shop_id')) {
-            $query->andWhere(['shop_id'=>$shop_id]);
+            $query->andWhere(['shop_id' => $shop_id]);
         }
-        
+
         if ($filter = Yii::$app->request->get('filter')) {
             // Check if we should use OR logic instead of AND
             $filterLogic = Yii::$app->request->get('filter_logic', 'and'); // 'and' or 'or'
-            
+
             // For each filter, find products that match the specified values
             $productIds = [];
             $filterCount = 0;
-            
+
             foreach ($filter as $filterId => $filterValue) {
                 $filterCount++;
-                
+
                 // Find products that have this filter_id with the specified value
                 // The value can be either a ProductFilter ID or a text value
                 $subQuery = ProductFilter::find()
                     ->select('product_id')
                     ->where(['filter_id' => $filterId])
-                    ->andWhere(['or', 
+                    ->andWhere([
+                        'or',
                         ['id' => $filterValue],           // Match by ProductFilter ID
                         ['value_ru' => $filterValue],     // Match by text value
                         ['value_en' => $filterValue],     // Match by text value (English)
                         ['value_uz' => $filterValue]      // Match by text value (Uzbek)
                     ]);
-                
+
                 if ($filterCount === 1) {
                     $productIds = $subQuery->column();
                 } else {
@@ -540,15 +546,15 @@ class ProductController extends Controller {
                     }
                 }
             }
-            
+
             if (!empty($productIds)) {
                 $query->andWhere(['in', 'id', $productIds]);
             } else {
                 // No products match the filters
                 $query->andWhere(['id' => -1]);
             }
-        }   
-    
+        }
+
         // Price filtering with bounds calculation
         $this->applyPriceFilterWithBounds($query, 'price');
 
@@ -558,7 +564,7 @@ class ProductController extends Controller {
                 $product->delete();
             }
         }
-        
+
         $dataProvider = new ActiveDataProvider([
             'query' => $query,
             'pagination' => [
@@ -569,48 +575,106 @@ class ProductController extends Controller {
         ]);
 
         return $dataProvider;
-    } 
-    
-    public function actionBestProducts() {
+    }
+
+    public function actionBestProducts()
+    {
+        // $query = Product::find()
+        //     ->alias('p')
+        //     ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
+        //     ->leftJoin('order_product op', 'op.product_id = p.id')
+        //     ->leftJoin('order o', 'op.order_id = o.id AND o.status IN (1, 2, 3)')
+        //     ->leftJoin('product_review pr', 'pr.product_id = p.id AND pr.status IN (1, 3)')
+        //     ->where(['p.status' => 1])
+        //     ->andWhere(['>=', 'p.views', 100])
+        //     ->groupBy('p.id')
+        //     ->having('COUNT(DISTINCT o.id) >= 30')
+        //     ->andHaving('COUNT(DISTINCT CASE WHEN pr.rate >= 4 THEN pr.id END) >= 10')
+        //     ->andHaving('AVG(pr.rate) >= 4.5')
+        //     ->andHaving('COUNT(DISTINCT pr.id) >= 10');
+
         $query = Product::find()
             ->alias('p')
+            ->select([
+                'p.*',
+                'orders_count' => 'COUNT(DISTINCT o.id)',
+                'reviews_count' => 'COUNT(DISTINCT pr.id)',
+                'avg_rate' => 'AVG(pr.rate)',
+                'good_reviews_count' => 'COUNT(DISTINCT CASE WHEN pr.rate >= 4 THEN pr.id END)',
+            ])
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
             ->leftJoin('order_product op', 'op.product_id = p.id')
-            ->leftJoin('order o', 'op.order_id = o.id AND o.status IN (1, 2, 3)')
-            ->leftJoin('product_review pr', 'pr.product_id = p.id AND pr.status IN (1, 3)')
+            ->leftJoin('order o', 'op.order_id = o.id AND o.status IN (1,2,3)')
+            ->leftJoin('product_review pr', 'pr.product_id = p.id AND pr.status IN (1,3)')
             ->where(['p.status' => 1])
             ->andWhere(['>=', 'p.views', 100])
             ->groupBy('p.id')
-            ->having('COUNT(DISTINCT o.id) >= 30')
-            ->andHaving('COUNT(DISTINCT CASE WHEN pr.rate >= 4 THEN pr.id END) >= 10')
-            ->andHaving('AVG(pr.rate) >= 4.5')
-            ->andHaving('COUNT(DISTINCT pr.id) >= 10');
-    
+            ->having(['>=', 'orders_count', 30])
+            ->andHaving(['>=', 'good_reviews_count', 10])
+            ->andHaving(['>=', 'avg_rate', 4.5])
+            ->andHaving(['>=', 'reviews_count', 10]);
+
         if ($sort = Yii::$app->request->get('sort')) {
+            // switch ($sort) {
+            //     case 'rating':
+            //         $query->orderBy('AVG(pr.rate) DESC, p.views DESC');
+            //         break;
+            //     case 'popular':
+            //         $query->orderBy('p.views DESC, AVG(pr.rate) DESC');
+            //         break;
+            //     case 'orders':
+            //         $query->orderBy('COUNT(DISTINCT o.id) DESC, AVG(pr.rate) DESC');
+            //         break;
+            //     case 'price_down':
+            //         $query->orderBy('p.price ASC');
+            //         break;
+            //     case 'price_up':
+            //         $query->orderBy('p.price DESC');
+            //         break;
+            //     default:
+            //         $query->orderBy('AVG(pr.rate) DESC, COUNT(DISTINCT o.id) DESC');
+            //         break;
+            // }
             switch ($sort) {
                 case 'rating':
-                    $query->orderBy('AVG(pr.rate) DESC, p.views DESC');
+                    $query->orderBy([
+                        'avg_rate' => SORT_DESC,
+                        'p.views' => SORT_DESC
+                    ]);
                     break;
+
                 case 'popular':
-                    $query->orderBy('p.views DESC, AVG(pr.rate) DESC');
+                    $query->orderBy([
+                        'p.views' => SORT_DESC,
+                        'avg_rate' => SORT_DESC
+                    ]);
                     break;
+
                 case 'orders':
-                    $query->orderBy('COUNT(DISTINCT o.id) DESC, AVG(pr.rate) DESC');
+                    $query->orderBy([
+                        'orders_count' => SORT_DESC,
+                        'avg_rate' => SORT_DESC
+                    ]);
                     break;
+
                 case 'price_down':
-                    $query->orderBy('p.price ASC');
+                    $query->orderBy(['p.price' => SORT_ASC]);
                     break;
+
                 case 'price_up':
-                    $query->orderBy('p.price DESC');
+                    $query->orderBy(['p.price' => SORT_DESC]);
                     break;
+
                 default:
-                    $query->orderBy('AVG(pr.rate) DESC, COUNT(DISTINCT o.id) DESC');
-                    break;
+                    $query->orderBy([
+                        'avg_rate' => SORT_DESC,
+                        'orders_count' => SORT_DESC
+                    ]);
             }
         } else {
             $query->orderBy('AVG(pr.rate) DESC, COUNT(DISTINCT o.id) DESC');
         }
-    
+
         if ($category_id = Yii::$app->request->get('category_id')) {
             $categoryIds = [$category_id];
             $subcategories = Category::find()->where(['parent_id' => $category_id])->all();
@@ -619,20 +683,20 @@ class ProductController extends Controller {
             }
             $query->andWhere(['in', 'p.category_id', $categoryIds]);
         }
-    
+
         if ($brand_id = Yii::$app->request->get('brand_id')) {
             $query->andWhere(['p.brand_id' => $brand_id]);
         }
-    
+
         if ($shop_id = Yii::$app->request->get('shop_id')) {
             $query->andWhere(['p.shop_id' => $shop_id]);
         }
-    
+
         // Price filtering with bounds calculation
         $this->applyPriceFilterWithBounds($query, 'p.price');
-    
+
         $perPage = Yii::$app->request->get('per-page', 12);
-    
+
         return new ActiveDataProvider([
             'query' => $query,
             'pagination' => [
@@ -641,17 +705,18 @@ class ProductController extends Controller {
             ],
         ]);
     }
-    
-    public function actionForYou() {
+
+    public function actionForYou()
+    {
         $limit = Yii::$app->request->get('per-page', 12);
-        
+
         if (Yii::$app->user->isGuest) {
             $query = Product::find()
                 ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
                 ->where(['status' => 1])
                 ->orderBy('views DESC, RAND()')
                 ->limit($limit * 2);
-            
+
             return new ActiveDataProvider([
                 'query' => $query,
                 'pagination' => [
@@ -660,13 +725,13 @@ class ProductController extends Controller {
                 ],
             ]);
         }
-        
+
         $userId = Yii::$app->user->id;
         $sessionId = Yii::$app->session->id;
         $ip = Yii::$app->request->userIP;
-        
+
         $whereCondition = ['user_id' => $userId];
-        
+
         $recentCategories = UserActivity::find()
             ->select(['category_id', 'COUNT(*) as cnt'])
             ->where($whereCondition)
@@ -677,9 +742,9 @@ class ProductController extends Controller {
             ->limit(4)
             ->asArray()
             ->all();
-        
+
         $categoryIds = array_column($recentCategories, 'category_id');
-        
+
         $recentSearches = UserActivity::find()
             ->select('search_query')
             ->where($whereCondition)
@@ -690,9 +755,9 @@ class ProductController extends Controller {
             ->limit(10)
             ->asArray()
             ->all();
-        
+
         $searchQueries = array_column($recentSearches, 'search_query');
-        
+
         $viewedProducts = UserActivity::find()
             ->select('product_id')
             ->where($whereCondition)
@@ -703,19 +768,19 @@ class ProductController extends Controller {
             ->limit(20)
             ->asArray()
             ->all();
-        
+
         $viewedProductIds = array_column($viewedProducts, 'product_id');
-        
+
         $query = Product::find()
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
             ->where(['status' => 1]);
-        
+
         if (!empty($viewedProductIds)) {
             $query->andWhere(['not in', 'id', $viewedProductIds]);
         }
-        
+
         $conditions = ['or'];
-        
+
         if (!empty($categoryIds)) {
             $allCategoryIds = $categoryIds;
             foreach ($categoryIds as $catId) {
@@ -724,7 +789,7 @@ class ProductController extends Controller {
             }
             $conditions[] = ['in', 'category_id', array_unique($allCategoryIds)];
         }
-        
+
         if (!empty($searchQueries)) {
             foreach ($searchQueries as $searchQuery) {
                 $terms = explode(' ', $searchQuery);
@@ -741,15 +806,15 @@ class ProductController extends Controller {
                 }
             }
         }
-        
+
         if (count($conditions) > 1) {
             $query->andWhere($conditions);
         } else {
             $query->orderBy('RAND()');
         }
-        
+
         $query->orderBy('views DESC, id DESC');
-        
+
         return new ActiveDataProvider([
             'query' => $query,
             'pagination' => [
@@ -759,10 +824,11 @@ class ProductController extends Controller {
         ]);
     }
 
-    public function actionByCategory($id) {
+    public function actionByCategory($id)
+    {
         UserActivity::trackCategory($id);
-        
-        $ids = ArrayHelper::map(Category::find()->where(['parent_id'=>$id])->all(), 'id', 'id');
+
+        $ids = ArrayHelper::map(Category::find()->where(['parent_id' => $id])->all(), 'id', 'id');
         $query = Product::find()
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
             ->where(['status' => 1])
@@ -804,8 +870,9 @@ class ProductController extends Controller {
         ]);
     }
 
-    public function actionByBrand($id) {
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1])->andWhere(['brand_id'=>$id]);
+    public function actionByBrand($id)
+    {
+        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['brand_id' => $id]);
 
         // Price filtering
         if ($price_min = Yii::$app->request->get('price_min')) {
@@ -831,7 +898,7 @@ class ProductController extends Controller {
         }
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
-    
+
         foreach ($query->all() as $product) {
             if ($product->status == 2) {
                 $product->delete();
@@ -848,11 +915,12 @@ class ProductController extends Controller {
         ]);
     }
 
-    public function actionByShop($id) {
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1])->andWhere(['shop_id'=>$id]);
+    public function actionByShop($id)
+    {
+        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['shop_id' => $id]);
 
         if ($category_id = Yii::$app->request->get('category_id')) {
-            $query->andWhere(['category_id'=>$category_id]);
+            $query->andWhere(['category_id' => $category_id]);
         }
 
         // Price filtering
@@ -879,7 +947,7 @@ class ProductController extends Controller {
         }
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
-    
+
         foreach ($query->all() as $product) {
             if ($product->status == 2) {
                 $product->delete();
@@ -896,25 +964,26 @@ class ProductController extends Controller {
         ]);
     }
 
-    public function actionByFilter() {
-        $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1]);
-        
+    public function actionByFilter()
+    {
+        $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1]);
+
         if ($filter = Yii::$app->request->get('filter')) {
             // Check if we should use OR logic instead of AND
             $filterLogic = Yii::$app->request->get('filter_logic', 'and'); // 'and' or 'or'
-            
+
             // For each filter, find products that have this filter_id (ignore values)
             $productIds = [];
             $filterCount = 0;
-            
+
             foreach ($filter as $filterId => $filterValue) {
                 $filterCount++;
-                
+
                 // Find products that have this filter_id (ignore the value)
                 $subQuery = ProductFilter::find()
                     ->select('product_id')
                     ->where(['filter_id' => $filterId]);
-                
+
                 if ($filterCount === 1) {
                     $productIds = $subQuery->column();
                 } else {
@@ -935,11 +1004,12 @@ class ProductController extends Controller {
                 // No products match the filters
                 $products->andWhere(['id' => -1]);
             }
-        }   
+        }
 
-        if ($category_id = Yii::$app->request->get('category_id')) {    
-            $ids1 = ArrayHelper::map(Category::find()->where(['parent_id'=>$category_id])->all(), 'id', 'id');
-            $products ->andWhere(['or',
+        if ($category_id = Yii::$app->request->get('category_id')) {
+            $ids1 = ArrayHelper::map(Category::find()->where(['parent_id' => $category_id])->all(), 'id', 'id');
+            $products->andWhere([
+                'or',
                 ['category_id' => $category_id],
                 ['in', 'category_id', $ids1],
             ]);
@@ -961,10 +1031,10 @@ class ProductController extends Controller {
                 $products->orderBy('views desc');
             }
         }
-        
+
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
-    
+
         return new ActiveDataProvider([
             'query' => $products,
             'pagination' => [
@@ -983,8 +1053,9 @@ class ProductController extends Controller {
      * @param string|null $query The search keyword(s).
      * @return ActiveDataProvider
      */
-    public function actionSearch($query = null) {
-        $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status'=>1]);
+    public function actionSearch($query = null)
+    {
+        $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1]);
 
         if ($query) {
             UserActivity::trackSearch($query);
@@ -1047,22 +1118,23 @@ class ProductController extends Controller {
             // For each filter, find products that match the specified values
             $productIds = [];
             $filterCount = 0;
-            
+
             foreach ($filter as $filterId => $filterValue) {
                 $filterCount++;
-                
+
                 // Find products that have this filter_id with the specified value
                 // The value can be either a ProductFilter ID or a text value
                 $subQuery = ProductFilter::find()
                     ->select('product_id')
                     ->where(['filter_id' => $filterId])
-                    ->andWhere(['or', 
+                    ->andWhere([
+                        'or',
                         ['id' => $filterValue],           // Match by ProductFilter ID
                         ['value_ru' => $filterValue],     // Match by text value
                         ['value_en' => $filterValue],     // Match by text value (English)
                         ['value_uz' => $filterValue]      // Match by text value (Uzbek)
                     ]);
-                
+
                 if ($filterCount === 1) {
                     $productIds = $subQuery->column();
                 } else {
@@ -1071,7 +1143,7 @@ class ProductController extends Controller {
                     $productIds = array_intersect($productIds, $currentProductIds);
                 }
             }
-            
+
             if (!empty($productIds)) {
                 $products->andWhere(['in', 'product.id', $productIds]);
             } else {
@@ -1079,20 +1151,20 @@ class ProductController extends Controller {
                 $products->andWhere(['product.id' => -1]);
             }
         }
-        
+
         // Price range filtering with bounds calculation
         $this->applyPriceFilterWithBounds($products, 'product.price');
-        
+
         $colorId  = Yii::$app->request->get('color_id');
         $colorIds = Yii::$app->request->get('color_ids', []);
-    
+
         if ($colorId || !empty($colorIds)) {
             $ids = $colorIds;
             if ($colorId) {
                 $ids[] = $colorId;
             }
             $products->joinWith(['productColors.color'])
-                     ->andWhere(['color.id' => $ids]);
+                ->andWhere(['color.id' => $ids]);
         }
 
         // Sorting options
@@ -1113,8 +1185,8 @@ class ProductController extends Controller {
                     break;
                 case 'rating': // Sort by average review rating
                     $products->leftJoin('product_review', 'product_review.product_id = product.id AND product_review.status IN (1, 3)')
-                            ->groupBy('product.id')
-                            ->orderBy('AVG(product_review.rate) DESC');
+                        ->groupBy('product.id')
+                        ->orderBy('AVG(product_review.rate) DESC');
                     break;
                 // Add more complex sorting options here (e.g., by availability, discount)
                 default:
@@ -1126,7 +1198,7 @@ class ProductController extends Controller {
         }
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
-    
+
         // Clean up products with status 2 (already handled in general index, but good to keep here for consistency if not universally applied)
         // Note: For a truly high-performance search, this deletion should ideally be a background task
         // or handled by a database trigger, not in the search query itself.
@@ -1147,19 +1219,21 @@ class ProductController extends Controller {
             'sort' => ['defaultOrder' => ['id' => 'desc']]
         ]);
     }
-    
-    public function actionSearchSuggestions($query = null) {
+
+    public function actionSearchSuggestions($query = null)
+    {
         if (empty($query) || strlen($query) < 2) {
             return ['data' => []];
         }
-    
+
         $suggestions = [];
         $limit = Yii::$app->request->get('limit', 10);
-        
+
         $products = Product::find()
             ->select(['name_ru', 'name_uz', 'name_en'])
             ->where(['status' => 1])
-            ->andWhere(['or',
+            ->andWhere([
+                'or',
                 ['like', 'name_ru', $query],
                 ['like', 'name_uz', $query],
                 ['like', 'name_en', $query],
@@ -1167,9 +1241,9 @@ class ProductController extends Controller {
             ->limit($limit * 3)
             ->asArray()
             ->all();
-    
+
         $seen = [];
-        
+
         foreach ($products as $product) {
             if (!empty($product['name_ru'])) {
                 $key = strtolower($product['name_ru']);
@@ -1205,10 +1279,11 @@ class ProductController extends Controller {
                 }
             }
         }
-    
+
         $categories = Category::find()
             ->select(['name_ru', 'name_uz', 'name_en'])
-            ->where(['or',
+            ->where([
+                'or',
                 ['like', 'name_ru', $query],
                 ['like', 'name_uz', $query],
                 ['like', 'name_en', $query],
@@ -1216,7 +1291,7 @@ class ProductController extends Controller {
             ->limit(5)
             ->asArray()
             ->all();
-    
+
         foreach ($categories as $category) {
             if (!empty($category['name_ru'])) {
                 $key = strtolower($category['name_ru']);
@@ -1252,10 +1327,11 @@ class ProductController extends Controller {
                 }
             }
         }
-    
+
         $brands = CategoryBrand::find()
             ->select(['name_ru', 'name_uz', 'name_en'])
-            ->where(['or',
+            ->where([
+                'or',
                 ['like', 'name_ru', $query],
                 ['like', 'name_uz', $query],
                 ['like', 'name_en', $query],
@@ -1263,7 +1339,7 @@ class ProductController extends Controller {
             ->limit(5)
             ->asArray()
             ->all();
-    
+
         foreach ($brands as $brand) {
             if (!empty($brand['name_ru'])) {
                 $key = strtolower($brand['name_ru']);
@@ -1299,25 +1375,26 @@ class ProductController extends Controller {
                 }
             }
         }
-    
-        usort($suggestions, function($a, $b) use ($query) {
+
+        usort($suggestions, function ($a, $b) use ($query) {
             $aPos = stripos($a['text'], $query);
             $bPos = stripos($b['text'], $query);
-            
+
             if ($aPos === 0 && $bPos !== 0) return -1;
             if ($bPos === 0 && $aPos !== 0) return 1;
-            
+
             return strcmp($a['text'], $b['text']);
         });
-    
+
         return ['data' => array_slice($suggestions, 0, $limit)];
     }
 
-    public function actionByPhoto() {
+    public function actionByPhoto()
+    {
         if ($image = UploadedFile::getInstanceByName('photo')) {
             $rnd = mt_rand(0, 1000000);
-            $name = time() + $rnd.'.'.$image->extension;
-            $original = 'uploads/search/'.$name;
+            $name = time() + $rnd . '.' . $image->extension;
+            $original = 'uploads/search/' . $name;
             $image->saveAs($original);
 
             $hasher = new ImageHash(new DifferenceHash());
@@ -1325,7 +1402,7 @@ class ProductController extends Controller {
 
             unlink($original);
 
-            $images = Images::find()->where(['type'=>'product', 'main'=>1])->andWhere(['!=', 'hash', ''])->all();
+            $images = Images::find()->where(['type' => 'product', 'main' => 1])->andWhere(['!=', 'hash', ''])->all();
 
             $ids = [];
             foreach ($images as $image) {
@@ -1333,11 +1410,11 @@ class ProductController extends Controller {
                     $distance = $hasher->distance(Hash::fromHex($hash), Hash::fromHex($image->hash));
                     if ($distance < 15) { // Threshold for image similarity
                         $ids[] = $image->object_id;
-                    }   
+                    }
                 }
             }
 
-            $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1]);
+            $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1]);
             if (!empty($ids)) {
                 $products->andWhere(['in', 'id', $ids]);
             } else {
@@ -1382,8 +1459,8 @@ class ProductController extends Controller {
                         break;
                     case 'rating':
                         $products->leftJoin('product_review', 'product_review.product_id = product.id AND product_review.status IN (1, 3)')
-                                ->groupBy('product.id')
-                                ->orderBy('AVG(product_review.rate) DESC');
+                            ->groupBy('product.id')
+                            ->orderBy('AVG(product_review.rate) DESC');
                         break;
                     default:
                         $products->orderBy('id desc');
@@ -1394,7 +1471,7 @@ class ProductController extends Controller {
             }
 
             $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
-    
+
             foreach ($products->all() as $product) {
                 if ($product->status == 2) {
                     $product->delete();
@@ -1415,16 +1492,17 @@ class ProductController extends Controller {
         return ['errors' => ['photo' => 'No photo uploaded.']];
     }
 
-    public function actionDetail($id) {
+    public function actionDetail($id)
+    {
         $product = Product::find()->with([
-            'image', 
-            'category', 
-            'gallery', 
-            'productFilters', 
-            'productFilters.filter', 
-            'productReviews', 
-            'productProperties', 
-            'productColors', 
+            'image',
+            'category',
+            'gallery',
+            'productFilters',
+            'productFilters.filter',
+            'productReviews',
+            'productProperties',
+            'productColors',
             'productColors.color',
             'color', // Load the main product's color
             'productProductTypes', // Load product types relationships
@@ -1435,17 +1513,17 @@ class ProductController extends Controller {
             'products.productProductTypes', // Load product types for related products
             'products.productProductTypes.productType', // Load product type for related products
             'products.productProductTypes.productTypeValue' // Load product type value for related products
-        ])->where(['id'=>$id])->one();
+        ])->where(['id' => $id])->one();
 
         if ($product === null) {
             throw new \yii\web\NotFoundHttpException('Товар не найден.');
         }
-        
+
         UserActivity::trackView($product->id, $product->category_id);
-        
+
         // set views
         if ($product) {
-            $view = ProductView::findOne(['product_id'=>$product->id, 'ip'=>Yii::$app->request->userIP]);
+            $view = ProductView::findOne(['product_id' => $product->id, 'ip' => Yii::$app->request->userIP]);
             if (!$view) {
                 $view = new ProductView;
                 $view->saveObject($product);
@@ -1455,7 +1533,7 @@ class ProductController extends Controller {
 
         // set view recently
         if ($product) {
-            $recently = ProductViewRecently::findOne(['product_id'=>$product->id, 'ip'=>Yii::$app->request->userIP]);
+            $recently = ProductViewRecently::findOne(['product_id' => $product->id, 'ip' => Yii::$app->request->userIP]);
             if (!$recently) {
                 $recently = new ProductViewRecently;
                 $recently->saveObject($product);
@@ -1463,16 +1541,17 @@ class ProductController extends Controller {
         }
         // end set view recently
 
-        return ['data'=>$product];
+        return ['data' => $product];
     }
     // end general product methods
 
     // favorites
-    public function actionFavorites() {
+    public function actionFavorites()
+    {
         $user = Yii::$app->user->identity;
 
-        $ids = ArrayHelper::map(UserFavorite::find()->where(['user_id'=>$user->id])->all(), 'product_id', 'product_id');
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1])->andWhere(['in', 'id', $ids]);
+        $ids = ArrayHelper::map(UserFavorite::find()->where(['user_id' => $user->id])->all(), 'product_id', 'product_id');
+        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['in', 'id', $ids]);
 
         if ($sort = Yii::$app->request->get('sort')) {
             if (($sort == 'new') || ($sort == 'recently')) {
@@ -1491,16 +1570,16 @@ class ProductController extends Controller {
                 $query->orderBy('views desc');
             }
         }
-        
+
         if ($category_id = Yii::$app->request->get('category_id')) {
-            $query->andWhere(['category_id'=>$category_id]);
+            $query->andWhere(['category_id' => $category_id]);
         }
 
         // Price filtering with bounds calculation
         $this->applyPriceFilterWithBounds($query, 'price');
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
-    
+
         foreach ($query->all() as $product) {
             if ($product->status == 2) {
                 $product->delete();
@@ -1517,7 +1596,8 @@ class ProductController extends Controller {
         ]);
     }
 
-    public function actionSetFavorite() {
+    public function actionSetFavorite()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
@@ -1525,16 +1605,16 @@ class ProductController extends Controller {
         $user_favorite->setAttributes($post);
 
         if (!$user_favorite->validate()) {
-             return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Validation error', $user_favorite->errors);
+            return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Validation error', $user_favorite->errors);
         }
 
-        $product = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productProperties', 'productColors', 'productColors.color')->where(['id'=>$post['product_id']])->one();
+        $product = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productProperties', 'productColors', 'productColors.color')->where(['id' => $post['product_id']])->one();
 
         if (!$product) {
             return $this->sendError(ErrorCodes::ERROR_PRODUCT_NOT_FOUND, 'Product not found', ['product_id' => 'Product not found.']);
         }
 
-        $favorite = UserFavorite::findOne(['user_id'=>$user->id, 'product_id'=>$post['product_id']]);
+        $favorite = UserFavorite::findOne(['user_id' => $user->id, 'product_id' => $post['product_id']]);
 
         if ($favorite) {
             $favorite->delete();
@@ -1547,24 +1627,26 @@ class ProductController extends Controller {
         return $this->sendSuccess(array_merge($product->toArray(), ['is_favorite' => true]));
     }
 
-    public function actionFavoriteCategories() {
+    public function actionFavoriteCategories()
+    {
         $user = Yii::$app->user->identity;
 
-        $ids = ArrayHelper::map(UserFavorite::find()->where(['user_id'=>$user->id])->all(), 'product_id', 'product_id');
-        $category_ids = ArrayHelper::map(Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1])->andWhere(['in', 'id', $ids])->all(), 'category_id', 'category_id');
-    
+        $ids = ArrayHelper::map(UserFavorite::find()->where(['user_id' => $user->id])->all(), 'product_id', 'product_id');
+        $category_ids = ArrayHelper::map(Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['in', 'id', $ids])->all(), 'category_id', 'category_id');
+
         $categories = Category::find()->where(['in', 'id', $category_ids])->all();
 
-        return ['data'=>$categories];
+        return ['data' => $categories];
     }
     // end favorites
 
     // compares
-    public function actionCompares() {
+    public function actionCompares()
+    {
         $user = Yii::$app->user->identity;
 
-        $ids = ArrayHelper::map(UserCompare::find()->where(['user_id'=>$user->id])->all(), 'product_id', 'product_id');
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1])->andWhere(['in', 'id', $ids]);
+        $ids = ArrayHelper::map(UserCompare::find()->where(['user_id' => $user->id])->all(), 'product_id', 'product_id');
+        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['in', 'id', $ids]);
 
         if ($sort = Yii::$app->request->get('sort')) {
             if (($sort == 'new') || ($sort == 'recently')) {
@@ -1583,16 +1665,16 @@ class ProductController extends Controller {
                 $query->orderBy('views desc');
             }
         }
-        
+
         if ($category_id = Yii::$app->request->get('category_id')) {
-            $query->andWhere(['category_id'=>$category_id]);
+            $query->andWhere(['category_id' => $category_id]);
         }
 
         // Price filtering with bounds calculation
         $this->applyPriceFilterWithBounds($query, 'price');
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
-    
+
         foreach ($query->all() as $product) {
             if ($product->status == 2) {
                 $product->delete();
@@ -1609,7 +1691,8 @@ class ProductController extends Controller {
         ]);
     }
 
-    public function actionSetCompare() {
+    public function actionSetCompare()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
@@ -1618,45 +1701,47 @@ class ProductController extends Controller {
 
         if (!$user_compare->validate()) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>$user_compare->errors];
+            return ['errors' => $user_compare->errors];
         }
 
-        $product = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productProperties', 'productColors', 'productColors.color')->where(['id'=>$post['product_id']])->one();
+        $product = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productProperties', 'productColors', 'productColors.color')->where(['id' => $post['product_id']])->one();
 
         if (!$product) {
             Yii::$app->response->statusCode = 404;
             return ['errors' => ['product_id' => 'Product not found.']];
         }
 
-        $compare = UserCompare::findOne(['user_id'=>$user->id, 'product_id'=>$post['product_id']]);
+        $compare = UserCompare::findOne(['user_id' => $user->id, 'product_id' => $post['product_id']]);
 
         if ($compare) {
             $compare->delete();
             Yii::$app->response->statusCode = 200;
-            return ['data'=>array_merge($product->toArray(), ['is_compared' => false])];
+            return ['data' => array_merge($product->toArray(), ['is_compared' => false])];
         }
 
         $user_compare->user_id = $user->id; // Ensure user_id is set from authenticated user
         $user_compare->save();
 
         Yii::$app->response->statusCode = 200;
-        return ['data'=>array_merge($product->toArray(), ['is_compared' => true])];
+        return ['data' => array_merge($product->toArray(), ['is_compared' => true])];
     }
 
-    public function actionCompareCategories() {
+    public function actionCompareCategories()
+    {
         $user = Yii::$app->user->identity;
 
-        $ids = ArrayHelper::map(UserCompare::find()->where(['user_id'=>$user->id])->all(), 'product_id', 'product_id');
-        $category_ids = ArrayHelper::map(Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1])->andWhere(['in', 'id', $ids])->all(), 'category_id', 'category_id');
-    
+        $ids = ArrayHelper::map(UserCompare::find()->where(['user_id' => $user->id])->all(), 'product_id', 'product_id');
+        $category_ids = ArrayHelper::map(Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['in', 'id', $ids])->all(), 'category_id', 'category_id');
+
         $categories = Category::find()->where(['in', 'id', $category_ids])->all();
 
-        return ['data'=>$categories];
+        return ['data' => $categories];
     }
     // end compares
 
     // review
-    public function actionSetReview() {
+    public function actionSetReview()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
@@ -1665,43 +1750,44 @@ class ProductController extends Controller {
 
         if (!$product_review->validate()) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>$product_review->errors];
+            return ['errors' => $product_review->errors];
         }
 
         $product = Product::findOne($post['product_id']);
-        
+
         if (!$product) {
             Yii::$app->response->statusCode = 404;
             return ['errors' => ['product_id' => 'Product not found.']];
         }
 
-        $product_check = ProductReview::findOne(['user_id'=>$user->id, 'product_id'=>$product->id]);
+        $product_check = ProductReview::findOne(['user_id' => $user->id, 'product_id' => $product->id]);
 
         if ($product_check) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['general'=>'Вы уже оставили свой голос']];
+            return ['errors' => ['general' => 'Вы уже оставили свой голос']];
         }
 
         $product_review->user_id = $user->id; // Ensure user_id is set
         $product_review->save(); // Use save directly if saveObject is not defined or needed
 
-        $product = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productColors', 'productColors.color')->where(['id'=>$post['product_id']])->one();
+        $product = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productColors', 'productColors.color')->where(['id' => $post['product_id']])->one();
 
         Yii::$app->response->statusCode = 200;
-        return ['data'=>$product];
+        return ['data' => $product];
     }
 
-    public function actionReviews($product_id) {
+    public function actionReviews($product_id)
+    {
         $user = Yii::$app->user->identity;
-        
-        $query = ProductReview::find()->with('user', 'user.image', 'orderProduct')->where(['product_id'=>$product_id, 'status' => [ProductReview::STATUS_ACCEPTED, ProductReview::STATUS_PROCESSED]])->orderBy('id desc');
+
+        $query = ProductReview::find()->with('user', 'user.image', 'orderProduct')->where(['product_id' => $product_id, 'status' => [ProductReview::STATUS_ACCEPTED, ProductReview::STATUS_PROCESSED]])->orderBy('id desc');
 
         if ($sort_date = Yii::$app->request->get('sort_date')) {
-            $query->orderBy('id '.$sort_date); // 'asc' or 'desc'
+            $query->orderBy('id ' . $sort_date); // 'asc' or 'desc'
         }
 
         if ($sort_rating = Yii::$app->request->get('sort_rating')) {
-            $query->orderBy('rate '.$sort_rating); // 'asc' or 'desc'
+            $query->orderBy('rate ' . $sort_rating); // 'asc' or 'desc'
         }
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
@@ -1718,13 +1804,14 @@ class ProductController extends Controller {
     // end review
 
     // recently view
-    public function actionRecentlyViewed() {
+    public function actionRecentlyViewed()
+    {
         $user = Yii::$app->user->identity;
 
-        $ids = ArrayHelper::map(ProductViewRecently::find()->where(['ip'=>Yii::$app->request->userIP])->orderBy('date DESC')->all(), 'product_id', 'product_id');
-        
+        $ids = ArrayHelper::map(ProductViewRecently::find()->where(['ip' => Yii::$app->request->userIP])->orderBy('date DESC')->all(), 'product_id', 'product_id');
+
         // Ensure that recently viewed products are active (status=1)
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status'=>1]);
+        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1]);
         if (!empty($ids)) {
             // Maintain the order of recently viewed items
             $query->andWhere(['in', 'id', $ids])->orderBy(['FIELD(id, ' . implode(',', $ids) . ')' => SORT_ASC]);
@@ -1734,7 +1821,7 @@ class ProductController extends Controller {
 
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
-    
+
         return new ActiveDataProvider([
             'query' => $query,
             'pagination' => [
@@ -1745,12 +1832,13 @@ class ProductController extends Controller {
     }
     // end recently view
 
-    public function actionRelatedProducts($product_id) {
+    public function actionRelatedProducts($product_id)
+    {
         $product = Product::findOne($product_id);
 
         if (!$product) {
             Yii::$app->response->statusCode = 404;
-            return ['errors'=>['product_id'=>'Товар не найден']];
+            return ['errors' => ['product_id' => 'Товар не найден']];
         }
 
         // Start with a broad search based on main product fields
@@ -1778,7 +1866,7 @@ class ProductController extends Controller {
         if ($product->recommendation_en) $keywords = array_merge($keywords, explode(' ', $product->recommendation_en));
 
         // Remove duplicates and common short words, perform stemming if possible
-        $keywords = array_unique(array_filter($keywords, function($word) {
+        $keywords = array_unique(array_filter($keywords, function ($word) {
             return strlen($word) > 2; // Only consider words longer than 2 characters
         }));
 
@@ -1812,16 +1900,16 @@ class ProductController extends Controller {
         } else {
             // If no significant keywords or related attributes, fallback to same category products
             if ($product->category_id) {
-                 $query->andWhere(['category_id' => $product->category_id]);
+                $query->andWhere(['category_id' => $product->category_id]);
             }
         }
-        
+
         // Order by relevance (e.g., matching keywords count, then views) - complex in SQL
         // For simplicity, let's order by views or simply id desc for now
         $query->orderBy('views DESC, id DESC'); // More popular related products first
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
-    
+
         // No need to delete products here; this is for fetching related, not managing status
         // The `status = 2` check and delete logic should be in a cron job or background process.
 
@@ -1843,7 +1931,8 @@ class ProductController extends Controller {
      * 
      * @return array
      */
-    public function actionRequest() {
+    public function actionRequest()
+    {
         $post = Yii::$app->request->post();
 
         // Basic validation
@@ -1862,7 +1951,7 @@ class ProductController extends Controller {
         // Create new request
         $request = new ProductRequest();
         $request->setAttributes($post);
-        
+
         // Set the user who sent the request
         $request->user_id = Yii::$app->user->id;
 

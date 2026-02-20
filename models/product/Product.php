@@ -981,7 +981,9 @@ class Product extends \yii\db\ActiveRecord
                         'id'   => $this->stock->id,
                         'name' => $this->stock->name_ru ?? $this->stock->name,
                         'address' => $this->stock->address,
-                        'shop_id' => $this->stock->shop_id
+                        'shop_id' => $this->stock->shop_id,
+                        'contact_phone' => $this->shop?->contact_phone ?? null,
+                        'contact_user' => $this->shop?->contact_user ?? null,
                     ];
                 }
                 return null;
