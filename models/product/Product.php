@@ -27,6 +27,7 @@ use app\models\Ikpu;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Intervention\Image\ImageManager;
+
 /**
  * This is the model class for table "product".
  *
@@ -71,7 +72,7 @@ class Product extends \yii\db\ActiveRecord
     public $product_types = [];
     public $product_relation_id;
     public $office_id;
-    
+
     /**
      * {@inheritdoc}
      */
@@ -86,7 +87,7 @@ class Product extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['name_ru', 'description_ru', 'price', 'category_id', 'shop_id'], 'required', 'message'=>'Заполните поле'],
+            [['name_ru', 'description_ru', 'price', 'category_id', 'shop_id'], 'required', 'message' => 'Заполните поле'],
             [['user_id', 'category_id', 'brand_id', 'tag_id', 'region_id', 'currency_id', 'unit_id', 'color_id', 'delivery_id', 'product_relation_id', 'views', 'status', 'office_id', 'shop_id', 'stock_id', 'sklad_product_id', 'sync_status'], 'integer'],
             [['description_ru', 'description_en', 'description_uz', 'composition_ru', 'composition_en', 'composition_uz', 'recommendation_ru', 'recommendation_en', 'recommendation_uz', 'token_key', 'name_trans_ru', 'name_trans_en'], 'string'],
             [['price', 'rating', 'discount', 'discount_small_count', 'discount_big_count', 'amount', 'price_opt', 'price_small', 'min_order', 'weight', 'height', 'width', 'length'], 'number'],
@@ -103,7 +104,7 @@ class Product extends \yii\db\ActiveRecord
 
             // billz
             [['billz_id', 'sku', 'barcode', 'qty'], 'string'],
-            
+
             // IKPU fields
             [['ikpu_code'], 'string', 'max' => 17],
             [['ikpu_name'], 'string', 'max' => 500],
@@ -123,7 +124,7 @@ class Product extends \yii\db\ActiveRecord
         if (!empty($this->$attribute)) {
             // Check if IKPU exists in database
             $ikpu = Ikpu::findOne(['code' => $this->$attribute]);
-            
+
             if ($ikpu) {
                 // If IKPU exists in database, clear custom name (will be auto-filled from relation)
                 $this->ikpu_name = null;
@@ -180,44 +181,90 @@ class Product extends \yii\db\ActiveRecord
         ];
     }
 
-    function transliterate($st, $rotate = false) {
+    function transliterate($st, $rotate = false)
+    {
         $letters = array(
-            'а' => 'a', 'б' => 'b', 'в' => 'v',
-            'г' => 'g', 'д' => 'd', 'е' => 'e',
-            'ё' => 'e', 'ж' => 'zh', 'з' => 'z',
-            'и' => 'i', 'й' => 'y', 'к' => 'k',
-            'л' => 'l', 'м' => 'm', 'н' => 'n',
-            'о' => 'o', 'п' => 'p', 'р' => 'r',
-            'с' => 's', 'т' => 't', 'у' => 'u',
-            'ф' => 'f', 'х' => 'h', 'ц' => 'c',
-            'ч' => 'ch', 'ш' => 'sh', 'щ' => 'sch',
-            'ь' => '\'', 'ы' => 'yi', 'ъ' => '\'',
-            'э' => 'e', 'ю' => 'yu', 'я' => 'ya',
+            'а' => 'a',
+            'б' => 'b',
+            'в' => 'v',
+            'г' => 'g',
+            'д' => 'd',
+            'е' => 'e',
+            'ё' => 'e',
+            'ж' => 'zh',
+            'з' => 'z',
+            'и' => 'i',
+            'й' => 'y',
+            'к' => 'k',
+            'л' => 'l',
+            'м' => 'm',
+            'н' => 'n',
+            'о' => 'o',
+            'п' => 'p',
+            'р' => 'r',
+            'с' => 's',
+            'т' => 't',
+            'у' => 'u',
+            'ф' => 'f',
+            'х' => 'h',
+            'ц' => 'c',
+            'ч' => 'ch',
+            'ш' => 'sh',
+            'щ' => 'sch',
+            'ь' => '\'',
+            'ы' => 'yi',
+            'ъ' => '\'',
+            'э' => 'e',
+            'ю' => 'yu',
+            'я' => 'ya',
 
-            'А' => 'A', 'Б' => 'B', 'В' => 'V',
-            'Г' => 'G', 'Д' => 'D', 'Е' => 'E',
-            'Ё' => 'E', 'Ж' => 'Zh', 'З' => 'Z',
-            'И' => 'I', 'Й' => 'Y', 'К' => 'K',
-            'Л' => 'L', 'М' => 'M', 'Н' => 'N',
-            'О' => 'O', 'П' => 'P', 'Р' => 'R',
-            'С' => 'S', 'Т' => 'T', 'У' => 'U',
-            'Ф' => 'F', 'Х' => 'H', 'Ц' => 'C',
-            'Ч' => 'Ch', 'Ш' => 'Sh', 'Щ' => 'Sch',
-            'Ь' => '\'', 'Ы' => 'YI', 'Ъ' => '\'',
-            'Э' => 'E', 'Ю' => 'Yu', 'Я' => 'Ya',
+            'А' => 'A',
+            'Б' => 'B',
+            'В' => 'V',
+            'Г' => 'G',
+            'Д' => 'D',
+            'Е' => 'E',
+            'Ё' => 'E',
+            'Ж' => 'Zh',
+            'З' => 'Z',
+            'И' => 'I',
+            'Й' => 'Y',
+            'К' => 'K',
+            'Л' => 'L',
+            'М' => 'M',
+            'Н' => 'N',
+            'О' => 'O',
+            'П' => 'P',
+            'Р' => 'R',
+            'С' => 'S',
+            'Т' => 'T',
+            'У' => 'U',
+            'Ф' => 'F',
+            'Х' => 'H',
+            'Ц' => 'C',
+            'Ч' => 'Ch',
+            'Ш' => 'Sh',
+            'Щ' => 'Sch',
+            'Ь' => '\'',
+            'Ы' => 'YI',
+            'Ъ' => '\'',
+            'Э' => 'E',
+            'Ю' => 'Yu',
+            'Я' => 'Ya',
         );
         $letters = $rotate ? array_flip($letters) : $letters;
         $st = strtr($st, $letters);
         return $st;
     }
 
-    public function setCategoryDashboard($category_id = null) {
+    public function setCategoryDashboard($category_id = null)
+    {
         if (!$category_id) {
             $category_id = $this->category_id;
             $this->sub_category_id[] = (int)$this->category_id;
         }
 
-        $category = Category::find()->with('parent')->where(['id'=>$category_id])->one();
+        $category = Category::find()->with('parent')->where(['id' => $category_id])->one();
         if ($category && $category->parent) {
             $this->sub_category_id[] = $category->parent->id;
             $this->setCategory($category->parent->id);
@@ -236,13 +283,14 @@ class Product extends \yii\db\ActiveRecord
         return $this->save(false);
     }
 
-    public function setCategory($category_id = null) {
+    public function setCategory($category_id = null)
+    {
         if (!$category_id) {
             $category_id = $this->category_id;
             $this->sub_category_id[] = (int)$this->category_id;
         }
 
-        $category = Category::find()->with('parent')->where(['id'=>$category_id])->one();
+        $category = Category::find()->with('parent')->where(['id' => $category_id])->one();
         if ($category && $category->parent) {
             $this->sub_category_id[] = $category->parent->id;
             $this->setCategory($category->parent->id);
@@ -254,7 +302,8 @@ class Product extends \yii\db\ActiveRecord
         return $this->sub_category_id;
     }
 
-    public function saveObject($dashboard = false, $color = null, $token_key = null, $category_tree = null, $product_types = null) {
+    public function saveObject($dashboard = false, $color = null, $token_key = null, $category_tree = null, $product_types = null)
+    {
         // Create new product instance when we have variants (color or product_types)
         if ($color || $product_types) {
             $product = new Product;
@@ -325,16 +374,16 @@ class Product extends \yii\db\ActiveRecord
             }
             /** @var User $user */
             $user = Yii::$app->user->identity;
-            $shop = Shop::findOne(['user_id'=>$user->id]);
+            $shop = Shop::findOne(['user_id' => $user->id]);
             if (!$shop) {
-                $shop = Shop::findOne(['id'=>$user->shop_id]);
+                $shop = Shop::findOne(['id' => $user->shop_id]);
             }
 
             $product->shop_id = $shop->id;
         }
 
         if ($product->save()) {
-            $admin = User::findOne(['role'=>User::ROLE_ADMIN]);
+            $admin = User::findOne(['role' => User::ROLE_ADMIN]);
             /** @var User $user */
             $user = Yii::$app->user->identity;
             if ($user->role != User::ROLE_ADMIN && !Yii::$app->request->get('id')) {
@@ -360,7 +409,7 @@ class Product extends \yii\db\ActiveRecord
                 Yii::$app->db->createCommand()->batchInsert('product_property', $keys, $vals)->execute();
             }
 
-            ProductFilter::deleteAll(['product_id'=>$product->id]);
+            ProductFilter::deleteAll(['product_id' => $product->id]);
 
             if ($product->filters) {
                 $keys = ['product_id', 'filter_id', 'value_ru'];
@@ -394,7 +443,7 @@ class Product extends \yii\db\ActiveRecord
             if ($product_types) {
                 $keys = ['product_id', 'product_type_id', 'product_type_value_id', 'custom_value'];
                 $vals = [];
-                
+
                 foreach ($product_types as $type_id => $type_values) {
                     if ($type_values) {
                         // Get the product type to check its type
@@ -402,7 +451,7 @@ class Product extends \yii\db\ActiveRecord
                         if (!$productType) {
                             continue; // Skip if product type doesn't exist
                         }
-                        
+
                         if (is_array($type_values)) {
                             foreach ($type_values as $type_value) {
                                 if ($type_value) {
@@ -446,7 +495,7 @@ class Product extends \yii\db\ActiveRecord
                         }
                     }
                 }
-                
+
                 if ($vals) {
                     Yii::$app->db->createCommand()->batchInsert('product_product_type', $keys, $vals)->execute();
                 }
@@ -499,10 +548,10 @@ class Product extends \yii\db\ActiveRecord
             // Handle image uploads for the product
             // Use static variable to track the first product that received images for copying to variants
             static $firstProductWithImages = null;
-            
+
             $image = new Images;
             $hasUploadedImages = false;
-            
+
             // Main product image
             if ($image->imageFiles = UploadedFile::getInstances($this, 'imageFiles')) {
                 if ($product->image) {
@@ -554,7 +603,7 @@ class Product extends \yii\db\ActiveRecord
         $sourceImages = Images::find()
             ->where(['object_id' => $sourceProductId, 'type' => 'product'])
             ->all();
-        
+
         if (empty($sourceImages)) {
             return false;
         }
@@ -565,14 +614,14 @@ class Product extends \yii\db\ActiveRecord
         // Create directories for target product
         $targetDir = $basePath . $targetProductId;
         $targetOriginalDir = $targetDir . '/original';
-        
+
         if (!is_dir($targetDir)) {
             mkdir($targetDir, 0755, true);
         }
         if (!is_dir($targetOriginalDir)) {
             mkdir($targetOriginalDir, 0755, true);
         }
-        
+
         foreach ($sizes as $k => $v) {
             $sizeDir = $targetDir . '/' . $k . 'x' . $v;
             if (!is_dir($sizeDir)) {
@@ -584,15 +633,15 @@ class Product extends \yii\db\ActiveRecord
             // Copy the physical files
             $sourceOriginal = $basePath . $sourceProductId . '/original/' . $sourceImage->photo;
             $targetOriginal = $basePath . $targetProductId . '/original/' . $sourceImage->photo;
-            
+
             if (is_file($sourceOriginal)) {
                 copy($sourceOriginal, $targetOriginal);
-                
+
                 // Copy sized versions
                 foreach ($sizes as $k => $v) {
                     $sourceSize = $basePath . $sourceProductId . '/' . $k . 'x' . $v . '/' . $sourceImage->photo;
                     $targetSize = $basePath . $targetProductId . '/' . $k . 'x' . $v . '/' . $sourceImage->photo;
-                    
+
                     if (is_file($sourceSize)) {
                         copy($sourceSize, $targetSize);
                     }
@@ -615,7 +664,8 @@ class Product extends \yii\db\ActiveRecord
         return true;
     }
 
-    public function updateObject($dashboard = false,$status = 2) {
+    public function updateObject($dashboard = false, $status = 2)
+    {
         /** @var User|null $user */
         $user = Yii::$app->user->identity;
         $this->user_id = $this->user_id ? $this->user_id : ($user ? $user->id : null);
@@ -640,7 +690,7 @@ class Product extends \yii\db\ActiveRecord
         $this->name_trans_en = $this->transliterate($this->name_ru);
 
         if ($this->save()) {
-            $admin = User::findOne(['role'=>User::ROLE_ADMIN]);
+            $admin = User::findOne(['role' => User::ROLE_ADMIN]);
             /** @var User $user */
             $user = Yii::$app->user->identity;
             if ($user->role != User::ROLE_ADMIN && !Yii::$app->request->get('id')) {
@@ -666,7 +716,7 @@ class Product extends \yii\db\ActiveRecord
                 Yii::$app->db->createCommand()->batchInsert('product_property', $keys, $vals)->execute();
             }
 
-            ProductFilter::deleteAll(['product_id'=>$this->id]);
+            ProductFilter::deleteAll(['product_id' => $this->id]);
 
             if ($this->filters) {
                 $keys = ['product_id', 'filter_id', 'value_ru'];
@@ -721,8 +771,9 @@ class Product extends \yii\db\ActiveRecord
     }
 
 
-    public function removeObject(){
-        if ($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
 
@@ -731,55 +782,56 @@ class Product extends \yii\db\ActiveRecord
                 $photo->removeImageSize();
             }
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image) {
-            if ($this->image->web == 1) {
-                return $this->image->photo;
-            }
-            if (!$this->token_key) {
-                return Images::PHOTO_DEFAULT;
-            }
+            // if ($this->image->web == 1) {
+            //     return $this->image->photo;
+            // }
+            // if (!$this->token_key) {
+            //     return Images::PHOTO_DEFAULT;
+            // }
 
-            $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
+            // $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
 
-            return $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
-            // $path = Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
+            // return $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
+            $path = Images::PHOTO_PRODUCT_PATH . $this->image->object_id . '/' . $s . '/' . $this->image->photo;
 
             // $path = Images::PHOTO_PRODUCT_PATH.$this->token_key.'/'.$s.'/'.$this->image->photo;
 
-            // if (is_file($path)) {
-            //     return '/'.$path;
-            // // $imageManager = new ImageManager();
-            // // $image = $imageManager->make($path);
-            // // $image->encode('webp');
-            // // $image->save(Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp');
-            // //     return '/'.Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp';
-            // }
+            if (is_file($path)) {
+                return '/' . $path;
+                // $imageManager = new ImageManager();
+                // $image = $imageManager->make($path);
+                // $image->encode('webp');
+                // $image->save(Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp');
+                //     return '/'.Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp';
+            }
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function getPhotos($s = 'original') {
+    public function getPhotos($s = 'original')
+    {
         $data = [];
-        $baseUrl = Yii::$app->params['minio']['publicEndpoint'];  
+        $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
 
         if ($this->image) {
             if ($this->image->web == 1) {
                 $data[] = $this->image->photo;
             } elseif ($this->token_key) {
                 $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
+            } else {
+                $path = Images::PHOTO_PRODUCT_PATH . $this->image->object_id . '/' . $s . '/' . $this->image->photo;
+                if (is_file($path)) {
+                    $data[] = '/' . $path;
+                }
             }
-            //  else {
-            //     $path = Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            //     if (is_file($path)) {
-            //         $data[] = '/'.$path;
-            //     }
-            // }
         }
 
         if ($this->gallery) {
@@ -787,27 +839,27 @@ class Product extends \yii\db\ActiveRecord
                 if ($photo->web == 1) {
                     $data[] = $photo->photo;
                 } elseif ($this->token_key) {
-                    $data[] = $baseUrl . '/uploads/product/'. $this->token_key. '/'. $s. '/'. $photo->photo;
+                    $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $photo->photo;
+                } else {
+                    $path = Images::PHOTO_PRODUCT_PATH . $photo->object_id . '/' . $s . '/' . $photo->photo;
+                    if (is_file($path)) {
+                        $data[] = '/' . $path;
+                    }
                 }
-                // } else {
-                //     $path = Images::PHOTO_PRODUCT_PATH.$photo->object_id.'/'.$s.'/'.$photo->photo;
-                //     if (is_file($path)) {
-                //         $data[] = '/'.$path;
-                //     }
-                // }
             }
         }
 
         return $data;
     }
 
-    public function getFilter() {
+    public function getFilter()
+    {
         $data = [];
 
         if ($this->productFilters) {
             foreach ($this->productFilters as $key => $filter) {
                 if ($filter->filter->type == 'checkbox') {
-                    $items = ProductFilter::find()->where(['product_id'=>$filter->product_id, 'filter_id'=>$filter->filter_id])->all();
+                    $items = ProductFilter::find()->where(['product_id' => $filter->product_id, 'filter_id' => $filter->filter_id])->all();
                     if ($items) {
                         $data[$key] = [
                             'id' => $filter->filter->id,
@@ -838,21 +890,23 @@ class Product extends \yii\db\ActiveRecord
         return $data;
     }
 
-    public function isFavorite() {
+    public function isFavorite()
+    {
         $favorite = false;
         /** @var User|null $user */
         $user = Yii::$app->user->identity;
-        if($user && !empty($user->id) && !empty($this->id)){
-            $favorite = UserFavorite::findOne(['product_id'=>$this->id, 'user_id'=>$user->id]);
+        if ($user && !empty($user->id) && !empty($this->id)) {
+            $favorite = UserFavorite::findOne(['product_id' => $this->id, 'user_id' => $user->id]);
         }
         return $favorite ? true : false;
     }
 
-    public function getCountRating() {
+    public function getCountRating()
+    {
         $data = [];
 
         for ($i = 1; $i <= 5; $i++) {
-            $data['rate_'.$i] = 0;
+            $data['rate_' . $i] = 0;
         }
 
         // Get only accepted or processed reviews
@@ -863,7 +917,7 @@ class Product extends \yii\db\ActiveRecord
         if ($reviews) {
             foreach ($reviews as $review) {
                 if ($review->rate >= 1 && $review->rate <= 5) {
-                    $data['rate_'.$review->rate] = $data['rate_'.$review->rate] + 1;
+                    $data['rate_' . $review->rate] = $data['rate_' . $review->rate] + 1;
                 }
             }
         }
@@ -871,7 +925,8 @@ class Product extends \yii\db\ActiveRecord
         return $data;
     }
 
-    public function getCategoryFull() {
+    public function getCategoryFull()
+    {
         $data = [];
 
         if ($this->category_tree) {
@@ -890,7 +945,8 @@ class Product extends \yii\db\ActiveRecord
         return $data ? implode('/', $data) : $data;
     }
 
-    public function getCategoryFullArray() {
+    public function getCategoryFullArray()
+    {
         $data = [];
 
         if ($this->category_tree) {
@@ -912,7 +968,8 @@ class Product extends \yii\db\ActiveRecord
         return $data;
     }
 
-    public function getOtherProducts() {
+    public function getOtherProducts()
+    {
         $data = [];
         if ($this->products) {
             foreach ($this->products as $product) {
@@ -925,7 +982,7 @@ class Product extends \yii\db\ActiveRecord
                         'color' => $product->color->color
                     ];
                 }
-                
+
                 // Get productTypes information with product_id and color
                 $productTypesData = [];
                 if ($product->productProductTypes) {
@@ -955,17 +1012,20 @@ class Product extends \yii\db\ActiveRecord
         return $data;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
-        
+
         $controller = Yii::$app->controller->id;
         $action = Yii::$app->controller->action->id;
 
         $data = [
             'id',
-            'name' => function() use($language) { return $this->{'name_'.$language} ? $this->{'name_'.$language} : $this->name_ru;},
-            'color' => function() {
+            'name' => function () use ($language) {
+                return $this->{'name_' . $language} ? $this->{'name_' . $language} : $this->name_ru;
+            },
+            'color' => function () {
                 if ($this->color) {
                     return [
                         'id' => $this->color->id,
@@ -988,7 +1048,7 @@ class Product extends \yii\db\ActiveRecord
                 }
                 return null;
             },
-            'user' => function() {
+            'user' => function () {
                 return $this->user ? [
                     'id' => $this->user->id,
                     'role' => $this->user->role,
@@ -1000,8 +1060,8 @@ class Product extends \yii\db\ActiveRecord
             },
             'images' => function () {
                 return \app\models\Images::find()->where(['token_key' => $this->token_key])
-                ->asArray()
-                ->all();
+                    ->asArray()
+                    ->all();
             },
             'tag',
             'name_ru',
@@ -1016,16 +1076,20 @@ class Product extends \yii\db\ActiveRecord
             'delivery',
             'discount',
             'amount',
-            'unit' => function() {
-                        return $this->unit ? [
-                            'id' => $this->unit->id,
-                            'name' => $this->unit->name_ru
-                        ] : null;
-                    },
+            'unit' => function () {
+                return $this->unit ? [
+                    'id' => $this->unit->id,
+                    'name' => $this->unit->name_ru
+                ] : null;
+            },
             'brand',
             'category',
-            'category_full' => function(){return $this->getCategoryFull();},
-            'category_full_array' => function(){return $this->getCategoryFullArray();},
+            'category_full' => function () {
+                return $this->getCategoryFull();
+            },
+            'category_full_array' => function () {
+                return $this->getCategoryFullArray();
+            },
             'weight',
             'height',
             'width',
@@ -1033,39 +1097,41 @@ class Product extends \yii\db\ActiveRecord
             'image',
             'gallery',
             'views',
-            'rating' => function() {
+            'rating' => function () {
                 // Calculate average rating from accepted or processed reviews
                 $reviews = $this->getProductReviews()
                     ->where(['status' => [ProductReview::STATUS_ACCEPTED, ProductReview::STATUS_PROCESSED]])
                     ->all();
-                
+
                 if (empty($reviews)) {
                     return 0;
                 }
-                
+
                 $totalRating = 0;
                 $reviewCount = count($reviews);
-                
+
                 foreach ($reviews as $review) {
                     $totalRating += $review->rate;
                 }
-                
+
                 return round($totalRating / $reviewCount, 1);
             },
-            'review_count' => function() {
+            'review_count' => function () {
                 // Count of accepted or processed reviews
                 return $this->getProductReviews()
                     ->where(['status' => [ProductReview::STATUS_ACCEPTED, ProductReview::STATUS_PROCESSED]])
                     ->count();
             },
             'photo',
-            'isFavorite' => function(){return $this->isFavorite();},
+            'isFavorite' => function () {
+                return $this->isFavorite();
+            },
             'status',
             'productProperties',
             'productColors',
-            'productTypes' => function() {
+            'productTypes' => function () {
                 $productTypesData = [];
-                
+
                 // Get current product's productTypes
                 if ($this->productProductTypes) {
                     foreach ($this->productProductTypes as $productProductType) {
@@ -1080,7 +1146,7 @@ class Product extends \yii\db\ActiveRecord
                         }
                     }
                 }
-                
+
                 // Get product variants with same color and same token_key (same product, same color, different types)
                 if ($this->token_key && $this->color_id) {
                     $relatedProducts = Product::find()
@@ -1098,7 +1164,7 @@ class Product extends \yii\db\ActiveRecord
                         ->andWhere(['!=', 'id', $this->id]) // Exclude current product
                         ->limit(20) // Increased limit for product variants
                         ->all();
-                    
+
                     foreach ($relatedProducts as $relatedProduct) {
                         if ($relatedProduct->productProductTypes) {
                             foreach ($relatedProduct->productProductTypes as $productProductType) {
@@ -1115,29 +1181,51 @@ class Product extends \yii\db\ActiveRecord
                         }
                     }
                 }
-                
+
                 return $productTypesData;
             },
-            'availableProductTypes' => function() {
+            'availableProductTypes' => function () {
                 return $this->category ? $this->category->productTypes : [];
             },
-            'gallery' => function() {return $this->getPhotos();},
-            'pricing_tiers' => function() {return $this->getPricingTiers();}
+            'gallery' => function () {
+                return $this->getPhotos();
+            },
+            'pricing_tiers' => function () {
+                return $this->getPricingTiers();
+            }
         ];
 
         $exception = ['product', 'detail', 'set-rate', 'set-review', 'compares'];
 
         if (($controller == 'product') && in_array($action, $exception)) {
             $detail = [
-                'description' => function() use($language) { return $this->{'description_'.$language} ? strip_tags(html_entity_decode(htmlspecialchars_decode($this->{'description_'.$language}))) : $this->description_ru;},
-                'description_ru' => function() {return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_ru)));},
-                'description_en' => function() {return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_en)));},
-                'description_uz' => function() {return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_uz)));},
-                'filters' => function() {return $this->getFilter();},
-                'reviews' => function() {return $this->productReviews;},
-                'reviews_count' => function() {return count($this->productReviews);},
-                'review_separate' => function() {return $this->getCountRating();},
-                'products' => function() {return $this->getOtherProducts();},
+                'description' => function () use ($language) {
+                    return $this->{'description_' . $language} ? strip_tags(html_entity_decode(htmlspecialchars_decode($this->{'description_' . $language}))) : $this->description_ru;
+                },
+                'description_ru' => function () {
+                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_ru)));
+                },
+                'description_en' => function () {
+                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_en)));
+                },
+                'description_uz' => function () {
+                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_uz)));
+                },
+                'filters' => function () {
+                    return $this->getFilter();
+                },
+                'reviews' => function () {
+                    return $this->productReviews;
+                },
+                'reviews_count' => function () {
+                    return count($this->productReviews);
+                },
+                'review_separate' => function () {
+                    return $this->getCountRating();
+                },
+                'products' => function () {
+                    return $this->getOtherProducts();
+                },
                 'shop'
             ];
 
@@ -1180,7 +1268,7 @@ class Product extends \yii\db\ActiveRecord
                 'type' => 'regular'
             ]
         ];
-        
+
         if ($this->qty_small_wholesale && $this->price_small) {
             $tiers[] = [
                 'min_quantity' => $this->qty_small_wholesale,
@@ -1189,7 +1277,7 @@ class Product extends \yii\db\ActiveRecord
                 'type' => 'small_wholesale'
             ];
         }
-        
+
         if ($this->qty_big_wholesale && $this->price_opt) {
             $tiers[] = [
                 'min_quantity' => $this->qty_big_wholesale,
@@ -1198,7 +1286,7 @@ class Product extends \yii\db\ActiveRecord
                 'type' => 'big_wholesale'
             ];
         }
-        
+
         return $tiers;
     }
 
@@ -1241,11 +1329,11 @@ class Product extends \yii\db\ActiveRecord
     {
         return $this->hasMany(ProductFilter::className(), ['product_id' => 'id'])
             ->select([
-                'id' => 'MAX(id)', 
-                'product_id', 
-                'filter_id', 
-                'value_ru' => 'MAX(value_ru)', 
-                'value_en' => 'MAX(value_en)', 
+                'id' => 'MAX(id)',
+                'product_id',
+                'filter_id',
+                'value_ru' => 'MAX(value_ru)',
+                'value_en' => 'MAX(value_en)',
                 'value_uz' => 'MAX(value_uz)'
             ])
             ->groupBy(['product_id', 'filter_id']);
@@ -1266,9 +1354,10 @@ class Product extends \yii\db\ActiveRecord
     //     return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'product', 'main'=>1]);
     // }
 
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['token_key'=>'token_key'])
-            ->andOnCondition(['type'=>'product', 'main'=>1]);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['token_key' => 'token_key'])
+            ->andOnCondition(['type' => 'product', 'main' => 1]);
     }
 
 
@@ -1276,9 +1365,10 @@ class Product extends \yii\db\ActiveRecord
     //     return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type'=>'product', 'main'=>2]);
     // }
 
-    public function getGallery() {
-        return $this->hasMany(Images::className(), ['token_key'=>'token_key'])
-            ->andOnCondition(['type'=>'product', 'main'=>2]);
+    public function getGallery()
+    {
+        return $this->hasMany(Images::className(), ['token_key' => 'token_key'])
+            ->andOnCondition(['type' => 'product', 'main' => 2]);
     }
 
     // brand
@@ -1294,20 +1384,24 @@ class Product extends \yii\db\ActiveRecord
     }
 
     // properties
-    public function getProductProperties() {
+    public function getProductProperties()
+    {
         return $this->hasMany(ProductProperty::className(), ['product_id' => 'id']);
     }
 
     // product colors
-    public function getProductColors() {
+    public function getProductColors()
+    {
         return $this->hasMany(ProductColor::className(), ['product_id' => 'id']);
     }
 
-    public function getColor() {
+    public function getColor()
+    {
         return $this->hasOne(Color::className(), ['id' => 'color_id']);
     }
 
-    public function getProducts() {
+    public function getProducts()
+    {
         return $this->hasMany(Product::className(), ['token_key' => 'token_key'])->andOnCondition(['!=', 'id', $this->id]);
     }
 
@@ -1342,11 +1436,13 @@ class Product extends \yii\db\ActiveRecord
     }
 
     // product types
-    public function getProductProductTypes() {
+    public function getProductProductTypes()
+    {
         return $this->hasMany(ProductProductType::className(), ['product_id' => 'id']);
     }
 
-    public function getProductTypes() {
+    public function getProductTypes()
+    {
         return $this->hasMany(\app\models\product\ProductType::className(), ['id' => 'product_type_id'])
             ->via('productProductTypes');
     }
@@ -1381,7 +1477,7 @@ class Product extends \yii\db\ActiveRecord
         if ($this->ikpu) {
             return $this->ikpu->getName($language);
         }
-        
+
         // Fallback to cached value if IKPU relation is not loaded
         return $this->ikpu_name;
     }
@@ -1398,7 +1494,7 @@ class Product extends \yii\db\ActiveRecord
             $name = $this->getIkpuName($language);
             return $this->ikpu_code . ($name ? ' - ' . $name : '');
         }
-        
+
         return null;
     }
 
@@ -1416,7 +1512,8 @@ class Product extends \yii\db\ActiveRecord
 
     public function getModerationComments()
     {
-        return $this->hasMany(\app\models\moderator\ModerationComment::class,
+        return $this->hasMany(
+            \app\models\moderator\ModerationComment::class,
             ['entity_id' => 'id']
         )->andWhere(['entity_type' => 'product']);
     }
@@ -1438,14 +1535,14 @@ class Product extends \yii\db\ActiveRecord
 
             // Reset sync status if relevant fields changed and sync_status wasn't explicitly changed
             if (!$insert && !$this->isAttributeChanged('sync_status')) {
-                 // List of fields that should trigger a re-sync
-                 $syncFields = ['name_ru', 'name_en', 'name_uz', 'price', 'sku', 'barcode', 'amount'];
-                 foreach ($syncFields as $field) {
-                     if ($this->isAttributeChanged($field)) {
-                         $this->sync_status = 0; // Pending
-                         break;
-                     }
-                 }
+                // List of fields that should trigger a re-sync
+                $syncFields = ['name_ru', 'name_en', 'name_uz', 'price', 'sku', 'barcode', 'amount'];
+                foreach ($syncFields as $field) {
+                    if ($this->isAttributeChanged($field)) {
+                        $this->sync_status = 0; // Pending
+                        break;
+                    }
+                }
             }
 
             return true;
@@ -1456,7 +1553,7 @@ class Product extends \yii\db\ActiveRecord
     public function afterSave($insert, $changedAttributes)
     {
         parent::afterSave($insert, $changedAttributes);
-        
+
         // DEPRECATED: Sync is now handled by Sklad pulling data via API to prevent UI freezing
         /*
         if ($insert) {
@@ -1489,7 +1586,7 @@ class Product extends \yii\db\ActiveRecord
         if (!$secretKey) {
             return;
         }
-        
+
         $token = md5($this->id . $secretKey);
 
         try {
@@ -1506,11 +1603,11 @@ class Product extends \yii\db\ActiveRecord
 
     public function beforeDelete()
     {
-        if(!parent::beforeDelete()) {
+        if (!parent::beforeDelete()) {
             return false;
         }
 
-         Yii::$app->db->createCommand()->insert('product_sync_log', [
+        Yii::$app->db->createCommand()->insert('product_sync_log', [
             'submission_id' => $this->id,
             'action' => 'delete',
             'created_at' => date('Y-m-d H:i:s'),

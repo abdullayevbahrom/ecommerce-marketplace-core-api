@@ -262,9 +262,6 @@ class Images extends \yii\db\ActiveRecord
         return true;
     }
 
-
-
-
     public function removeImage()
     {
         $path = $this->object[$this->type];
