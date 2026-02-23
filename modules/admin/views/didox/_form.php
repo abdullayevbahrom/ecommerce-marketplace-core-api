@@ -10,6 +10,7 @@ use yii\helpers\ArrayHelper;
 /* @var $users array */
 /* @var $currentAdminTin string */
 /* @var $order app\models\order\Order */
+$order = $order ?? null;
 
 $isAuthenticated = Yii::$app->session->has('didox_authenticated') && Yii::$app->session->get('didox_authenticated') === true;
 
