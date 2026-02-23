@@ -223,7 +223,7 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                             <div class="product-info">
                                                                 <span class="product-title">
                                                                     <?= Html::encode($transaction->type_payment ?: 'Транзакция') ?>
-                                                                    <span class="label label-success pull-right"><?= number_format($transaction->amount, 0, '.', ' ') ?> сум</span>
+                                                                    <span class="label label-success pull-right"><?= number_format((float) ($transaction->amount ?? 0), 0, '.', ' ') ?> сум</span>
                                                                 </span>
                                                                 <span class="product-description">
                                                                     <?= formatDateSafe($transaction->date) ?> | #<?= $transaction->id ?>
@@ -268,7 +268,7 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                         <tr>
                                                             <td>#<?= $order->id ?></td>
                                                             <td><?= formatDateSafe($order->date, 'datetime') ?></td>
-                                                            <td><strong><?= number_format($order->price, 0, '.', ' ') ?> сум</strong></td>
+                                                            <td><strong><?= number_format((float) ($order->price ?? 0), 0, '.', ' ') ?> сум</strong></td>
                                                             <td><?= $order->amount ?></td>
                                                             <td>
                                                                 <span class="label label-<?= $order->status == 1 ? 'success' : 'warning' ?>">
@@ -316,7 +316,7 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                         <tr>
                                                             <td>#<?= $transaction->id ?></td>
                                                             <td><?= formatDateSafe($transaction->date, 'datetime') ?></td>
-                                                            <td class="text-green"><strong>+<?= number_format($transaction->amount, 0, '.', ' ') ?> сум</strong></td>
+                                                            <td class="text-green"><strong>+<?= number_format((float) ($transaction->amount ?? 0), 0, '.', ' ') ?> сум</strong></td>
                                                             <td><?= Html::encode($transaction->type_transaction ?: '-') ?></td>
                                                             <td><?= Html::encode($transaction->type_payment ?: '-') ?></td>
                                                             <td>
@@ -420,12 +420,12 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                             </td>
                                                             <td>
                                                                 <?php if($promo->type == 1): ?>
-                                                                    <?= number_format($promo->value, 0, '.', ' ') ?> сум
+                                                                    <?= number_format((float) ($promo->value ?? 0), 0, '.', ' ') ?> сум
                                                                 <?php else: ?>
                                                                     <?= $promo->value ?>%
                                                                 <?php endif; ?>
                                                             </td>
-                                                            <td><?= $promo->min_order_amount ? number_format($promo->min_order_amount, 0, '.', ' ') . ' сум' : '-' ?></td>
+                                                            <td><?= $promo->min_order_amount ? number_format((float) ($promo->min_order_amount ?? 0), 0, '.', ' ') . ' сум' : '-' ?></td>
                                                             <td><?= $promo->usage_limit ?: '∞' ?></td>
                                                             <td><?= $promo->end_date ? formatDateSafe($promo->end_date, 'datetime') : 'Бессрочно' ?></td>
                                                             <td>
