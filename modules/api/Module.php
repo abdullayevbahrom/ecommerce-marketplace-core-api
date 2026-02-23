@@ -3,6 +3,7 @@
 namespace app\modules\api;
 
 use yii\web\Response;
+use yii\filters\ContentNegotiator;
 
 /**
  * api module definition class
@@ -33,7 +34,7 @@ class Module extends \yii\base\Module
                 'formats' => [
                     'application/json' => Response::FORMAT_JSON,
                     'text/json' => Response::FORMAT_JSON,
-                    '*/*' => Response::FORMAT_JSON, // Accept bo'lmasa ham JSON
+                    '*/*' => Response::FORMAT_JSON,
                 ],
             ],
         ];
