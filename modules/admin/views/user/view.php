@@ -184,7 +184,7 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                             <div class="product-info">
                                                                 <a href="<?= Url::to(['/admin/order/view', 'id' => $order->id]) ?>" class="product-title">
                                                                     Заказ #<?= $order->id ?>
-                                                                    <span class="label label-default pull-right"><?= number_format($order->price, 0, '.', ' ') ?> сум</span>
+                                                                    <span class="label label-default pull-right"><?= number_format((float) ($order->price ?? 0), 0, '.', ' ') ?> сум</span>
                                                                 </a>
                                                                 <span class="product-description">
                                                                     <?= formatDateSafe($order->date) ?> | Товаров: <?= $order->amount ?>
