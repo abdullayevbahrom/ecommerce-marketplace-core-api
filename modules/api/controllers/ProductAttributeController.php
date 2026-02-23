@@ -28,21 +28,6 @@ class ProductAttributeController extends Controller
 {
     public $enableCsrfValidation = false;
 
-    public function behaviors()
-    {
-        // $behaviors = parent::behaviors();
-        // $behaviors['contentNegotiator']['formats']['application/json'] = Response::FORMAT_JSON;
-        // return $behaviors;
-        return [
-            'contentNegotiator' => [
-                'class' => ContentNegotiator::class,
-                'formats' => [
-                    'application/json' => Response::FORMAT_JSON,
-                ],
-            ],
-        ];
-    }
-
     /**
      * Check authentication token
      * Headers: X-Api-Token (md5 hash of branch_id + apiSecretKey)

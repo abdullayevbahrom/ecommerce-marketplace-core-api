@@ -18,13 +18,7 @@ class SessionController extends Controller
         return [
             'authenticator' => [
                 'class' => WebSessionAuth::class,
-            ],
-            'contentNegotiator' => [
-                'class' => ContentNegotiator::class,
-                'formats' => [
-                    'application/json' => Response::FORMAT_JSON,
-                ],
-            ],
+            ]
         ];
     }
 

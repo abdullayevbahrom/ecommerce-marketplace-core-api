@@ -11,7 +11,7 @@ class Module extends \yii\base\Module
      * @inheritdoc
      */
     public $controllerNamespace = 'app\modules\api\controllers';
-    
+
     /**
      * @inheritdoc
      */
@@ -21,5 +21,19 @@ class Module extends \yii\base\Module
         parent::init();
 
         // custom initialization code goes here
+    }
+
+    public function behaviors()
+    {
+        return [
+            'contentNegotiator' => [
+                'class' => ContentNegotiator::class,
+                'formats' => [
+                    'application/json' => Response::FORMAT_JSON,
+                    'text/json' => Response::FORMAT_JSON,
+                    '*/*' => Response::FORMAT_JSON, // Accept bo'lmasa ham JSON
+                ],
+            ],
+        ];
     }
 }

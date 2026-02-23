@@ -1,4 +1,5 @@
 <?php
+
 namespace app\modules\admin\controllers;
 
 use Yii;
@@ -19,10 +20,12 @@ use app\models\Notification;
 use app\models\product\review\ProductReview;
 use app\models\product\review\ProductReviewSearch;
 
-class DefaultController extends Controller{
+class DefaultController extends Controller
+{
     public $user;
 
-    public function beforeAction($action){
+    public function beforeAction($action)
+    {
         if (!Yii::$app->user->isGuest) {
             $this->user = Yii::$app->user->identity;
             if ($this->user->role == User::ROLE_USER) {
@@ -33,7 +36,8 @@ class DefaultController extends Controller{
         return parent::beforeAction($action);
     }
 
-    public function actionIndex() {
+    public function actionIndex()
+    {
         if ($this->user && ($this->user->role == User::ROLE_ADMIN)) {
             return $this->redirect(['/admin/default/dashboard']);
         }
@@ -72,12 +76,13 @@ class DefaultController extends Controller{
         }
 
         return $this->render('index', [
-            'model'=>$model
+            'model' => $model
         ]);
     }
 
-    public function actionProfile() {
-        if ($this->user->load(Yii::$app->request->post()) && $this->user->validate()){
+    public function actionProfile()
+    {
+        if ($this->user->load(Yii::$app->request->post()) && $this->user->validate()) {
 
             $avatar = $this->user->avatar;
             if (!$avatar) {
@@ -94,27 +99,29 @@ class DefaultController extends Controller{
         }
 
         return $this->render('profile', [
-            'model'=>$this->user
+            'model' => $this->user
         ]);
     }
 
-    public function actionUpdateProfile() {
-        $model = User::find()->with('image')->where(['id'=>$this->user->id])->one();
+    public function actionUpdateProfile()
+    {
+        $model = User::find()->with('image')->where(['id' => $this->user->id])->one();
         $model->scenario = User::UPDATE_ADMIN;
 
         if ($model->load(Yii::$app->request->post()) && $model->validate()) {
             if ($model->saveObject(User::ROLE_ADMIN)) {
                 Yii::$app->session->setFlash('admin_saved', 'Saved');
             }
-            return $this->redirect(['/admin/default/profile', 'id'=>$model->id]);
+            return $this->redirect(['/admin/default/profile', 'id' => $model->id]);
         }
-        
+
         return $this->render('update-profile', [
-            'model'=>$model
+            'model' => $model
         ]);
     }
 
-    public function actionRemovePhoto($id) {
+    public function actionRemovePhoto($id)
+    {
         $model = Images::findOne($id);
 
         if ($model && $model->removeImageSize()) {
@@ -124,7 +131,8 @@ class DefaultController extends Controller{
         return $this->redirect(Yii::$app->request->referrer);
     }
 
-    public function actionRemoveFile($id) {
+    public function actionRemoveFile($id)
+    {
         $model = File::findOne($id);
 
         if ($model && $model->remove()) {
@@ -134,8 +142,9 @@ class DefaultController extends Controller{
         return $this->redirect(Yii::$app->request->referrer);
     }
 
-    public function actionChangePassword(){
-    	$model = User::findOne($this->user->id);
+    public function actionChangePassword()
+    {
+        $model = User::findOne($this->user->id);
 
         $model->scenario = User::ADMIN_CHANGE_PASSWORD;
 
@@ -146,20 +155,21 @@ class DefaultController extends Controller{
             return $this->redirect(Yii::$app->request->referrer);
         }
 
-    	return $this->render('change-password', [
-    		'model'=>$model,
-    	]);
+        return $this->render('change-password', [
+            'model' => $model,
+        ]);
     }
 
-    public function actionDashboard($type = null) {
-        $user_count = User::find()->where(['role'=>User::ROLE_USER, 'status'=>1])->count();
-        $product_count = Product::find()->where(['status'=>1])->count();
-        $order_count = Order::find()->where(['status'=>0])->count();
+    public function actionDashboard($type = null)
+    {
+        $user_count = User::find()->where(['role' => User::ROLE_USER, 'status' => 1])->count();
+        $product_count = Product::find()->where(['status' => 1])->count();
+        $order_count = Order::find()->where(['status' => 0])->count();
         $shop_count = Shop::find()->count();
 
         if ($type = Yii::$app->request->get('type')) {
-            $type_data = ['week'=>'7 DAY', 'month'=>'1 MONTH', 'hyear'=>'6 MONTH', 'year'=>'12 MONTH'];
-            $order_statistic = Order::find()->where('date >= DATE_SUB(CURRENT_DATE, INTERVAL '.$type_data[$type].')')->all();
+            $type_data = ['week' => '7 DAY', 'month' => '1 MONTH', 'hyear' => '6 MONTH', 'year' => '12 MONTH'];
+            $order_statistic = Order::find()->where('date >= DATE_SUB(CURRENT_DATE, INTERVAL ' . $type_data[$type] . ')')->all();
         } else {
             $order_statistic = Order::find()->where('date >= DATE_SUB(CURRENT_DATE, INTERVAL 12 MONTH)')->all();
         }
@@ -168,18 +178,18 @@ class DefaultController extends Controller{
 
         foreach ($order_statistic as $k => $v) {
             $date = explode(' ', $v->date);
-            if(!empty($data[$date[0]])){
+            if (!empty($data[$date[0]])) {
                 $data[$date[0]]['amount'] += 1;
                 $data[$date[0]]['price'] += $v->price;
             }
         }
 
-        $products = ArrayHelper::map(Product::find()->where(['status'=>1])->all(), 'id', 'name_ru');
-        $users = ArrayHelper::map(User::find()->where(['status'=>1])->all(), 'id', 'name');
+        $products = ArrayHelper::map(Product::find()->where(['status' => 1])->all(), 'id', 'name_ru');
+        $users = ArrayHelper::map(User::find()->where(['status' => 1])->all(), 'id', 'name');
 
         $searchModel = new OrderSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
-        $dataProvider->query->with('user', 'payment', 'delivery')->andWhere(['status'=>0])->limit(10);
+        $dataProvider->query->with('user', 'payment', 'delivery')->andWhere(['status' => 0])->limit(10);
         $dataProvider->pagination = false;
 
         $searchModelReview = new ProductReviewSearch();
@@ -202,4 +212,3 @@ class DefaultController extends Controller{
         ]);
     }
 }
-?>

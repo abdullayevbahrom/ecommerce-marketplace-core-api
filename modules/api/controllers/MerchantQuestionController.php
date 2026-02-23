@@ -1,12 +1,10 @@
-<?php 
+<?php
 
 namespace app\modules\api\controllers;
 
 use app\models\merchant\MerchantQuestion;
 use app\models\merchant\MerchantQuestionMessage;
-use app\models\Notification;
 use app\models\user\User;
-use app\services\NotificationService;
 use Yii;
 use yii\data\ActiveDataProvider;
 use yii\filters\auth\HttpBearerAuth;
@@ -22,13 +20,7 @@ class MerchantQuestionController extends Controller
             // $behaviors = parent::behaviors(),
             'authenticator' => [
                 'class' => HttpBearerAuth::class,
-            ],
-            'contentNegotiator' => [
-                'class' => \yii\filters\ContentNegotiator::class,
-                'formats' => [
-                    'application/json' => Response::FORMAT_JSON,
-                ],
-            ],
+            ]
         ];
     }
 
@@ -41,25 +33,22 @@ class MerchantQuestionController extends Controller
         }
 
         $query = MerchantQuestion::find()
-        ->with([
-            'messages', 
-            'client' => function ($q) {
-                $q->select(['id', 'phone', 'name']);
-            },
-            'merchant' => function ($q) {
-                $q->select(['id', 'phone', 'name']);
-            },
-        ])->orderBy(['created_at' => SORT_DESC]);
+            ->with([
+                'messages',
+                'client' => function ($q) {
+                    $q->select(['id', 'phone', 'name']);
+                },
+                'merchant' => function ($q) {
+                    $q->select(['id', 'phone', 'name']);
+                },
+            ])->orderBy(['created_at' => SORT_DESC]);
 
         if (in_array($user->role, [User::ROLE_ADMIN, User::ROLE_ADMIN, User::ROLE_MODERATOR])) {
-          
-        }elseif ($user->role === User::ROLE_SHOP) {
+        } elseif ($user->role === User::ROLE_SHOP) {
             $query->andWhere(['merchant_id' => $user->id]);
-        }
-        elseif ($user->role === User::ROLE_USER) {
+        } elseif ($user->role === User::ROLE_USER) {
             $query->andWhere(['client_id' => $user->id]);
-        }
-        else {
+        } else {
             throw new HttpException(403, 'Access denied');
         }
 
@@ -81,7 +70,6 @@ class MerchantQuestionController extends Controller
                 'page_count' => $dataProvider->pagination->getPageCount(),
             ],
         ];
-        
     }
 
 
@@ -97,7 +85,7 @@ class MerchantQuestionController extends Controller
 
         $merchantId = (int) Yii::$app->request->post('merchant_id');
         $message    = trim(Yii::$app->request->post('message'));
-    
+
         if (!$merchantId || !$message) {
             return [
                 'success' => false,
@@ -135,7 +123,7 @@ class MerchantQuestionController extends Controller
 
             $model = new MerchantQuestion();
             $model->client_id   = $user->id;
-            $model->merchant_id = $merchant->id;//Yii::$app->request->post('merchant_id');
+            $model->merchant_id = $merchant->id; //Yii::$app->request->post('merchant_id');
             $model->status      = MerchantQuestion::STATUS_OPEN;
             $model->created_at  = time();
 
@@ -147,7 +135,7 @@ class MerchantQuestionController extends Controller
             $msg->question_id = $model->id;
             $msg->sender_role = MerchantQuestionMessage::ROLE_CLIENT;
             $msg->sender_id   = $user->id;
-            $msg->message     = $message;//Yii::$app->request->post('message');
+            $msg->message     = $message; //Yii::$app->request->post('message');
             $msg->created_at  = time();
             $msg->save(false);
 
@@ -160,7 +148,6 @@ class MerchantQuestionController extends Controller
 
 
             return ['success' => true, 'question_id' => $model->id];
-
         } catch (\Throwable $e) {
             $transaction->rollBack();
             Yii::error($e->getMessage(), 'create_question_for_merchant');
@@ -216,7 +203,6 @@ class MerchantQuestionController extends Controller
                 'success' => true,
                 'message' => 'Question closed successfully',
             ];
-
         } catch (\Throwable $e) {
             $transaction->rollBack();
             Yii::error($e->getMessage(), 'close_question_for_merchant');
@@ -266,7 +252,7 @@ class MerchantQuestionController extends Controller
     {
         $baseUrl   = Yii::$app->params['warehouseApiUrl'] ?? null;
         $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
-        
+
         $payload = [
             'id'    => $merchant->shop_id,
             'client_id' => $user->id,
@@ -284,8 +270,9 @@ class MerchantQuestionController extends Controller
                 'timeout' => 5,
             ]);
 
-            $response = $client->post(rtrim($baseUrl, '/') . '/api/tickets/from-shop',
-            [
+            $response = $client->post(
+                rtrim($baseUrl, '/') . '/api/tickets/from-shop',
+                [
                     'json' => $payload,
                     'headers' => [
                         'X-Api-Token' => $token,

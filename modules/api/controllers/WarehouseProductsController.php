@@ -4,7 +4,6 @@ namespace app\modules\api\controllers;
 
 use Yii;
 use yii\rest\Controller;
-use yii\web\Response;
 use yii\web\BadRequestHttpException;
 use yii\web\UnauthorizedHttpException;
 use app\models\product\PendingProduct;
@@ -30,12 +29,6 @@ class WarehouseProductsController extends Controller
         throw new \yii\web\GoneHttpException('This endpoint is deactivated. Please use the new direct attribute sync endpoints.');
     }
 
-    public function behaviors()
-    {
-        $behaviors = parent::behaviors();
-        $behaviors['contentNegotiator']['formats']['application/json'] = Response::FORMAT_JSON;
-        return $behaviors;
-    }
 
     /**
      * Check authentication token
@@ -46,21 +39,21 @@ class WarehouseProductsController extends Controller
     {
         $headers = Yii::$app->request->headers;
         $token = $headers->get('X-Api-Token');
-        
+
         if (!$token) {
             throw new UnauthorizedHttpException('Missing X-Api-Token header');
         }
-        
+
         // Get branch_id from header or body
         $branchId = $headers->get('X-Branch-ID') ?? Yii::$app->request->post('branch_id');
-        
+
         if (!$branchId) {
             throw new UnauthorizedHttpException('Missing X-Branch-ID header');
         }
-        
+
         // Validate token: md5(branch_id + apiSecretKey)
         $expectedToken = md5($branchId . Yii::$app->params['apiSecretKey']);
-        
+
         if ($token !== $expectedToken) {
             throw new UnauthorizedHttpException('Invalid API Token');
         }
@@ -81,28 +74,28 @@ class WarehouseProductsController extends Controller
     public function actionSubmit()
     {
         $this->checkAuth();
-        
+
         $request = Yii::$app->request;
         $headers = $request->headers;
         $data = $request->post();
-        
+
         // Get branch info from headers or body
         $branchId = $headers->get('X-Branch-ID') ?? $data['branch_id'] ?? null;
         $branchName = $headers->get('X-Branch-Name') ?? $data['branch_name'] ?? null;
-        
+
         // Validate required fields per spec
         if (empty($data['warehouse_product_id'])) {
             throw new BadRequestHttpException('warehouse_product_id is required');
         }
-        
+
         if (empty($branchId)) {
             throw new BadRequestHttpException('branch_id (or X-Branch-ID header) is required');
         }
-        
+
         if (empty($data['product']['name_ru']) && empty($data['product']['name'])) {
             throw new BadRequestHttpException('product.name_ru is required');
         }
-        
+
         if (!isset($data['product']['price'])) {
             throw new BadRequestHttpException('product.price is required');
         }
@@ -111,10 +104,10 @@ class WarehouseProductsController extends Controller
 
         // Find existing submission or create new
         $model = PendingProduct::findOne([
-            'branch_id' => $branchId, 
+            'branch_id' => $branchId,
             'warehouse_product_id' => $warehouseProductId
         ]);
-        
+
         $isNew = false;
         if (!$model) {
             $model = new PendingProduct();
@@ -135,7 +128,7 @@ class WarehouseProductsController extends Controller
         $model->merchant_id = $data['merchant_id'] ?? null;
         $model->merchant_name = $data['merchant_name'] ?? null;
         $model->callback_url = $data['callback_url'] ?? null;
-        
+
         // Store product data
         $product = $data['product'] ?? [];
         $model->name = $product['name'] ?? $product['name_ru'] ?? null;
@@ -153,15 +146,15 @@ class WarehouseProductsController extends Controller
         $model->sku = $product['sku'] ?? null;
         $model->weight = $product['weight'] ?? null;
         $model->discount = $product['discount'] ?? null;
-        
+
         // Store full JSON payload for reference
         $model->data = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        
+
         if ($model->save()) {
             $submissionId = 'shop_sub_' . $model->id;
-            
+
             Yii::info("Product submission received: {$submissionId} from branch {$branchId}", 'warehouse-sync');
-            
+
             return [
                 'success' => true,
                 'submission_id' => $submissionId,
@@ -194,19 +187,19 @@ class WarehouseProductsController extends Controller
     public function actionStatus()
     {
         $this->checkAuth();
-        
+
         $warehouseProductId = Yii::$app->request->get('warehouse_product_id');
         $branchId = Yii::$app->request->get('branch_id');
 
         if (!$warehouseProductId || !$branchId) {
             throw new BadRequestHttpException('warehouse_product_id and branch_id are required');
         }
-        
+
         $model = PendingProduct::findOne([
             'branch_id' => $branchId,
             'warehouse_product_id' => $warehouseProductId
         ]);
-        
+
         if (!$model) {
             throw new \yii\web\NotFoundHttpException('Submission not found');
         }
@@ -222,7 +215,7 @@ class WarehouseProductsController extends Controller
         if ($model->status == PendingProduct::STATUS_REJECTED) {
             $response['comment'] = $model->moderator_comment;
         }
-        
+
         if ($model->status == PendingProduct::STATUS_APPROVED && $model->approved_product_id) {
             $response['marketplace_product_id'] = $model->approved_product_id;
         }

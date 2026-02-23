@@ -4,10 +4,7 @@ namespace app\modules\api\controllers;
 
 use Yii;
 use yii\rest\Controller;
-use yii\web\Response;
 use app\services\WalletService;
-use app\models\user\User;
-use yii\web\NotFoundHttpException;
 
 use yii\filters\auth\HttpBearerAuth;
 
@@ -25,12 +22,11 @@ class WalletController extends Controller
     public function behaviors()
     {
         $behaviors = parent::behaviors();
-        $behaviors['contentNegotiator']['formats']['text/html'] = Response::FORMAT_JSON;
-        
+
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
         ];
-        
+
         return $behaviors;
     }
 
@@ -41,7 +37,7 @@ class WalletController extends Controller
     public function actionAddress()
     {
         $id = Yii::$app->user->id;
-        
+
         if (!$id) {
             return ['error' => 'User not found'];
         }
@@ -49,7 +45,7 @@ class WalletController extends Controller
         try {
             $eoa = $this->walletService->ensureWallet($id);
             $aa = $this->walletService->getAAAddress($id);
-            
+
             return [
                 'user_id' => $id,
                 'eoa_address' => $eoa,
@@ -67,14 +63,14 @@ class WalletController extends Controller
     public function actionBalance()
     {
         $id = Yii::$app->user->id;
-        
+
         if (!$id) {
             return ['error' => 'User not found'];
         }
 
         $cacheKey = 'wallet_balance_' . $id;
         $cachedResponse = Yii::$app->cache->get($cacheKey);
-        
+
         if ($cachedResponse !== false) {
             return $cachedResponse;
         }
@@ -82,18 +78,18 @@ class WalletController extends Controller
         try {
             // Get balance data (includes balance, isDeployed, tokens if available)
             $balanceData = $this->walletService->getBalance($id);
-            
+
             // Get address data
             $addresses = $this->walletService->predictWallet($id);
-            
+
             $tokens = $balanceData['tokens'] ?? [];
-            
+
             // Define images
             $images = [
                 'ETH' => 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
                 'USDT' => 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
                 'USDC' => 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
-                'HUMO' => 'https://cdn.example.com/assets/cards/humo.png', 
+                'HUMO' => 'https://cdn.example.com/assets/cards/humo.png',
                 'app' => 'https://cdn-icons-png.flaticon.com/512/555/555526.png',
             ];
 
@@ -116,13 +112,13 @@ class WalletController extends Controller
             ];
 
             Yii::$app->cache->set($cacheKey, $response, 60); // Cache for 1 minute
-            
+
             return $response;
         } catch (\Exception $e) {
             return ['error' => $e->getMessage()];
         }
     }
-    
+
     /**
      * Mint tokens (Test/Admin only)
      * POST /api/wallet/mint
@@ -157,7 +153,7 @@ class WalletController extends Controller
         $token = $request->post('token');
         $amount = $request->post('amount');
         $merchant = $request->post('merchant');
-        
+
         if (!$aaWalletAddress || !$token || !$amount || !$merchant) {
             return ['error' => 'Missing required parameters'];
         }
@@ -186,7 +182,7 @@ class WalletController extends Controller
         $token = $request->post('token');
         $to = $request->post('to');
         $amount = $request->post('amount');
-        
+
         if (!$token || !$to || !$amount) {
             return ['error' => 'Missing required parameters'];
         }
@@ -216,7 +212,7 @@ class WalletController extends Controller
     public function actionPredict()
     {
         $id = Yii::$app->user->id;
-        
+
         if (!$id) {
             return ['error' => 'User not found'];
         }
@@ -241,21 +237,20 @@ class WalletController extends Controller
     public function actionDeploy()
     {
         $user_id = Yii::$app->user->id;
-        
+
         if (!$user_id) {
             return ['error' => 'User not found'];
         }
 
         try {
             $txHash = $this->walletService->deployWallet($user_id);
-            
+
             // Invalidate balance cache
             Yii::$app->cache->delete('wallet_balance_' . $user_id);
-            
+
             return ['status' => 'Deployment initiated', 'txHash' => $txHash];
         } catch (\Exception $e) {
             return ['error' => $e->getMessage()];
         }
     }
 }
-
