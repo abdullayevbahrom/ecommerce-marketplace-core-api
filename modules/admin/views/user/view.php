@@ -588,11 +588,6 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                                         <i class="fa fa-paper-plane"></i> Pay
                                                                     </button>
                                                                 </div>
-                                                                <div class="btn-group">
-                                                                    <button type="button" class="btn btn-info" data-toggle="modal" data-target="#transferModal">
-                                                                        <i class="fa fa-exchange"></i> Transfer
-                                                                    </button>
-                                                                </div>
                                                             </div>
                                                         <?php endif; ?>
                                                     </div>
@@ -841,24 +836,26 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
       <?= Html::beginForm(['/admin/user/wallet-pay', 'id' => $model->id], 'post') ?>
       <div class="modal-body">
           <div class="form-group">
-              <label>From AA Address</label>
-              <input type="text" name="aaWalletAddress" class="form-control" value="<?= $aaAddress ?? '' ?>" required>
+              <label>Payer (User ID)</label>
+              <input type="text" class="form-control" value="<?= $model->id ?> (<?= Html::encode($model->name ?: $model->phone) ?>)" readonly disabled>
+              <p class="help-block">This user will be the payer. Their AA wallet address is resolved by the backend.</p>
           </div>
           <div class="form-group">
-              <label>Token Address</label>
-              <select name="token" class="form-control">
-                  <option value="0x7b95CaDaf3Fe1154A7B663f3793856F7e9f21d16">USDT (0x7b95...d16)</option>
-                  <option value="0x3f4A04341122360b304C9A896a2Dbfe4cca5B4AE">USDC (0x3f4A...4AE)</option>
+              <label>Merchant User ID</label>
+              <input type="number" name="merchantId" class="form-control" placeholder="Enter merchant's user ID" required>
+              <p class="help-block">Enter the numeric user ID of the merchant/recipient.</p>
+          </div>
+          <div class="form-group">
+              <label>Token</label>
+              <select name="symbol" class="form-control">
+                  <option value="USDT">USDT</option>
+                  <option value="USDC">USDC</option>
               </select>
-              <p class="help-block">Payments are restricted to USDT and USDC.</p>
-          </div>
-          <div class="form-group">
-              <label>Merchant Address</label>
-              <input type="text" name="merchant" class="form-control" value="0x41Dc3526Aa84a9EEE8ae210FCEE94E016E081EEb" required>
+              <p class="help-block">The backend resolves the symbol to the on-chain token address.</p>
           </div>
           <div class="form-group">
               <label>Amount</label>
-              <input type="number" name="amount" class="form-control" value="10" required>
+              <input type="number" name="amount" class="form-control" value="10" step="any" required>
           </div>
       </div>
       <div class="modal-footer">
@@ -870,45 +867,6 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
   </div>
 </div>
 
-<!-- Transfer Modal -->
-<div class="modal fade" id="transferModal" tabindex="-1" role="dialog" aria-labelledby="transferModalLabel">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="transferModalLabel">Transfer Tokens</h4>
-      </div>
-      <?= Html::beginForm(['/admin/user/wallet-transfer', 'id' => $model->id], 'post') ?>
-      <div class="modal-body">
-          <div class="form-group">
-              <label>To Address</label>
-              <input type="text" name="to" class="form-control" placeholder="0x..." required>
-          </div>
-          <div class="form-group">
-              <label>Token</label>
-              <select name="token" class="form-control" id="transferTokenSelect">
-                  <option value="0x7b95CaDaf3Fe1154A7B663f3793856F7e9f21d16">USDT (0x7b95...d16)</option>
-                  <option value="0x3f4A04341122360b304C9A896a2Dbfe4cca5B4AE">USDC (0x3f4A...4AE)</option>
-                  <option value="custom">Custom...</option>
-              </select>
-          </div>
-          <div class="form-group" id="customTokenGroup" style="display:none;">
-              <label>Custom Token Address</label>
-              <input type="text" name="custom_token" class="form-control" placeholder="0x...">
-          </div>
-          <div class="form-group">
-              <label>Amount</label>
-              <input type="number" name="amount" class="form-control" step="any" required>
-          </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        <button type="submit" class="btn btn-info">Transfer</button>
-      </div>
-      <?= Html::endForm() ?>
-    </div>
-  </div>
-</div>
 
 <script>
 // Simple script to handle custom token toggle
@@ -930,7 +888,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    setupTokenSelect('transferTokenSelect', 'customTokenGroup');
     setupTokenSelect('mintTokenSelect', 'mintCustomTokenGroup');
 });
 </script>

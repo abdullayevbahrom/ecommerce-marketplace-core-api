@@ -459,27 +459,17 @@ $(function() {
                             
                             html += '<div class="product-type-values" style="margin-top: 10px; padding: 10px; background-color: #f9f9f9; border-radius: 4px;">';
                             
-                            if (productType.type == 'select' && productType.values && productType.values.length > 0) {
-                                html += '<div class="row">';
+                            if ((productType.type == 'select' || productType.type == 'checkbox') && productType.values && productType.values.length > 0) {
+                                html += '<div class="row" style="display: flex; flex-wrap: wrap;">';
                                 for (var v in productType.values) {
                                     var value = productType.values[v];
-                                    html += '<div class="col-md-2 col-sm-3 col-xs-4" style="margin-bottom: 8px;">';
-                                    html += '<label class="checkbox-inline" style="margin: 0; padding: 5px 8px; border: 1px solid #ddd; border-radius: 3px; background-color: white; cursor: pointer; display: block; text-align: center;">';
-                                    html += '<input type="checkbox" name="Product[product_types][' + productType.id + '][]" value="' + value.id + '" style="margin-right: 5px;"/> ';
-                                    html += '<span style="font-weight: normal;">' + (value.display_value || value.value) + '</span>';
+                                    html += '<div class="col-md-3 col-sm-4 col-xs-6" style="margin-bottom: 10px; display: flex;">';
+                                    html += '<div class="product-type-item" style="border: 1px solid #ddd; border-radius: 4px; background-color: white; width: 100%; transition: all 0.2s;">';
+                                    html += '<label style="margin: 0; padding: 10px; cursor: pointer; display: flex; align-items: center; width: 100%; height: 100%; font-weight: normal;">';
+                                    html += '<input type="checkbox" name="Product[product_types][' + productType.id + '][]" value="' + value.id + '" class="product-type-checkbox" style="margin-right: 10px; transform: scale(1.2);"/> ';
+                                    html += '<span class="value-text">' + (value.display_value || value.value) + '</span>';
                                     html += '</label>';
                                     html += '</div>';
-                                }
-                                html += '</div>';
-                            } else if (productType.type == 'checkbox' && productType.values && productType.values.length > 0) {
-                                html += '<div class="row">';
-                                for (var v in productType.values) {
-                                    var value = productType.values[v];
-                                    html += '<div class="col-md-3 col-sm-4 col-xs-6" style="margin-bottom: 8px;">';
-                                    html += '<label class="checkbox-inline" style="margin: 0; padding: 5px 8px; border: 1px solid #ddd; border-radius: 3px; background-color: white; cursor: pointer; display: block;">';
-                                    html += '<input type="checkbox" name="Product[product_types][' + productType.id + '][]" value="' + value.id + '" style="margin-right: 5px;"/> ';
-                                    html += '<span style="font-weight: normal;">' + (value.display_value || value.value) + '</span>';
-                                    html += '</label>';
                                     html += '</div>';
                                 }
                                 html += '</div>';
@@ -511,21 +501,26 @@ $(function() {
                         
                         $('#product-types-container').html(html);
                         
-                        // Add some CSS for hover effects
+                        // Remove existing style if any
+                        $('#product-type-styles').remove();
+                        
                         $('<style>')
+                            .attr('id', 'product-type-styles')
                             .prop('type', 'text/css')
                             .html(`
-                                .product-type-values label:hover {
-                                    background-color: #e6f3ff !important;
+                                .product-type-item:hover {
+                                    background-color: #f0f9ff !important;
                                     border-color: #3c8dbc !important;
+                                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
                                 }
-                                .product-type-values input[type="checkbox"]:checked + span {
-                                    font-weight: bold;
-                                    color: #3c8dbc;
-                                }
-                                .product-type-values label:has(input[type="checkbox"]:checked) {
+                                .product-type-item.checked {
                                     background-color: #d9edf7 !important;
                                     border-color: #3c8dbc !important;
+                                    box-shadow: 0 2px 5px rgba(60,141,188,0.2);
+                                }
+                                .product-type-item.checked .value-text {
+                                    font-weight: bold;
+                                    color: #3c8dbc;
                                 }
                             `)
                             .appendTo('head');
@@ -715,4 +710,173 @@ $(function() {
             block.remove();
         }
     });
+
+    // Variant Generator Logic
+    var selectedColors = [];
+    var selectedProductTypes = {}; // { typeId: { valueId: 'Value Name' } }
+
+    function updateVariantsTable() {
+        console.log('updateVariantsTable called');
+        var variantsContainer = $('#variants-container');
+        console.log('variantsContainer found:', variantsContainer.length);
+        
+        var variants = [];
+
+        // Collect selected colors
+        selectedColors = [];
+        $('input[name="Product[colors][]"]:checked').each(function() {
+            selectedColors.push({
+                id: $(this).val(),
+                name: $(this).parent().text().trim()
+            });
+        });
+        console.log('Selected colors:', selectedColors);
+
+        // Collect selected product types
+        selectedProductTypes = {};
+        $('.product-type-checkbox:checked').each(function() {
+            var nameAttr = $(this).attr('name');
+            if (nameAttr) {
+                var match = nameAttr.match(/\[product_types\]\[(\d+)\]/);
+                if (match) {
+                    var typeId = match[1];
+                    var valueId = $(this).val();
+                    var valueName = $(this).parent().text().trim();
+                    
+                    if (!selectedProductTypes[typeId]) {
+                        selectedProductTypes[typeId] = [];
+                    }
+                    selectedProductTypes[typeId].push({
+                        id: valueId,
+                        name: valueName
+                    });
+                }
+            }
+        });
+        console.log('Selected product types:', selectedProductTypes);
+
+        // Generate combinations
+        // If we have product types, we need to generate Cartesian product of types
+        // Then cross that with colors
+        
+        var typeKeys = Object.keys(selectedProductTypes);
+        var typeCombinations = [];
+
+        if (typeKeys.length > 0) {
+            // Helper to generate combinations of types
+            function generateTypeCombos(index, currentCombo) {
+                if (index === typeKeys.length) {
+                    typeCombinations.push(currentCombo);
+                    return;
+                }
+                var typeId = typeKeys[index];
+                var values = selectedProductTypes[typeId];
+                for (var i = 0; i < values.length; i++) {
+                    var newCombo = $.extend({}, currentCombo); // Clone
+                    newCombo[typeId] = values[i];
+                    generateTypeCombos(index + 1, newCombo);
+                }
+            }
+            generateTypeCombos(0, {});
+        } else {
+            // No types selected
+            typeCombinations.push({});
+        }
+
+        // Now cross typeCombinations with colors
+        var finalVariants = [];
+        
+        // If no colors selected, treat as "no color" (single iteration)
+        var colorLoop = selectedColors.length > 0 ? selectedColors : [{id: null, name: ''}];
+
+        for (var i = 0; i < colorLoop.length; i++) {
+            var color = colorLoop[i];
+            for (var j = 0; j < typeCombinations.length; j++) {
+                var typeCombo = typeCombinations[j];
+                
+                // Skip if absolutely nothing selected (no color, no types)
+                if (color.id === null && Object.keys(typeCombo).length === 0) {
+                    continue;
+                }
+
+                var variantNameParts = [];
+                if (color.name) variantNameParts.push(color.name);
+                
+                var typeIds = [];
+                $.each(typeCombo, function(tId, tVal) {
+                    variantNameParts.push(tVal.name);
+                    typeIds.push(tVal.id); // Store value ID
+                });
+
+                finalVariants.push({
+                    name: variantNameParts.join(' / '),
+                    color_id: color.id,
+                    type_values: typeCombo // Map of typeId -> {id, name}
+                });
+            }
+        }
+
+        if (finalVariants.length === 0) {
+            variantsContainer.html('<p class="text-muted">Выберите цвета и типы товаров для генерации вариантов.</p>');
+            return;
+        }
+
+        // Render Table
+        var html = '<table class="table table-bordered table-striped">';
+        html += '<thead><tr><th>Вариант</th><th>Цена</th><th>Мелкий опт</th><th>Опт</th><th>Количество</th></tr></thead>';
+        html += '<tbody>';
+
+        for (var k = 0; k < finalVariants.length; k++) {
+            var v = finalVariants[k];
+            var idx = k; // Use index for form array
+            
+            html += '<tr>';
+            html += '<td style="vertical-align: middle;"><strong>' + v.name + '</strong>';
+            
+            // Hidden inputs for identification
+            if (v.color_id) {
+                html += '<input type="hidden" name="Product[variants][' + idx + '][color_id]" value="' + v.color_id + '">';
+            }
+            $.each(v.type_values, function(tId, tVal) {
+                html += '<input type="hidden" name="Product[variants][' + idx + '][types][' + tId + ']" value="' + tVal.id + '">';
+            });
+            
+            html += '</td>';
+            
+            // Price inputs
+            html += '<td><input type="number" step="0.01" name="Product[variants][' + idx + '][price]" class="form-control input-sm" placeholder="По умолчанию"></td>';
+            html += '<td><input type="number" step="0.01" name="Product[variants][' + idx + '][price_small]" class="form-control input-sm" placeholder="По умолчанию"></td>';
+            html += '<td><input type="number" step="0.01" name="Product[variants][' + idx + '][price_opt]" class="form-control input-sm" placeholder="По умолчанию"></td>';
+            html += '<td><input type="number" name="Product[variants][' + idx + '][amount]" class="form-control input-sm" placeholder="По умолчанию"></td>';
+            
+            html += '</tr>';
+        }
+
+        html += '</tbody></table>';
+        variantsContainer.html(html);
+    }
+
+    // Event listeners for generator
+    // Use 'body' delegation for dynamically added elements (like colors loaded via AJAX or product types)
+    $('body').on('change', 'input[name="Product[colors][]"]', function() {
+        console.log('Color changed');
+        updateVariantsTable();
+    });
+    $('body').on('change', '.product-type-checkbox', function() {
+        console.log('Product type changed');
+        
+        // Toggle active class for styling
+        if($(this).is(':checked')) {
+            $(this).closest('.product-type-item').addClass('checked');
+        } else {
+            $(this).closest('.product-type-item').removeClass('checked');
+        }
+
+        updateVariantsTable();
+    });
+
+    // Initial check (if editing or page reload with values)
+    setTimeout(function() {
+        updateVariantsTable();
+    }, 1000); // Small delay to ensure dynamic elements might be ready or to just run it once
 });

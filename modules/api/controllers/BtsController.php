@@ -2,13 +2,11 @@
 namespace app\modules\api\controllers;
 
 use Yii;
-use yii\web\Response;
 use yii\web\HttpException;
 use yii\rest\Controller;
 use yii\filters\auth\HttpBearerAuth;
 use yii\services\BTS;
 use app\models\product\Product;
-use app\models\stock\Stock;
 
 class BtsController extends Controller {
     
@@ -60,8 +58,8 @@ class BtsController extends Controller {
             ]
         ];
 
-        $behaviors['authenticator']['except'] = ['options'];
         $behaviors['authenticator'] = $auth;
+        $behaviors['authenticator']['except'] = ['options'];
         
         return $behaviors;
     }
@@ -72,13 +70,24 @@ class BtsController extends Controller {
     ];
 
     /**
-     * Calculate shipping price using BTS API
+     * Calculate shipping price using BTS API (order-calculate endpoint)
      * POST /api/bts/calculate
+     * 
+     * Required params:
+     * - product_id: Product ID
+     * - receiverCityCode: Receiver BTS city code (e.g. "0101")
+     * 
+     * Optional params:
+     * - amount: Quantity of products (default: 1)
+     * - pickup_type: 'courier', 'branch', 'self' (default: 'branch')
+     * - dropoff_type: 'courier', 'branch', 'self' (default: 'courier')
+     * - is_multiple_cost: 0 or 1 (default: 0)
      */
     public function actionCalculate() {
         $post = Yii::$app->request->post();
+
         // Validate required fields
-        $requiredFields = ['product_id', 'receiverCityId'];
+        $requiredFields = ['product_id', 'receiverCityCode'];
         foreach ($requiredFields as $field) {
             if (!isset($post[$field]) || $post[$field] === '') {
                 Yii::$app->response->statusCode = 422;
@@ -113,123 +122,104 @@ class BtsController extends Controller {
             return ['errors' => ['product_id' => ['У склада продукта не указан город для доставки']]];
         }
 
-        // Get sender city from product stock
-        $senderCityId = $product->stock->bts_city_id;
+        // Get sender city code from product stock (stored as BTS city code string, e.g. "0101")
+        $senderCityCode = (string)$product->stock->bts_city_id;
 
-        // Calculate total weight for the amount of products
-        $totalWeight = $product->weight && $product->weight > 0 
-            ? $product->weight * $amount 
-            : 2 * $amount; // Default 2kg per product if weight not specified
+        // Calculate total weight for the amount of products (in kg)
+        $unitWeight = $product->weight && $product->weight > 0 ? $product->weight : 1.0;
+        $totalWeight = $unitWeight * $amount;
+        $totalWeight = max(1.0, $totalWeight); // Minimum 1kg
 
-        // Calculate total volume from product dimensions (length × height × width) × amount
-        $volume = null;
-        $singleProductVolume = null;
-        if ($product->length && $product->height && $product->width) {
-            // Calculate single product volume (convert cm to meters)
-            $singleProductVolume = ($product->length / 100) * ($product->height / 100) * ($product->width / 100);
-            // Multiply by amount to get total volume
-            $volume = $singleProductVolume * $amount;
-        }
+        // Calculate total volume from product dimensions (in cm)
+        $unitLength = $product->length ?: 10;
+        $unitWidth = $product->width ?: 10;
+        $unitHeight = $product->height ?: 10;
 
-        // Set default date if not provided
-        $senderDate = isset($post['senderDate']) ? $post['senderDate'] : null;
-        
-        // Validate and set sender date
-        if (!$senderDate) {
-            // Default to tomorrow
-            $senderDate = date('Y-m-d', strtotime('+1 day'));
-        } else {
-            // Validate date format
-            $dateObj = \DateTime::createFromFormat('Y-m-d', $senderDate);
-            if (!$dateObj || $dateObj->format('Y-m-d') !== $senderDate) {
-                Yii::$app->response->statusCode = 422;
-                return ['errors' => ['senderDate' => ['Неверный формат даты. Используйте Y-m-d']]];
-            }
+        // Smart stacking: keep base dimensions (length x width), stack by height
+        $volumeX = max(10, (int)$unitLength);
+        $volumeY = max(10, (int)$unitWidth);
+        $volumeZ = max(10, (int)($unitHeight * $amount));
 
-            // Check if date is not too close (at least 1 day in future)
-            $minDate = new \DateTime('+1 day');
-            $providedDate = new \DateTime($senderDate);
-            
-            if ($providedDate < $minDate) {
-                Yii::$app->response->statusCode = 422;
-                return ['errors' => ['senderDate' => ['Дата отправки должна быть минимум завтра: ' . $minDate->format('Y-m-d')]]];
-            }
-
-            // Check if date is not too far (max 30 days in future)
-            $maxDate = new \DateTime('+30 days');
-            if ($providedDate > $maxDate) {
-                Yii::$app->response->statusCode = 422;
-                return ['errors' => ['senderDate' => ['Дата отправки не может быть позже чем: ' . $maxDate->format('Y-m-d')]]];
-            }
-        }
-
-        // Validate city IDs exist
-        $regions = BTS::getRegions();
-        $allCities = BTS::getCitiesDetailed();
-        
-        if (!isset($allCities[$senderCityId])) {
-            Yii::$app->response->statusCode = 422;
-            return ['errors' => ['product_id' => ['Неверный ID города склада продукта']]];
-        }
-        
-        if (!isset($allCities[$post['receiverCityId']])) {
-            Yii::$app->response->statusCode = 422;
-            return ['errors' => ['receiverCityId' => ['Неверный ID города получателя']]];
-        }
+        // Get delivery type options from request or use defaults
+        $pickupType = isset($post['pickup_type']) && in_array($post['pickup_type'], ['courier', 'branch', 'self'])
+            ? $post['pickup_type']
+            : 'branch';
+        $dropoffType = isset($post['dropoff_type']) && in_array($post['dropoff_type'], ['courier', 'branch', 'self'])
+            ? $post['dropoff_type']
+            : 'courier';
+        $isMultipleCost = isset($post['is_multiple_cost']) ? (int)$post['is_multiple_cost'] : 0;
 
         try {
-            // Prepare data for BTS API
             $calculationData = [
-                'senderCityId' => (int)$senderCityId,
-                'receiverCityId' => (int)$post['receiverCityId'],
+                'senderCityCode' => $senderCityCode,
+                'receiverCityCode' => (string)$post['receiverCityCode'],
+                'pickup_type' => $pickupType,
+                'dropoff_type' => $dropoffType,
+                'is_multiple_cost' => $isMultipleCost,
                 'weight' => (float)$totalWeight,
-                'volume' => $volume ? (int)$volume : null,
-                'senderDate' => $senderDate,
-                'senderDelivery' => 1,
-                'receiverDelivery' => 1
+                'volume' => [
+                    'x' => $volumeX,
+                    'y' => $volumeY,
+                    'z' => $volumeZ
+                ]
             ];
 
-            error_log('Calculation data123: ' . json_encode($calculationData));
-            // Call BTS API for calculation
             $btsService = new BTS();
-            $result = $btsService->calculateDelivery($calculationData);
-            error_log('Result2223: ' . json_encode($result));
-            if ($result && isset($result['data']['summaryPrice'])) {
+            $result = $btsService->calculateOrder($calculationData);
+
+            if ($result && $result['success'] && isset($result['data'])) {
+                $priceKey = $pickupType . '_to_' . $dropoffType;
+                $price = null;
+                $allPrices = [];
+
+                $priceKeys = ['branch_to_branch', 'branch_to_courier', 'courier_to_branch', 'courier_to_courier'];
+                foreach ($priceKeys as $key) {
+                    if (isset($result['data'][$key])) {
+                        $allPrices[$key] = $result['data'][$key];
+                        if ($key === $priceKey && isset($result['data'][$key]['price'])) {
+                            $price = $result['data'][$key]['price'];
+                        }
+                    }
+                }
+
+                if ($price === null && isset($result['data']['price'])) {
+                    $price = $result['data']['price'];
+                }
+
+                if ($price === null && !empty($allPrices)) {
+                    foreach ($allPrices as $priceData) {
+                        if (isset($priceData['available']) && $priceData['available'] && isset($priceData['price'])) {
+                            $price = $priceData['price'];
+                            break;
+                        }
+                    }
+                }
+
                 return [
                     'data' => [
-                        'summaryPrice' => $result['data']['summaryPrice'],
+                        'price' => $price,
+                        'price_key' => $priceKey,
+                        'all_prices' => $isMultipleCost ? $allPrices : null,
                         'currency' => 'UZS',
-                        'requestData' => $calculationData,
+                        'bts_response' => $result['data'],
                         'product' => [
                             'id' => $product->id,
                             'name' => $product->name_ru,
                             'amount' => $amount,
-                            'single_product' => [
-                                'weight' => $product->weight ?: 2, // Show actual or default weight
-                                'dimensions' => [
-                                    'length' => $product->length,
-                                    'height' => $product->height,
-                                    'width' => $product->width,
-                                    'volume' => $singleProductVolume
-                                ]
-                            ],
-                            'total_calculation' => [
-                                'weight' => $totalWeight,
-                                'volume' => $volume
-                            ],
                             'stock' => [
                                 'id' => $product->stock->id,
                                 'name' => $product->stock->name_ru,
-                                'city_id' => $product->stock->bts_city_id
+                                'city_code' => $senderCityCode
                             ]
                         ],
-                        'senderCity' => $allCities[$senderCityId]['name'],
-                        'receiverCity' => $allCities[$post['receiverCityId']]['name']
                     ]
                 ];
             } else {
                 Yii::$app->response->statusCode = 500;
-                return ['errors' => ['general' => ['Ошибка при расчете стоимости доставки']]];
+                return [
+                    'errors' => ['general' => ['Ошибка при расчете стоимости доставки']],
+                    'bts_response' => $result
+                ];
             }
 
         } catch (\Exception $e) {
@@ -240,32 +230,26 @@ class BtsController extends Controller {
     }
 
     /**
-     * Get all regions
+     * Get all regions from BTS API
      * GET /api/bts/regions
      */
     public function actionRegions() {
         try {
-            $language = Yii::$app->request->get('language', 'ru');
-            
-            if (!in_array($language, ['ru', 'uz', 'en'])) {
-                $language = 'ru';
+            $bts = new BTS();
+            $result = $bts->fetchRegions();
+
+            if ($result['success'] && isset($result['data']['items'])) {
+                return ['data' => $result['data']['items']];
             }
 
-            $regions = BTS::getRegions($language);
-            
+            // Fallback to hardcoded regions
+            $regions = BTS::getRegions('ru');
             $formattedRegions = [];
             foreach ($regions as $id => $name) {
-                $formattedRegions[] = [
-                    'id' => $id,
-                    'name' => $name,
-                    'name_ru' => BTS::getRegions('ru')[$id] ?? $name,
-                    'name_uz' => BTS::getRegions('uz')[$id] ?? $name,
-                    'name_en' => BTS::getRegions('en')[$id] ?? $name,
-                ];
+                $formattedRegions[] = ['code' => (string)$id, 'name' => $name];
             }
-
             return ['data' => $formattedRegions];
-            
+
         } catch (\Exception $e) {
             Yii::error('BTS regions error: ' . $e->getMessage(), __METHOD__);
             Yii::$app->response->statusCode = 500;
@@ -274,60 +258,31 @@ class BtsController extends Controller {
     }
 
     /**
-     * Get cities by region
-     * GET /api/bts/cities?regionId=X
+     * Get cities by region code from BTS API
+     * GET /api/bts/cities?regionCode=01
      */
     public function actionCities() {
         try {
-            $regionId = Yii::$app->request->get('regionId');
-            $language = Yii::$app->request->get('language', 'ru');
-            
-            if (!in_array($language, ['ru', 'uz', 'en'])) {
-                $language = 'ru';
+            $regionCode = Yii::$app->request->get('regionCode');
+
+            if (!$regionCode) {
+                Yii::$app->response->statusCode = 422;
+                return ['errors' => ['regionCode' => ['Код региона обязателен (например: 01, 10, 60)']]];
             }
 
-            if ($regionId) {
-                // Get cities for specific region
-                if (!is_numeric($regionId)) {
-                    Yii::$app->response->statusCode = 422;
-                    return ['errors' => ['regionId' => ['ID региона должен быть числом']]];
-                }
+            $bts = new BTS();
+            $result = $bts->fetchCities($regionCode);
 
-                $regions = BTS::getRegions();
-                if (!isset($regions[$regionId])) {
-                    Yii::$app->response->statusCode = 422;
-                    return ['errors' => ['regionId' => ['Неверный ID региона']]];
-                }
-
-                $cities = BTS::getCities($regionId, $language);
-                
-                $formattedCities = [];
-                foreach ($cities as $id => $city) {
-                    $formattedCities[] = [
-                        'id' => $id,
-                        'name' => BTS::getCityName($id, $language),
-                        'region_id' => $regionId
-                    ];
-                }
-
-                return ['data' => $formattedCities];
-                
-            } else {
-                // Get all cities
-                $allCities = BTS::getCitiesDetailed();
-                
-                $formattedCities = [];
-                foreach ($allCities as $id => $city) {
-                    $formattedCities[] = [
-                        'id' => $id,
-                        'name' => BTS::getCityName($id, $language),
-                        'region_id' => $city['region_id']
-                    ];
-                }
-
-                return ['data' => $formattedCities];
+            if ($result['success'] && isset($result['data']['items'])) {
+                return [
+                    'data' => $result['data']['items'],
+                    '_meta' => $result['data']['_meta'] ?? null,
+                ];
             }
-            
+
+            Yii::$app->response->statusCode = $result['httpCode'] ?? 500;
+            return ['errors' => ['general' => [$result['error'] ?? 'Ошибка при получении списка городов']]];
+
         } catch (\Exception $e) {
             Yii::error('BTS cities error: ' . $e->getMessage(), __METHOD__);
             Yii::$app->response->statusCode = 500;

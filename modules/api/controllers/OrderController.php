@@ -26,6 +26,7 @@ use yii\services\BTS;
 use yii\caching\FileCache;
 use yii\helpers\FileHelper;
 use yii\web\BadRequestHttpException;
+use app\services\WalletService;
 
 class OrderController extends Controller
 {
@@ -135,7 +136,7 @@ class OrderController extends Controller
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
-        $cart = UserCart::find()->with('cartFilter')->where(['user_id' => $user->id])->all();
+        $cart = UserCart::find()->with(['cartFilter', 'product'])->where(['user_id' => $user->id])->all();
         if (!$cart) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['cart' => 'Your cart is empty']];
@@ -144,6 +145,36 @@ class OrderController extends Controller
         $model = new Order;
         $model->load($post, '');
 
+        // Prevent direct promocode_id injection — must use code string
+        $model->promocode_id = null;
+        $model->discount_amount = null;
+
+        // Validate and resolve promocode from code string (non-blocking)
+        $promocodeWarning = null;
+        if (!empty($post['promocode'])) {
+            $promocode = \app\models\Promocode::findOne(['code' => $post['promocode']]);
+
+            if (!$promocode) {
+                $promocodeWarning = 'Promocode not accepted';
+            } else {
+                $cartTotal = 0;
+                foreach ($cart as $item) {
+                    if ($item->product) {
+                        $unitPrice = $item->product->getPriceByQuantity($item->amount);
+                        $cartTotal += $unitPrice * $item->amount;
+                    }
+                }
+
+                list($isValid, $error) = $promocode->checkValidity($user, $cartTotal, $cart);
+
+                if (!$isValid) {
+                    $promocodeWarning = $error ?: 'Promocode not accepted';
+                } else {
+                    $model->promocode_id = $promocode->id;
+                }
+            }
+        }
+
         if (!$model->validate()) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => $model->errors];
@@ -151,7 +182,7 @@ class OrderController extends Controller
 
         $saveResult = $model->saveObject($cart);
         if ($saveResult) {
-            $order = Order::find()->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image')->where(['id' => $model->id])->one();
+            $order = Order::find()->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image', 'shop')->where(['id' => $model->id])->one();
 
             // Auto-create Didox documents
             try {
@@ -161,8 +192,70 @@ class OrderController extends Controller
                 \app\models\Log::log('didox_order', "Auto-creation exception for Order #{$order->id}", $e->getMessage(), 'error');
             }
 
+            // Process wallet payment if payment_id matches wallet type
+            $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
+            if ($walletPaymentId && $order->payment_id == $walletPaymentId) {
+                $walletToken = $post['wallet_token'] ?? Yii::$app->params['walletDefaultToken'] ?? 'USDT';
+                $merchantId = $order->shop ? $order->shop->user_id : null;
+
+                if (!$merchantId) {
+                    $order->status_payment = 0;
+                    $order->save(false);
+                    Yii::$app->response->statusCode = 422;
+                    return ['errors' => ['wallet' => 'Shop owner not found for wallet payment']];
+                }
+
+                try {
+                    $walletService = new WalletService();
+                    $walletService->init();
+                    $result = $walletService->pay($user->id, $merchantId, (string)$order->price, $walletToken);
+
+                    // Payment succeeded — mark as paid and create transaction
+                    $order->status_payment = 1;
+                    $order->save(false);
+
+                    $transaction = new Transaction();
+                    $transaction->user_id = $user->id;
+                    $transaction->order_id = $order->id;
+                    $transaction->shop_id = $order->shop_id;
+                    $transaction->type_transaction = 'payment';
+                    $transaction->type_payment = 'wallet';
+                    $transaction->amount = $order->price;
+                    $transaction->status = 1;
+                    $transaction->save(false);
+                } catch (\Exception $e) {
+                    // Wallet payment failed — mark order as unpaid
+                    $order->status_payment = 0;
+                    $order->save(false);
+                    Yii::$app->response->statusCode = 422;
+                    return ['errors' => ['wallet' => 'Wallet payment failed: ' . $e->getMessage()], 'data' => $order];
+                }
+            }
+
             Yii::$app->response->statusCode = 200;
-            return ['data' => $order];
+            $response = ['data' => $order];
+
+            // Build promocode status for the response
+            if (!empty($post['promocode'])) {
+                if ($order->promocode_id && $order->discount_amount > 0) {
+                    $appliedPromo = $order->promocode;
+                    $response['promocode_status'] = [
+                        'applied' => true,
+                        'code' => $appliedPromo ? $appliedPromo->code : $post['promocode'],
+                        'discount_amount' => $order->discount_amount,
+                        'message' => 'Promocode applied successfully',
+                    ];
+                } else {
+                    // Promo was rejected either in controller or during saveObject re-validation
+                    $response['promocode_status'] = [
+                        'applied' => false,
+                        'code' => $post['promocode'],
+                        'discount_amount' => 0,
+                        'message' => $promocodeWarning ?: 'Promocode not accepted',
+                    ];
+                }
+            }
+            return $response;
         }
 
         // Check if there are validation errors (like minimum order violations)
@@ -578,6 +671,20 @@ class OrderController extends Controller
         return ['success' => true, 'data' => $response['data']];
     }
 
+    /**
+     * Calculate delivery cost using BTS order-calculate API
+     * POST /api/order/calculate
+     * 
+     * Required params:
+     * - product_id: Product ID
+     * 
+     * Optional params:
+     * - receiverCityId: Receiver BTS city ID (falls back to user profile bts_city_id)
+     * - amount: Quantity of products (default: 1)
+     * - pickup_type: 'courier', 'branch', 'self' (default: 'branch')
+     * - dropoff_type: 'courier', 'branch', 'self' (default: 'courier')
+     * - is_multiple_cost: 0 or 1 (default: 0)
+     */
     public function actionCalculate()
     {
         $post = Yii::$app->request->post();
@@ -601,6 +708,16 @@ class OrderController extends Controller
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['user' => 'User BTS city not set. Please update your location in profile or provide receiverCityId.']];
         }
+
+        // Validate and set amount (quantity)
+        $amount = 1;
+        if (isset($post['amount'])) {
+            if (!is_numeric($post['amount']) || $post['amount'] <= 0) {
+                Yii::$app->response->statusCode = 422;
+                return ['errors' => ['amount' => 'Amount must be a positive number']];
+            }
+            $amount = (int)$post['amount'];
+        }
         
         try {
             $product = \app\models\product\Product::find()
@@ -619,51 +736,166 @@ class OrderController extends Controller
                 Yii::$app->response->statusCode = 422;
                 return ['errors' => ['product' => 'Product location (BTS city) not configured. Please contact seller.']];
             }
+
+            // Calculate total weight for the amount of products (in kg)
+            $unitWeight = $product->weight && $product->weight > 0 ? (float)$product->weight : 1.0;
+            $totalWeight = $unitWeight * $amount;
+            $totalWeight = max(1.0, $totalWeight); // Minimum 1kg
+
+            // Calculate total volume from product dimensions (in cm³) × amount
+            $unitLength = $product->length ?: 10;
+            $unitWidth = $product->width ?: 10;
+            $unitHeight = $product->height ?: 10;
             
+            $singleProductVolumeCm3 = $unitLength * $unitWidth * $unitHeight;
+            $totalVolumeCm3 = $singleProductVolumeCm3 * $amount;
+            
+            // Smart stacking: keep base dimensions (length × width), stack by height
+            // This avoids inflating dimensions with a cube approximation
+            $volumeX = max(10, (int)$unitLength);
+            $volumeY = max(10, (int)$unitWidth);
+            $volumeZ = max(10, (int)($unitHeight * $amount)); // Stack products vertically
+
+            // Get delivery type options from request or use defaults
+            $pickupType = isset($post['pickup_type']) && in_array($post['pickup_type'], ['courier', 'branch', 'self']) 
+                ? $post['pickup_type'] 
+                : 'branch';
+            $dropoffType = isset($post['dropoff_type']) && in_array($post['dropoff_type'], ['courier', 'branch', 'self']) 
+                ? $post['dropoff_type'] 
+                : 'courier';
+            $isMultipleCost = isset($post['is_multiple_cost']) ? (int)$post['is_multiple_cost'] : 0;
+
+            // Prepare data for BTS order-calculate API
             $calculatorData = [
-                'senderCityId' => (int)$senderCityId,
-                'receiverCityId' => $receiverCityId,
-                'weight' => 4.0,
-                'senderDelivery' => 2,
-                'receiverDelivery' => 2,
+                'senderCityCode' => (string)$senderCityId,
+                'receiverCityCode' => (string)$receiverCityId,
+                'pickup_type' => $pickupType,
+                'dropoff_type' => $dropoffType,
+                'is_multiple_cost' => $isMultipleCost,
+                'weight' => (float)$totalWeight,
+                'volume' => [
+                    'x' => $volumeX,
+                    'y' => $volumeY,
+                    'z' => $volumeZ
+                ]
             ];
             
-            if (!empty($post['volume'])) {
-                $calculatorData['volume'] = (float)$post['volume'];
-            }
-            
-            if (!empty($post['senderDate'])) {
-                $calculatorData['senderDate'] = $post['senderDate'];
-            }
-            
-            if ($product->length && $product->width && $product->height) {
-                $calculatorData['volume'] = ($product->length * $product->width * $product->height) / 1000000;
-            }
-            
-            if ($product->weight && $product->weight > 4) {
-                $calculatorData['weight'] = (float)$product->weight;
-            }
-            
             $bts = new BTS;
-            $response = $bts->calculateDelivery($calculatorData);
+            $response = $bts->calculateOrder($calculatorData);
             
+            // TODO: Remove this mock fallback once BTS service is stable and reliable
+            $isMock = false;
             if (!$response['success']) {
-                Yii::$app->response->statusCode = $response['httpCode'] ?? 500;
-                return ['success' => false, 'error' => $response['error'] ?? 'BTS calculation failed', 'bts_response' => $response];
+                Yii::warning('BTS calculate failed, using mock response. Error: ' . ($response['error'] ?? 'unknown'), __METHOD__);
+                $isMock = true;
+
+                // Mock delivery prices based on weight and distance heuristic
+                $baseCost = 25000; // Base cost in UZS
+                $weightCost = $totalWeight * 5000; // 5000 UZS per kg
+                $courierSurcharge = 15000; // Extra for courier pickup/delivery
+
+                $branchPrice = (int)($baseCost + $weightCost);
+                $courierPickupPrice = (int)($branchPrice + $courierSurcharge);
+                $courierDeliveryPrice = (int)($branchPrice + $courierSurcharge);
+                $fullCourierPrice = (int)($branchPrice + $courierSurcharge * 2);
+
+                $response = [
+                    'success' => true,
+                    'httpCode' => 200,
+                    'data' => [
+                        'summaryPrice' => $branchPrice,
+                        'branch_to_branch' => [
+                            'price' => $branchPrice,
+                            'available' => true,
+                            'delivery_days' => '2-4',
+                        ],
+                        'branch_to_courier' => [
+                            'price' => $courierDeliveryPrice,
+                            'available' => true,
+                            'delivery_days' => '2-4',
+                        ],
+                        'courier_to_branch' => [
+                            'price' => $courierPickupPrice,
+                            'available' => true,
+                            'delivery_days' => '3-5',
+                        ],
+                        'courier_to_courier' => [
+                            'price' => $fullCourierPrice,
+                            'available' => true,
+                            'delivery_days' => '3-5',
+                        ],
+                    ],
+                    'error' => null,
+                ];
+            }
+            // END TODO: Remove mock fallback
+            
+            // Extract price based on pickup_type and dropoff_type combination
+            $priceKey = $pickupType . '_to_' . $dropoffType;
+            $price = null;
+            $allPrices = [];
+            
+            // Build all prices array and extract selected price
+            $priceKeys = ['branch_to_branch', 'branch_to_courier', 'courier_to_branch', 'courier_to_courier'];
+            foreach ($priceKeys as $key) {
+                if (isset($response['data'][$key])) {
+                    $allPrices[$key] = $response['data'][$key];
+                    if ($key === $priceKey && isset($response['data'][$key]['price'])) {
+                        $price = $response['data'][$key]['price'];
+                    }
+                }
+            }
+            
+            // Fallback: try direct price field
+            if ($price === null && isset($response['data']['price'])) {
+                $price = $response['data']['price'];
+            }
+            
+            // Fallback: get first available price
+            if ($price === null && !empty($allPrices)) {
+                foreach ($allPrices as $priceData) {
+                    if (isset($priceData['available']) && $priceData['available'] && isset($priceData['price'])) {
+                        $price = $priceData['price'];
+                        break;
+                    }
+                }
             }
             
             return [
                 'success' => true,
-                'data' => $response['data'],
+                'is_mock' => $isMock, // TODO: Remove this flag when BTS mock is removed
+                'data' => [
+                    'summaryPrice' => $branchPrice,
+                    'price' => $price,
+                    'price_key' => $priceKey,
+                    'all_prices' => $allPrices,
+                    'currency' => 'UZS',
+                    'bts_response' => $response['data']
+                ],
                 'calculation_info' => [
                     'product_id' => $product->id,
                     'product_name' => $product->name_ru ?: $product->name_en ?: $product->name_uz,
+                    'amount' => $amount,
                     'sender_city_id' => $senderCityId,
                     'receiver_city_id' => $receiverCityId,
-                    'weight' => $calculatorData['weight'],
-                    'volume' => $calculatorData['volume'] ?? null,
-                    'sender_delivery' => $calculatorData['senderDelivery'],
-                    'receiver_delivery' => $calculatorData['receiverDelivery'],
+                    'pickup_type' => $pickupType,
+                    'dropoff_type' => $dropoffType,
+                    'single_product' => [
+                        'weight' => $unitWeight,
+                        'length' => $unitLength,
+                        'width' => $unitWidth,
+                        'height' => $unitHeight,
+                        'volume_cm3' => $singleProductVolumeCm3
+                    ],
+                    'total_calculation' => [
+                        'weight' => $totalWeight,
+                        'volume_cm3' => $totalVolumeCm3,
+                        'packed_dimensions' => [
+                            'x' => $volumeX,
+                            'y' => $volumeY,
+                            'z' => $volumeZ
+                        ]
+                    ]
                 ]
             ];
             

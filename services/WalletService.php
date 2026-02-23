@@ -31,6 +31,7 @@ class WalletService extends Component
 
     /**
      * Resolve token symbol to address
+     * @deprecated No longer needed for payments — backend resolves symbols internally. Still used by mintToken().
      * @param string $token
      * @return string
      */
@@ -194,57 +195,30 @@ class WalletService extends Component
     }
 
     /**
-     * Transfer Token
-     * @param int $userId
-     * @param string $token Token address or symbol
-     * @param string $to Recipient address
-     * @param string $amount Amount
-     * @return array Response data
+     * @deprecated Transfer endpoint has been removed from the wallet backend. Use pay() instead.
      */
     public function transfer($userId, $token, $to, $amount)
     {
-        try {
-            $userLogin = $this->getUserLogin($userId);
-            
-            // Resolve token if it's a name
-            $tokenAddress = $this->resolveToken($token);
-
-            $response = $this->client->post('wallet/transfer', [
-                'json' => [
-                    'userId' => $userId,
-                    'userLogin' => $userLogin,
-                    'token' => $tokenAddress,
-                    'to' => $to,
-                    'amount' => (string)$amount
-                ]
-            ]);
-
-            return json_decode($response->getBody()->getContents(), true);
-        } catch (\Exception $e) {
-            Yii::error('Transfer Error: ' . $e->getMessage());
-            throw $e;
-        }
+        throw new Exception('Transfer functionality has been removed. Use /payment/* endpoints instead.');
     }
 
     /**
      * Execute Batch Payment
-     * @param string $aaWalletAddress
-     * @param string $token Token address
-     * @param string $amount Amount
-     * @param string $merchant Merchant address
-     * @param int $deadlineSeconds
+     * @param int $payerId Payer's user ID
+     * @param int $merchantId Merchant's user ID
+     * @param string $amount Payment amount
+     * @param string $symbol Token symbol (e.g. 'USDT', 'USDC')
      * @return array Response data
      */
-    public function pay($aaWalletAddress, $token, $amount, $merchant, $deadlineSeconds = 600)
+    public function pay($payerId, $merchantId, $amount, $symbol)
     {
         try {
             $response = $this->client->post('payment/execute-batch', [
                 'json' => [
-                    'aaWalletAddress' => $aaWalletAddress,
-                    'token' => $token,
+                    'payerId' => (int)$payerId,
+                    'merchantId' => (int)$merchantId,
                     'amount' => (string)$amount,
-                    'merchant' => $merchant,
-                    'deadlineSeconds' => $deadlineSeconds
+                    'symbol' => strtoupper($symbol),
                 ]
             ]);
 
@@ -252,6 +226,75 @@ class WalletService extends Component
         } catch (\Exception $e) {
             Yii::error('Payment Error: ' . $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * Approve a payment (pre-approval step)
+     * @param int $payerId
+     * @param int $merchantId
+     * @param string $amount
+     * @param string $symbol
+     * @return array Response data
+     */
+    public function approvePayment($payerId, $merchantId, $amount, $symbol)
+    {
+        try {
+            $response = $this->client->post('payment/approve', [
+                'json' => [
+                    'payerId' => (int)$payerId,
+                    'merchantId' => (int)$merchantId,
+                    'amount' => (string)$amount,
+                    'symbol' => strtoupper($symbol),
+                ]
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (\Exception $e) {
+            Yii::error('Payment Approve Error: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Build a payment batch (without executing)
+     * @param int $payerId
+     * @param int $merchantId
+     * @param string $amount
+     * @param string $symbol
+     * @return array Response data
+     */
+    public function buildBatch($payerId, $merchantId, $amount, $symbol)
+    {
+        try {
+            $response = $this->client->post('payment/build-batch', [
+                'json' => [
+                    'payerId' => (int)$payerId,
+                    'merchantId' => (int)$merchantId,
+                    'amount' => (string)$amount,
+                    'symbol' => strtoupper($symbol),
+                ]
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (\Exception $e) {
+            Yii::error('Build Batch Error: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Get list of supported tokens from the payment backend
+     * @return array
+     */
+    public function getSupportedTokens()
+    {
+        try {
+            $response = $this->client->get('payment/supported-tokens');
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (\Exception $e) {
+            Yii::error('Supported Tokens Error: ' . $e->getMessage());
+            return [];
         }
     }
 

@@ -209,13 +209,12 @@ class UserController extends Controller {
             throw new HttpException(404, 'Page not found');
         }
 
-        $aaWalletAddress = Yii::$app->request->post('aaWalletAddress');
-        $token = Yii::$app->request->post('token');
+        $merchantId = Yii::$app->request->post('merchantId');
         $amount = Yii::$app->request->post('amount');
-        $merchant = Yii::$app->request->post('merchant');
+        $symbol = Yii::$app->request->post('symbol');
 
         try {
-            $this->walletService->pay($aaWalletAddress, $token, $amount, $merchant);
+            $this->walletService->pay($id, $merchantId, $amount, $symbol);
             Yii::$app->session->setFlash('wallet_generated', 'Payment executed successfully');
         } catch (\Exception $e) {
             Yii::$app->session->setFlash('error', 'Failed to execute payment: ' . $e->getMessage());
@@ -225,25 +224,7 @@ class UserController extends Controller {
     }
 
     public function actionWalletTransfer($id) {
-        $model = User::findOne($id);
-        if (!$model) {
-            throw new HttpException(404, 'Page not found');
-        }
-
-        $to = Yii::$app->request->post('to');
-        $token = Yii::$app->request->post('token');
-        if ($token === 'custom') {
-            $token = Yii::$app->request->post('custom_token');
-        }
-        $amount = Yii::$app->request->post('amount');
-
-        try {
-            $this->walletService->transfer($id, $token, $to, $amount);
-            Yii::$app->session->setFlash('wallet_generated', 'Transfer executed successfully');
-        } catch (\Exception $e) {
-            Yii::$app->session->setFlash('error', 'Failed to execute transfer: ' . $e->getMessage());
-        }
-
+        Yii::$app->session->setFlash('error', 'Transfer functionality has been removed. Use payment instead.');
         return $this->redirect(['view', 'id' => $id]);
     }
 

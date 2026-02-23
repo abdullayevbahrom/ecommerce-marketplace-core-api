@@ -565,6 +565,20 @@ $this->params['breadcrumbs'][] = $this->title;
                 <?php }?>
             </div>
 
+            <!-- Variants Section -->
+            <div class="box box-primary">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        <i class="fa fa-list"></i> Варианты товара
+                    </h3>
+                </div>
+                <div class="box-body">
+                    <div id="variants-container">
+                        <p class="text-muted">Выберите цвета и типы товаров для генерации вариантов.</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Product Colors -->
             <?php if ($colors_object) {?>
                 <div class="box box-warning">

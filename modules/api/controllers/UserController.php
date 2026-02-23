@@ -289,8 +289,8 @@ class UserController extends Controller {
             return ['errors'=>$model->errors];
         }
 
-        $model->password = 1;
-        $model->role = User::ROLE_USER;
+        // $model->password = 1;
+        // $model->role = User::ROLE_USER;
         $model->status = 0;
 
         if ($model->save(false)) {
@@ -390,7 +390,7 @@ class UserController extends Controller {
         $model->scenario = User::USER_UPDATE;
 
         $model->setAttributes($post);
-        $model->password = 1;
+        // $model->password = 1;
         if (!$model->validate()) {
             return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Validation error', $model->errors);
         }

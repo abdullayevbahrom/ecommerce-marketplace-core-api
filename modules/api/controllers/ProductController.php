@@ -61,15 +61,16 @@ class ProductController extends Controller
         $boundsQuery = clone $query;
         $boundsQuery->orderBy(null);
         $boundsQuery->limit(null)->offset(null);
+        
+        // When query has groupBy, Yii2 wraps min/max in a subquery where table aliases are lost.
+        // Strip the alias prefix so the aggregate works on the subquery's bare column names.
+        $aggregateColumn = !empty($boundsQuery->groupBy) ? preg_replace('/^\w+\./', '', $column) : $column;
 
-        // We need to ensure we don't select everything, just the aggregates
-        // But if the query has with(), it might trigger extra queries or be slow?
-        // Cloning ActiveQuery keeps 'with', but 'min'/'max' usually ignores eager loading unless joinWith is used.
-        // If joinWith is used, we need it.
-
-        $min = $boundsQuery->min($column);
-        $max = $boundsQuery->max($column);
-
+        $min = $boundsQuery->min($aggregateColumn);
+        $boundsQuery2 = clone $query;
+        $boundsQuery2->orderBy(null)->limit(null)->offset(null);
+        $max = $boundsQuery2->max($aggregateColumn);
+        
         $this->minMaxPrices = [
             'min' => $min !== null ? (float)$min : 0,
             'max' => $max !== null ? (float)$max : 0
@@ -590,37 +591,23 @@ class ProductController extends Controller
             ])
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
             ->leftJoin('order_product op', 'op.product_id = p.id')
-            ->leftJoin('order o', 'op.order_id = o.id AND o.status IN (1,2,3)')
-            ->leftJoin('product_review pr', 'pr.product_id = p.id AND pr.status IN (1,3)')
+            ->leftJoin('`order` o', 'op.order_id = o.id AND o.status IN (1, 2, 3)')
+            ->leftJoin('product_review pr', 'pr.product_id = p.id AND pr.status IN (1, 3)')
             ->where(['p.status' => 1])
-            ->andWhere(['>=', 'p.views', 100])
-            ->groupBy('p.id')
-            ->having(['>=', 'orders_count', 30])
-            ->andHaving(['>=', 'good_reviews_count', 10])
-            ->andHaving(['>=', 'avg_rate', 4.5])
-            ->andHaving(['>=', 'reviews_count', 10]);
+            ->groupBy('p.id');
 
         if ($sort = Yii::$app->request->get('sort')) {
             switch ($sort) {
                 case 'rating':
-                    $query->orderBy([
-                        'avg_rate' => SORT_DESC,
-                        'p.views' => SORT_DESC
-                    ]);
+                    $query->orderBy(new \yii\db\Expression('COALESCE(AVG(pr.rate), 0) DESC, p.views DESC'));
                     break;
 
                 case 'popular':
-                    $query->orderBy([
-                        'p.views' => SORT_DESC,
-                        'avg_rate' => SORT_DESC
-                    ]);
+                    $query->orderBy(new \yii\db\Expression('p.views DESC, COALESCE(AVG(pr.rate), 0) DESC'));
                     break;
 
                 case 'orders':
-                    $query->orderBy([
-                        'orders_count' => SORT_DESC,
-                        'avg_rate' => SORT_DESC
-                    ]);
+                    $query->orderBy(new \yii\db\Expression('COUNT(DISTINCT o.id) DESC, COALESCE(AVG(pr.rate), 0) DESC'));
                     break;
 
                 case 'price_down':
@@ -632,16 +619,11 @@ class ProductController extends Controller
                     break;
 
                 default:
-                    $query->orderBy([
-                        'avg_rate' => SORT_DESC,
-                        'orders_count' => SORT_DESC
-                    ]);
+                    $query->orderBy(new \yii\db\Expression('COALESCE(AVG(pr.rate), 0) DESC, COUNT(DISTINCT o.id) DESC, p.views DESC'));
+                    break;
             }
         } else {
-            $query->orderBy([
-                'avg_rate' => SORT_DESC,
-                'orders_count' => SORT_DESC
-            ]);
+            $query->orderBy(new \yii\db\Expression('COALESCE(AVG(pr.rate), 0) DESC, COUNT(DISTINCT o.id) DESC, p.views DESC'));
         }
 
         if ($category_id = Yii::$app->request->get('category_id')) {
@@ -662,7 +644,7 @@ class ProductController extends Controller
         }
 
         // Price filtering with bounds calculation
-        $this->applyPriceFilterWithBounds($query, 'price');
+        $this->applyPriceFilterWithBounds($query, 'p.price');
 
         $perPage = Yii::$app->request->get('per-page', 12);
 
@@ -940,19 +922,28 @@ class ProductController extends Controller
         if ($filter = Yii::$app->request->get('filter')) {
             // Check if we should use OR logic instead of AND
             $filterLogic = Yii::$app->request->get('filter_logic', 'and'); // 'and' or 'or'
-
-            // For each filter, find products that have this filter_id (ignore values)
+            
             $productIds = [];
             $filterCount = 0;
 
             foreach ($filter as $filterId => $filterValue) {
                 $filterCount++;
 
-                // Find products that have this filter_id (ignore the value)
+                // Find products that have this filter with the specified value
                 $subQuery = ProductFilter::find()
                     ->select('product_id')
                     ->where(['filter_id' => $filterId]);
 
+                // Apply value matching (supports single value or array for checkboxes)
+                if (!empty($filterValue)) {
+                    $subQuery->andWhere(['or',
+                        ['id' => $filterValue],
+                        ['value_ru' => $filterValue],
+                        ['value_en' => $filterValue],
+                        ['value_uz' => $filterValue]
+                    ]);
+                }
+                
                 if ($filterCount === 1) {
                     $productIds = $subQuery->column();
                 } else {
@@ -1028,35 +1019,26 @@ class ProductController extends Controller
 
         if ($query) {
             UserActivity::trackSearch($query);
-            // Enhanced keyword search with OR conditions across multiple fields
-            // You might consider a dedicated full-text search engine (e.g., Elasticsearch, Sphinx)
-            // for very large datasets and advanced relevance scoring.
-            $searchTerms = explode(' ', $query); // Split query into individual terms
+            $searchTerms = explode(' ', $query);
 
-            $orConditions = ['or'];
+            $searchFields = [
+                'product.name_ru', 'product.name_uz', 'product.name_en',
+                'product.name_trans_ru', 'product.name_trans_en',
+                'product.description_ru', 'product.description_uz', 'product.description_en',
+                'product.composition_ru', 'product.composition_uz', 'product.composition_en',
+                'product.recommendation_ru', 'product.recommendation_uz', 'product.recommendation_en',
+            ];
+
+            // Each term must appear in at least one field (AND between terms, OR between fields)
             foreach ($searchTerms as $term) {
                 $term = trim($term);
                 if (empty($term)) continue;
 
-                // Using 'LIKE' for basic fuzzy matching
-                $orConditions[] = ['like', 'product.name_ru', $term];
-                $orConditions[] = ['like', 'product.name_uz', $term];
-                $orConditions[] = ['like', 'product.name_en', $term];
-                $orConditions[] = ['like', 'product.name_trans_ru', $term];
-                $orConditions[] = ['like', 'product.name_trans_en', $term];
-                $orConditions[] = ['like', 'product.description_ru', $term];
-                $orConditions[] = ['like', 'product.description_uz', $term];
-                $orConditions[] = ['like', 'product.description_en', $term];
-                $orConditions[] = ['like', 'product.composition_ru', $term];
-                $orConditions[] = ['like', 'product.composition_uz', $term];
-                $orConditions[] = ['like', 'product.composition_en', $term];
-                $orConditions[] = ['like', 'product.recommendation_ru', $term];
-                $orConditions[] = ['like', 'product.recommendation_uz', $term];
-                $orConditions[] = ['like', 'product.recommendation_en', $term];
-            }
-
-            if (count($orConditions) > 1) { // Ensure there are actual conditions besides 'or'
-                $products->andWhere($orConditions);
+                $termCondition = ['or'];
+                foreach ($searchFields as $field) {
+                    $termCondition[] = ['like', $field, $term];
+                }
+                $products->andWhere($termCondition);
             }
         }
 
@@ -1473,16 +1455,17 @@ class ProductController extends Controller
             'productProperties',
             'productColors',
             'productColors.color',
-            'color', // Load the main product's color
-            'productProductTypes', // Load product types relationships
-            'productProductTypes.productType', // Load the actual product type
-            'productProductTypes.productTypeValue', // Load the product type value
-            'products', // Load related products
-            'products.color', // Load color for related products  
-            'products.productProductTypes', // Load product types for related products
-            'products.productProductTypes.productType', // Load product type for related products
-            'products.productProductTypes.productTypeValue' // Load product type value for related products
-        ])->where(['id' => $id])->one();
+            'color',
+            'productProductTypes',
+            'productProductTypes.productType',
+            'productProductTypes.productTypeValue',
+            'products',
+            'products.image',
+            'products.color',
+            'products.productProductTypes',
+            'products.productProductTypes.productType',
+            'products.productProductTypes.productTypeValue'
+        ])->where(['id'=>$id])->one();
 
         if ($product === null) {
             throw new \yii\web\NotFoundHttpException('Товар не найден.');
