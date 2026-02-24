@@ -1126,6 +1126,14 @@ class Product extends \yii\db\ActiveRecord
             'isFavorite' => function () {
                 return $this->isFavorite();
             },
+            'cart_amount' => function () {
+                $user = Yii::$app->user->identity;
+                if ($user && !empty($user->id)) {
+                    $cart = \app\models\user\cart\UserCart::findOne(['product_id' => $this->id, 'user_id' => $user->id]);
+                    return $cart ? (int)$cart->amount : 0;
+                }
+                return 0;
+            },
             'status',
             'productProperties',
             'productColors',

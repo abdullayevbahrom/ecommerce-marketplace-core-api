@@ -288,14 +288,14 @@ class UserCart extends \yii\db\ActiveRecord
 
     public function fields() {
         return [
-            'amount', 
-            'delivery', 
-            'amount_left'=>function(){return $this->product->amount - $this->amount;}, 
+            'cart_amount' => 'amount',
+            'delivery',
+            'amount_left'=>function(){return $this->product->amount - $this->amount;},
             'price',
             'unit_price'=>function(){return $this->product->getPriceByQuantity($this->amount);},
             'delivery_cost',
             'total_with_delivery'=>function(){return $this->price + ($this->delivery_cost ?: 0);},
-            'product', 
+            'product',
             'productFilter'
         ];
     }
