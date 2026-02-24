@@ -1,4 +1,4 @@
-<?php 
+<?php
 
 namespace app\modules\api\controllers;
 
@@ -13,30 +13,116 @@ use yii\web\Response;
 
 class SessionController extends Controller
 {
-    public function behaviors()
-    {
-        return [
-            'authenticator' => [
-                'class' => WebSessionAuth::class,
-            ]
-        ];
-    }
+    // public function behaviors()
+    // {
+    //     return [
+    //         'authenticator' => [
+    //             'class' => WebSessionAuth::class,
+    //         ]
+    //     ];
+    // }
 
     public function actionSessions()
     {
         $user = Yii::$app->user->identity;
-    
+
         $sessions = WebSession::find()
             ->where([
                 'user_id' => $user->id,
                 'is_revoked' => 0
             ])
             ->all();
-    
+
         return [
             'success' => true,
             'sessions' => $sessions
         ];
+    }
+
+    public function actionWarehouse()
+    {
+        $user = Yii::$app->user->identity;
+
+        if (!$user) {
+            return ['success' => false, 'message' => 'Unauthorized'];
+        }
+
+        $payload = [
+            'yii_id' => (int)$user->id,
+            'phone' => (string)$user->phone,
+            'name' => trim($user->name . ' ' . $user->lastname . ' ' . $user->middlename),
+            'role' => (int)$user->role,
+            'is_active' => $user->status === User::STATUS_ACTIVE,
+        ];
+
+        $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
+        try {
+            /** @var \GuzzleHttp\Client $client */
+            $client = Yii::$app->httpClient;
+            $response = $client->post($warehouseApiUrl . '/api/shopLogin', ['json' => $payload]);
+
+            $status = $response->getStatusCode();
+            $body = (string)$response->getBody();
+            $data = json_decode($body, true);
+
+            if ($status >= 400) {
+                Yii::warning("Warehouse sync failed: HTTP {$status} Body: {$body}", __METHOD__);
+            }
+
+            return [
+                'success' => $status < 400,
+                'status' => $status,
+                'data' => $data ?? $body,
+            ];
+        } catch (\Throwable $e) {
+            Yii::error("Warehouse sync fatal: {$e->getMessage()}", __METHOD__);
+            Yii::$app->response->statusCode = 500;
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public function actionOperator()
+    {
+        $user = Yii::$app->user->identity;
+
+        if (!$user) {
+            return ['success' => false, 'message' => 'Unauthorized'];
+        }
+
+        $payload = [
+            'yii_id' => (int)$user->id,
+            'phone' => (string)$user->phone,
+            'name' => trim($user->name . ' ' . $user->lastname . ' ' . $user->middlename),
+            'role' => (int)$user->role,
+            'is_active' => $user->status === User::STATUS_ACTIVE,
+        ];
+
+        $operatorApiUrl = rtrim(Yii::$app->params['operatorApiUrl'], '/');
+        try {
+            /** @var \GuzzleHttp\Client $client */
+            $client = Yii::$app->httpClient;
+            $response = $client->post($operatorApiUrl . '/api/auth/shopLogin', ['json' => $payload]);
+
+            $status = $response->getStatusCode();
+            $body = (string)$response->getBody();
+            $data = json_decode($body, true);
+
+            if ($status >= 400) {
+                Yii::warning("Operator sync failed: HTTP {$status} Body: {$body}", __METHOD__);
+            }
+
+            return [
+                'success' => $status < 400,
+                'status' => $status,
+                'data' => $data ?? $body,
+            ];
+        } catch (\Throwable $e) {
+            Yii::error("Operator sync fatal: {$e->getMessage()}", __METHOD__);
+            Yii::$app->response->statusCode = 500;
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 
 
@@ -119,5 +205,4 @@ class SessionController extends Controller
 
         return ['success' => true];
     }
-
 }
