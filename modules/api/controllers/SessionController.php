@@ -2,11 +2,9 @@
 
 namespace app\modules\api\controllers;
 
-use app\components\WebSessionAuth;
 use app\models\session\WebSession;
 use app\models\user\User;
 use Yii;
-use yii\filters\ContentNegotiator;
 use yii\filters\VerbFilter;
 use yii\rest\Controller;
 use yii\web\HttpException;
