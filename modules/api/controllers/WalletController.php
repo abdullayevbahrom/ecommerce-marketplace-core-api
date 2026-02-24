@@ -145,51 +145,28 @@ class WalletController extends Controller
     /**
      * Execute Payment
      * POST /api/wallet/pay
+     * Accepts: merchantId (int), amount (string), symbol (string e.g. 'USDT')
+     * payerId is the authenticated user.
      */
     public function actionPay()
     {
-        $request = Yii::$app->request;
-        $aaWalletAddress = $request->post('aaWalletAddress');
-        $token = $request->post('token');
-        $amount = $request->post('amount');
-        $merchant = $request->post('merchant');
 
-        if (!$aaWalletAddress || !$token || !$amount || !$merchant) {
-            return ['error' => 'Missing required parameters'];
-        }
-
-        try {
-            $result = $this->walletService->pay($aaWalletAddress, $token, $amount, $merchant);
-            return $result;
-        } catch (\Exception $e) {
-            return ['error' => $e->getMessage()];
-        }
-    }
-
-    /**
-     * Transfer Tokens (P2P)
-     * POST /api/wallet/transfer
-     * Accepts 'token' as address or symbol (USDT, USDC)
-     */
-    public function actionTransfer()
-    {
-        $id = Yii::$app->user->id;
-        if (!$id) {
+        $payerId = Yii::$app->user->id;
+        if (!$payerId) {
             return ['error' => 'User not found'];
         }
 
         $request = Yii::$app->request;
-        $token = $request->post('token');
-        $to = $request->post('to');
+        $merchantId = $request->post('merchantId');
         $amount = $request->post('amount');
+        $symbol = $request->post('symbol');
 
-        if (!$token || !$to || !$amount) {
-            return ['error' => 'Missing required parameters'];
+        if (!$merchantId || !$amount || !$symbol) {
+            return ['error' => 'Missing required parameters: merchantId, amount, symbol'];
         }
 
         try {
-            // Service handles token resolution (symbol -> address)
-            $result = $this->walletService->transfer($id, $token, $to, $amount);
+            $result = $this->walletService->pay($payerId, $merchantId, $amount, $symbol);
             return $result;
         } catch (\Exception $e) {
             return ['error' => $e->getMessage()];
@@ -197,12 +174,92 @@ class WalletController extends Controller
     }
 
     /**
-     * Transfer Tokens by Name (Explicit Endpoint)
+     * @deprecated Transfer endpoint has been removed from the wallet backend. Use /payment/* instead.
+     * POST /api/wallet/transfer
+     */
+    public function actionTransfer()
+    {
+        Yii::$app->response->statusCode = 410;
+        return ['error' => 'Transfer functionality is no longer available. Use /payment/* endpoints instead.'];
+    }
+
+    /**
+     * @deprecated Transfer endpoint has been removed from the wallet backend.
      * POST /api/wallet/transfer-by-name
      */
     public function actionTransferByName()
     {
-        return $this->actionTransfer();
+        Yii::$app->response->statusCode = 410;
+        return ['error' => 'Transfer functionality is no longer available. Use /payment/* endpoints instead.'];
+    }
+
+    /**
+     * Approve Payment (pre-approval step)
+     * POST /api/wallet/approve-payment
+     */
+    public function actionApprovePayment()
+    {
+        $payerId = Yii::$app->user->id;
+        if (!$payerId) {
+            return ['error' => 'User not found'];
+        }
+
+        $request = Yii::$app->request;
+        $merchantId = $request->post('merchantId');
+        $amount = $request->post('amount');
+        $symbol = $request->post('symbol');
+
+        if (!$merchantId || !$amount || !$symbol) {
+            return ['error' => 'Missing required parameters: merchantId, amount, symbol'];
+        }
+
+        try {
+            $result = $this->walletService->approvePayment($payerId, $merchantId, $amount, $symbol);
+            return $result;
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Build payment batch (preview, no execution)
+     * POST /api/wallet/build-batch
+     */
+    public function actionBuildBatch()
+    {
+        $payerId = Yii::$app->user->id;
+        if (!$payerId) {
+            return ['error' => 'User not found'];
+        }
+
+        $request = Yii::$app->request;
+        $merchantId = $request->post('merchantId');
+        $amount = $request->post('amount');
+        $symbol = $request->post('symbol');
+
+        if (!$merchantId || !$amount || !$symbol) {
+            return ['error' => 'Missing required parameters: merchantId, amount, symbol'];
+        }
+
+        try {
+            $result = $this->walletService->buildBatch($payerId, $merchantId, $amount, $symbol);
+            return $result;
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Get supported tokens
+     * GET /api/wallet/supported-tokens
+     */
+    public function actionSupportedTokens()
+    {
+        try {
+            return $this->walletService->getSupportedTokens();
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+        }
     }
 
     /**

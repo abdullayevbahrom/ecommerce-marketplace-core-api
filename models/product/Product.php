@@ -8,6 +8,7 @@ use yii\helpers\ArrayHelper;
 
 use app\models\user\User;
 use app\models\user\favorite\UserFavorite;
+use app\models\user\cart\UserCart;
 use app\models\product\review\ProductReview;
 use app\models\product\ProductProperty;
 use app\models\product\ProductFilter;
@@ -302,8 +303,7 @@ class Product extends \yii\db\ActiveRecord
         return $this->sub_category_id;
     }
 
-    public function saveObject($dashboard = false, $color = null, $token_key = null, $category_tree = null, $product_types = null)
-    {
+    public function saveObject($dashboard = false, $color = null, $token_key = null, $category_tree = null, $product_types = null, $price_data = null) {
         // Create new product instance when we have variants (color or product_types)
         if ($color || $product_types) {
             $product = new Product;
@@ -347,6 +347,25 @@ class Product extends \yii\db\ActiveRecord
             // Generate token_key for linking variants if not set
             $product->token_key = $this->token_key ?: Yii::$app->security->generateRandomString();
         }
+
+        // Apply specific prices if provided
+        if ($price_data) {
+            if (!empty($price_data['price'])) {
+                $product->price = $price_data['price'];
+            }
+            if (!empty($price_data['price_small'])) {
+                $product->price_small = $price_data['price_small'];
+            }
+            if (!empty($price_data['price_opt'])) {
+                $product->price_opt = $price_data['price_opt'];
+            }
+            if (isset($price_data['amount']) && $price_data['amount'] !== '') {
+                $product->amount = $price_data['amount'];
+                // Update qty as well if needed, though model uses amount
+                $product->qty = $price_data['amount'];
+            }
+        }
+
         /** @var User|null $user */
         $user = Yii::$app->user->identity;
         $product->user_id = $product->user_id ? $product->user_id : ($user ? $user->id : null);
@@ -1012,8 +1031,141 @@ class Product extends \yii\db\ActiveRecord
         return $data;
     }
 
-    public function fields()
+    /**
+     * Get comprehensive variant data for the product detail page.
+     * Returns colors, grouped types, and a product lookup table
+     * so the frontend can build a proper variant selector.
+     * 
+     * @param string $language Current language code (ru, en, uz)
+     * @return array|null Variant data or null if no variants exist
+     */
+    public function getVariantsData($language = 'ru')
     {
+        if (!$this->token_key) {
+            return null;
+        }
+
+        // Use eager-loaded products relation + current product
+        $relatedProducts = $this->products ?: [];
+        $allVariants = array_merge([$this], $relatedProducts);
+
+        // Build current product's type selections for is_selected comparison
+        $currentTypeSelections = [];
+        if ($this->productProductTypes) {
+            foreach ($this->productProductTypes as $ppt) {
+                if ($ppt->product_type_value_id) {
+                    $currentTypeSelections[$ppt->product_type_id] = $ppt->product_type_value_id;
+                }
+            }
+        }
+
+        $colorVariants = [];
+        $seenColors = [];
+        $typeGroups = [];
+        $variantProducts = [];
+
+        foreach ($allVariants as $variant) {
+            // Skip inactive products (except current)
+            if ($variant->id != $this->id && $variant->status != 1) {
+                continue;
+            }
+
+            // Collect unique color variants
+            if ($variant->color_id && $variant->color && !isset($seenColors[$variant->color_id])) {
+                $seenColors[$variant->color_id] = true;
+                $colorVariants[] = [
+                    'id' => $variant->color->id,
+                    'name' => $variant->color->{'name_' . $language} ?: $variant->color->name_ru,
+                    'color' => $variant->color->color,
+                    'product_id' => $variant->id,
+                    'is_selected' => ($variant->color_id == $this->color_id),
+                    'photo' => $variant->getPhoto()
+                ];
+            }
+
+            // Collect type values grouped by product_type_id
+            $variantTypeSelections = [];
+            if ($variant->productProductTypes) {
+                foreach ($variant->productProductTypes as $ppt) {
+                    if ($ppt->productType) {
+                        $typeId = $ppt->product_type_id;
+
+                        // Initialize type group if first encounter
+                        if (!isset($typeGroups[$typeId])) {
+                            $typeGroups[$typeId] = [
+                                'id' => $typeId,
+                                'name' => $ppt->productType->{'name_' . $language} ?: $ppt->productType->name_ru,
+                                'type' => $ppt->productType->type,
+                                'values' => []
+                            ];
+                        }
+
+                        $typeName = $ppt->productType->{'name_' . $language} ?: $ppt->productType->name_ru;
+
+                        if ($ppt->productTypeValue) {
+                            $valueId = $ppt->product_type_value_id;
+                            $displayValue = $ppt->productTypeValue->{'value_' . $language} ?: $ppt->productTypeValue->value_ru;
+
+                            // Add unique values to the type group
+                            $valueExists = false;
+                            foreach ($typeGroups[$typeId]['values'] as $v) {
+                                if ($v['id'] == $valueId) {
+                                    $valueExists = true;
+                                    break;
+                                }
+                            }
+
+                            if (!$valueExists) {
+                                $typeGroups[$typeId]['values'][] = [
+                                    'id' => $valueId,
+                                    'display_value' => $displayValue,
+                                    'is_selected' => (isset($currentTypeSelections[$typeId]) && $currentTypeSelections[$typeId] == $valueId)
+                                ];
+                            }
+
+                            $variantTypeSelections[] = [
+                                'type_id' => $typeId,
+                                'type_name' => $typeName,
+                                'value_id' => $valueId,
+                                'display_value' => $displayValue,
+                            ];
+                        } elseif ($ppt->custom_value) {
+                            $variantTypeSelections[] = [
+                                'type_id' => $typeId,
+                                'type_name' => $typeName,
+                                'value_id' => null,
+                                'display_value' => $ppt->custom_value,
+                            ];
+                        }
+                    }
+                }
+            }
+
+            // Build variant product entry for the lookup table
+            $variantProducts[] = [
+                'product_id' => $variant->id,
+                'color_id' => $variant->color_id,
+                'types' => $variantTypeSelections,
+                'price' => (float)$variant->price,
+                'price_small' => $variant->price_small ? (float)$variant->price_small : null,
+                'price_opt' => $variant->price_opt ? (float)$variant->price_opt : null,
+                'qty_small_wholesale' => $variant->qty_small_wholesale ? (int)$variant->qty_small_wholesale : null,
+                'qty_big_wholesale' => $variant->qty_big_wholesale ? (int)$variant->qty_big_wholesale : null,
+                'min_order' => $variant->min_order ? (int)$variant->min_order : null,
+                'amount' => $variant->amount !== null ? (int)$variant->amount : null,
+                'photo' => $variant->getPhoto(),
+                'is_current' => ($variant->id == $this->id)
+            ];
+        }
+
+        return [
+            'colors' => $colorVariants,
+            'types' => array_values($typeGroups),
+            'products' => $variantProducts
+        ];
+    }
+
+    public function fields() {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
@@ -1129,55 +1281,28 @@ class Product extends \yii\db\ActiveRecord
             'status',
             'productProperties',
             'productColors',
-            'productTypes' => function () {
+            'productTypes' => function() use($language) {
                 $productTypesData = [];
-
-                // Get current product's productTypes
+                
                 if ($this->productProductTypes) {
                     foreach ($this->productProductTypes as $productProductType) {
-                        if ($productProductType->productType && $productProductType->productTypeValue) {
-                            $productTypesData[] = [
-                                'product_id' => $this->id,
-                                'id' => $productProductType->productTypeValue->id,
-                                'name' => $productProductType->productType->name_ru,
-                                'display_value' => $productProductType->productTypeValue->value_ru,
-                                'color' => $this->color ? $this->color->color : null
-                            ];
-                        }
-                    }
-                }
-
-                // Get product variants with same color and same token_key (same product, same color, different types)
-                if ($this->token_key && $this->color_id) {
-                    $relatedProducts = Product::find()
-                        ->with([
-                            'color',
-                            'productProductTypes',
-                            'productProductTypes.productType',
-                            'productProductTypes.productTypeValue'
-                        ])
-                        ->where([
-                            'token_key' => $this->token_key,
-                            'color_id' => $this->color_id, // Same color as current product
-                            'status' => 1 // Only active products
-                        ])
-                        ->andWhere(['!=', 'id', $this->id]) // Exclude current product
-                        ->limit(20) // Increased limit for product variants
-                        ->all();
-
-                    foreach ($relatedProducts as $relatedProduct) {
-                        if ($relatedProduct->productProductTypes) {
-                            foreach ($relatedProduct->productProductTypes as $productProductType) {
-                                if ($productProductType->productType && $productProductType->productTypeValue) {
-                                    $productTypesData[] = [
-                                        'product_id' => $relatedProduct->id,
-                                        'id' => $productProductType->productTypeValue->id,
-                                        'name' => $productProductType->productType->name_ru,
-                                        'display_value' => $productProductType->productTypeValue->value_ru,
-                                        'color' => $relatedProduct->color ? $relatedProduct->color->color : null
-                                    ];
-                                }
+                        if ($productProductType->productType) {
+                            $valueId = null;
+                            $displayValue = null;
+                            
+                            if ($productProductType->productTypeValue) {
+                                $valueId = $productProductType->product_type_value_id;
+                                $displayValue = $productProductType->productTypeValue->{'value_' . $language} ?: $productProductType->productTypeValue->value_ru;
+                            } elseif ($productProductType->custom_value) {
+                                $displayValue = $productProductType->custom_value;
                             }
+                            
+                            $productTypesData[] = [
+                                'type_id' => $productProductType->product_type_id,
+                                'type_name' => $productProductType->productType->{'name_' . $language} ?: $productProductType->productType->name_ru,
+                                'value_id' => $valueId,
+                                'display_value' => $displayValue,
+                            ];
                         }
                     }
                 }
@@ -1199,32 +1324,24 @@ class Product extends \yii\db\ActiveRecord
 
         if (($controller == 'product') && in_array($action, $exception)) {
             $detail = [
-                'description' => function () use ($language) {
-                    return $this->{'description_' . $language} ? strip_tags(html_entity_decode(htmlspecialchars_decode($this->{'description_' . $language}))) : $this->description_ru;
+                'description' => function() use($language) { return $this->{'description_'.$language} ? strip_tags(html_entity_decode(htmlspecialchars_decode($this->{'description_'.$language}))) : $this->description_ru;},
+                'description_ru' => function() {return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_ru)));},
+                'description_en' => function() {return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_en)));},
+                'description_uz' => function() {return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_uz)));},
+                'filters' => function() {return $this->getFilter();},
+                'reviews' => function() {return $this->productReviews;},
+                'reviews_count' => function() {return count($this->productReviews);},
+                'review_separate' => function() {return $this->getCountRating();},
+                'products' => function() {return $this->getOtherProducts();},
+                'variants' => function() use($language) {
+                    return $this->getVariantsData($language);
                 },
-                'description_ru' => function () {
-                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_ru)));
-                },
-                'description_en' => function () {
-                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_en)));
-                },
-                'description_uz' => function () {
-                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_uz)));
-                },
-                'filters' => function () {
-                    return $this->getFilter();
-                },
-                'reviews' => function () {
-                    return $this->productReviews;
-                },
-                'reviews_count' => function () {
-                    return count($this->productReviews);
-                },
-                'review_separate' => function () {
-                    return $this->getCountRating();
-                },
-                'products' => function () {
-                    return $this->getOtherProducts();
+                'cart_amount' => function() {
+                    if (Yii::$app->user->isGuest) {
+                        return 0;
+                    }
+                    $cartItem = UserCart::findOne(['user_id' => Yii::$app->user->id, 'product_id' => $this->id]);
+                    return $cartItem ? (int)$cartItem->amount : 0;
                 },
                 'shop'
             ];

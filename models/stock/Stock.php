@@ -53,7 +53,8 @@ class Stock extends \yii\db\ActiveRecord
     {
         return [
             [['name_ru'], 'required', 'message' => 'Заполните поле'],
-            [['shop_id', 'status', 'sort', 'bts_region_id', 'bts_city_id'], 'integer'],
+            [['shop_id', 'status', 'sort'], 'integer'],
+            [['bts_region_id', 'bts_city_id'], 'string', 'max' => 10],
             [['description_ru', 'description_en', 'description_uz', 'address'], 'string'],
             [['date'], 'safe'],
             [['name_ru', 'name_en', 'name_uz'], 'string', 'max' => 255],

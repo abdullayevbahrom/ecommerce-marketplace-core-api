@@ -20,8 +20,8 @@ $config = [
 
     // BTS delivery service integration settings
     'bts_token' => 'sample_logistics_token', // Your current BTS token
-    'bts_username' => '8888', // Add your BTS username for token generation
-    'bts_password' => '7132', // Add your BTS password for token generation  
+    'bts_username' => '8198', // Add your BTS username for token generation
+    'bts_password' => '4?Fp&e-Icz', // Add your BTS password for token generation  
     'bts_inn' => '123456789', // Add your company INN for BTS authentication
 
     // MinIO settings
@@ -52,11 +52,17 @@ $config = [
         'client_secret' => '', // Set your MyID Client Secret
         'redirect_uri' => 'http://shop.test/api/myid/callback', // Your callback URL
         'sandbox' => true, // Set to false for production
-        'base_url' => 'https://identity.example.com', // Production URL (used if sandbox is false)
+        'base_url' => 'https://identity.example.com', // API base URL (sandbox: https://devidentity.example.com)
+        'web_url' => 'https://web.identity.example.com', // WebSDK URL for user verification page
     ],
 
     // Wallet Configuration
     'walletServiceUrl' => 'https://wallet.example.com', // External Wallet Service URL
+    'walletPaymentId' => 2, // Category ID for wallet payment type (set after inserting into `category` table)
+    // INSERT INTO `category` (`parent_id`, `type`, `name_ru`, `name_uz`, `name_en`, `status`, `sort`, `date`) VALUES (0, 'payment', 'Кошелёк', 'Hamyon', 'Wallet', 1, 0, NOW());
+
+    'walletDefaultToken' => 'USDT', // Default token symbol for wallet payments
+
 ];
 
 if (YII_ENV_DEV) {

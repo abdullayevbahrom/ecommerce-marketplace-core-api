@@ -71,7 +71,8 @@ class Order extends \yii\db\ActiveRecord
         return [
             [['address', 'delivery_id'], 'required', 'message' => 'Заполните поле'],
             [['user_id', 'payment_id', 'delivery_id', 'shop_id', 'logist_id', 'tariff_id', 'receiver', 'status', 'status_payment', 'status_logist', 'status_delivery', 'status_review', 'promocode_id'], 'integer'],
-            [['price', 'amount', 'delivery_cost', 'bts_region_id', 'bts_city_id', 'discount_amount'], 'number'],
+            [['price', 'amount', 'delivery_cost', 'discount_amount'], 'number'],
+            [['bts_region_id', 'bts_city_id'], 'string', 'max' => 10],
             [['phone', 'address', 'comment', 'inn', 'account', 'bank_id'], 'string'],
             [['date'], 'safe'],
             [['name', 'lastname', 'email'], 'string', 'max' => 255],
@@ -165,6 +166,11 @@ class Order extends \yii\db\ActiveRecord
             $warehouseOrderItems = []; // Initialize the warehouse items array
     
             foreach ($cart as $product) {
+                if (!$product->product) {
+                    // Cart item references a deleted product — remove it and skip
+                    $product->delete();
+                    continue;
+                }
                 $order_product = new OrderProduct;
                 $shop_id = $product->product->shop_id;
     
@@ -279,32 +285,13 @@ class Order extends \yii\db\ActiveRecord
                 // Calculate total product price
                 $productsTotal = $price;
                 
-                // Apply Promocode if exists
+                // Apply Promocode discount (already validated in controller before saveObject)
                 $discount = 0;
                 if ($order->promocode_id) {
                     $promocode = \app\models\Promocode::findOne($order->promocode_id);
                     if ($promocode) {
-                        // Re-validate to ensure it's still valid at the moment of purchase
-                        // We need to pass cart items for category/product validation
-                        // Since cart is deleted, we use the order products we just created
-                        // However, checkValidity expects cart items structure usually, but we can adapt or just check basic validity here
-                        // For simplicity and robustness, we check basic validity + min order amount
-                        
-                        list($isValid, $error) = $promocode->checkValidity($user, $productsTotal);
-                        
-                        if ($isValid) {
-                            $discount = $promocode->calculateDiscount($productsTotal);
-                            $order->discount_amount = $discount;
-                            
-                            // Increment usage counts
-                            // Note: We don't increment here because it's calculated on the fly based on existing orders in checkValidity
-                            // But if we had a counter column, we would increment it.
-                            // Since checkValidity counts rows in `order` table, saving this order with promocode_id is enough.
-                        } else {
-                            // If invalid (e.g. expired just now), remove it
-                            $order->promocode_id = null;
-                            $order->discount_amount = 0;
-                        }
+                        $discount = $promocode->calculateDiscount($productsTotal);
+                        $order->discount_amount = $discount;
                     }
                 }
 
@@ -413,61 +400,53 @@ class Order extends \yii\db\ActiveRecord
     {
         $shop = $stock->shop;
         
+        // BTS API v1 uses nested objects: sender, receiver, cargo
         $data = [
-            "senderDelivery" => 1, // 1-Вызов курьера, 0-самовывоз в офис BTS.
-            "senderCityId" => $stock->bts_city_id,
-            "senderAddress" => $stock->address,
-            "senderReal" => $shop->name_ru,
-            "senderPhone" => $shop->contact_phone,
-            "weight" => max(1, $totalWeight / 1000), // Convert to kg
-            "packageId" => 4, // вид упаковки. Виды упаковок
-            "postTypeId" => 22, // тип доставки. Типы доставки
-            "receiverDelivery" => 1, // 1-Если курьер доставит, 0- если получатель сам забирает с офиса BTS.
-            "receiver" => $orderInfo->lastname . ' ' . $orderInfo->name,
-            "receiverCityId" => $orderInfo->bts_city_id ?? $user->bts_city_id,
-            "receiverAddress" => $orderInfo->address ?? $user->address,
-            "volume" => max(1, $totalVolume / 1000000), // Convert to cubic meters
-            "urgent" => 0,
-            "takePhoto" => 1, // 1 - требуется фото получателя, 0 - необизаятелно. поумолчание 0.
-            "senderSign" => null, // подпись отправителя
-            "receiverSign" => null, // подпись получателя
-            "piece" => count($orderProducts), // количество мест (number of products)
+            "pickup_type" => "courier", // courier=вызов курьера, self=самовывоз в офис BTS
+            "dropoff_type" => "courier", // courier=курьер доставит, branch=получатель забирает с офиса BTS
+            "sender" => [
+                "name" => $shop->name_ru,
+                "phone" => $shop->contact_phone,
+                "address" => $stock->address,
+                "city_code" => (string)$stock->bts_city_id, // BTS city code (e.g. "0101")
+            ],
+            "receiver" => [
+                "name" => trim($orderInfo->lastname . ' ' . $orderInfo->name),
+                "phone" => $orderInfo->phone ? $orderInfo->phone : $user->phone,
+                "address" => $orderInfo->address ?? $user->address,
+                "city_code" => (string)($orderInfo->bts_city_id ?? $user->bts_city_id), // BTS city code
+            ],
+            "cargo" => [
+                "weight" => max(1, $totalWeight / 1000), // Convert to kg
+                "volume" => max(1, $totalVolume / 1000000), // Convert to cubic meters
+                "piece" => count($orderProducts), // количество мест (number of products)
+                "packageId" => 4, // вид упаковки
+                "postTypeId" => 22, // тип доставки
+            ],
+            "takePhoto" => 1, // 1 - требуется фото получателя
             "is_test" => 1, // 1 - тестовый заказ, 0 - реальный заказ
-            "senderDate" => date('Y-m-d', strtotime($orderInfo->date)), // дата отправки
-            "receiverDate" => date('Y-m-d', strtotime('+1 day', strtotime($orderInfo->date))), // дата получения
-            "receiverPhone" => $orderInfo->phone ? $orderInfo->phone : $user->phone, // телефон получателя
-            "receiverPhone1" => null
         ];
 
         $bts = new BTS();
 
-        // Validate order data before sending to BTS
-        $validationErrors = $bts->validateOrderData($data);
-        if (!empty($validationErrors)) {
-            Yii::error('BTS order validation failed: ' . json_encode($validationErrors), __METHOD__);
-            // Continue with order creation even if BTS validation fails
-        }
-        
         $response = $bts->createOrder($data);
 
         if ($response['success'] && isset($response['data']['orderId'])) {
             $btsData = $response['data'];
             $btsId = $btsData['orderId'];
-            $btsStatus = $btsData['status']['id'] ?? null;
+            $btsStatus = $btsData['status']['code'] ?? null;
             $btsStatusInfo = $btsData['status']['info'] ?? null;
             $btsPrice = $btsData['cost'] ?? null;
-            
+
             // Distribute BTS cost among order products (evenly)
             $pricePerProduct = $btsPrice ? $btsPrice / count($orderProducts) : 0;
-            
+
             // Update all order products in this group with BTS information
             foreach ($orderProducts as $orderProduct) {
                 $orderProduct->bts_id = $btsId;
                 $orderProduct->bts_status = $btsStatus;
                 $orderProduct->bts_status_info = $btsStatusInfo;
-                // devide price per product by count of order products
-                // ToDo::similarly to delivery_cost
-                $orderProduct->bts_price = $pricePerProduct / count($orderProducts);
+                $orderProduct->bts_price = $pricePerProduct;
                 $orderProduct->delivery_cost = $orderProduct->bts_price;
                 $orderProduct->price = $orderProduct->price + $orderProduct->bts_price;
                 $orderProduct->save(false);

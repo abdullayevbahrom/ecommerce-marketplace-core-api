@@ -240,16 +240,15 @@ class Promocode extends ActiveRecord
 
     public function getTitle()
     {
-        $lang = Yii::$app->language; // e.g., 'ru', 'en', 'uz'
-        // Fallback to 'ru' if current language field is empty
+        $lang = substr(Yii::$app->language, 0, 2); // 'en-US' → 'en'
         $field = 'title_' . $lang;
-        return $this->$field ?: $this->title_ru;
+        return $this->hasAttribute($field) ? ($this->$field ?: $this->title_ru) : $this->title_ru;
     }
 
     public function getDescription()
     {
-        $lang = Yii::$app->language;
+        $lang = substr(Yii::$app->language, 0, 2);
         $field = 'description_' . $lang;
-        return $this->$field ?: $this->description_ru;
+        return $this->hasAttribute($field) ? ($this->$field ?: $this->description_ru) : $this->description_ru;
     }
 }

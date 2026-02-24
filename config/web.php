@@ -183,6 +183,15 @@ $config = [
 
                 'POST api/warehouse/ticket/close-from-warehouse' => 'api/warehouse-ticket/close-from-warehouse',
 
+                // MyID verification endpoints
+                'POST api/myid/init-web' => 'api/myid/init-web',
+                'POST api/myid/callback' => 'api/myid/callback',
+                'POST api/myid/verify' => 'api/myid/verify',
+                'POST api/myid/register' => 'api/myid/register',
+                'GET api/myid/status' => 'api/myid/status',
+                'GET api/myid/sdk-config' => 'api/myid/sdk-config',
+                'GET api/myid/session-result' => 'api/myid/session-result',
+
                 // Wallet API
                 'GET api/wallet/balance' => 'api/wallet/balance',
                 'POST api/wallet/deploy' => 'api/wallet/deploy',

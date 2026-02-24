@@ -158,27 +158,68 @@ class ProductController extends Controller {
                 // Generate a shared token_key for all variants
                 $shared_token_key = $model->token_key ?: Yii::$app->security->generateRandomString();
                 
-                // Create mode: Handle product type variations
-                if ($model->product_types) {
-                    $type_combinations = $this->generateTypeCombinations($model->product_types);
-                    
-                    foreach ($type_combinations as $combination) {
-                        if ($model->colors) {
-                            foreach ($model->colors as $color) {
-                                $product = $model->saveObject(false, $color, $shared_token_key, null, $combination);
-                            }
-                        } else {
-                            $product = $model->saveObject(false, null, $shared_token_key, null, $combination);
-                        }
+                // Get explicit variants from request (new logic)
+                $post = Yii::$app->request->post();
+                $variants = isset($post['Product']['variants']) ? $post['Product']['variants'] : [];
+
+                if (!empty($variants)) {
+                    // New logic: Iterate through explicitly defined variants
+                    foreach ($variants as $variant) {
+                        $color = isset($variant['color_id']) && $variant['color_id'] !== '' ? $variant['color_id'] : null;
+                        $types = isset($variant['types']) ? $variant['types'] : [];
+                        
+                        $price_data = [
+                            'price' => isset($variant['price']) ? $variant['price'] : null,
+                            'price_small' => isset($variant['price_small']) ? $variant['price_small'] : null,
+                            'price_opt' => isset($variant['price_opt']) ? $variant['price_opt'] : null,
+                            'amount' => isset($variant['amount']) ? $variant['amount'] : null,
+                        ];
+
+                        // saveObject expects product_types as [type_id => value_id] or [type_id => [value_id]]
+                        // Our $types is [type_id => value_id]
+                        // We need to pass it correctly. saveObject handles it.
+                        
+                        $product = $model->saveObject(false, $color, $shared_token_key, null, $types, $price_data);
                     }
                 } else {
-                    // Original color handling for create
-                    if ($model->colors) {
-                        foreach ($model->colors as $color) {
-                            $product = $model->saveObject(false, $color, $shared_token_key);
+                    // Fallback to old logic (if no variants generated or JS disabled/failed)
+                    
+                    // Get product type prices from request
+                    $product_type_prices = isset($post['Product']['product_type_prices']) ? $post['Product']['product_type_prices'] : [];
+                    
+                    // Create mode: Handle product type variations
+                    if ($model->product_types) {
+                        $type_combinations = $this->generateTypeCombinations($model->product_types);
+                        
+                        foreach ($type_combinations as $combination) {
+                            // Determine price overrides for this combination
+                            $price_data = null;
+                            foreach ($combination as $type_id => $value_id) {
+                                if (isset($product_type_prices[$value_id])) {
+                                    $p_data = $product_type_prices[$value_id];
+                                    if (!empty($p_data['price']) || !empty($p_data['price_small']) || !empty($p_data['price_opt'])) {
+                                        $price_data = $p_data;
+                                    }
+                                }
+                            }
+
+                            if ($model->colors) {
+                                foreach ($model->colors as $color) {
+                                    $product = $model->saveObject(false, $color, $shared_token_key, null, $combination, $price_data);
+                                }
+                            } else {
+                                $product = $model->saveObject(false, null, $shared_token_key, null, $combination, $price_data);
+                            }
                         }
                     } else {
-                        $product = $model->saveObject(false);
+                        // Original color handling for create
+                        if ($model->colors) {
+                            foreach ($model->colors as $color) {
+                                $product = $model->saveObject(false, $color, $shared_token_key);
+                            }
+                        } else {
+                            $product = $model->saveObject(false);
+                        }
                     }
                 }
             } else {
