@@ -10,20 +10,20 @@ $minioBucket = getenv('MINIO_BUCKET') ?: 'uploads';
 $minioRegion = getenv('MINIO_REGION') ?: 'us-east-1';
 $minioSecure = getenv('MINIO_SECURE') ?: true;
 
-return [
+$config = [
     'adminEmail' => 'admin@example.com',
     'senderEmail' => 'noreply@example.com',
     'senderName' => 'Example.com mailer',
-    
+
     // Didox E-IMZO integration settings
     'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MzAyLCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQUlOIFRSQURJTkcgSE9MRElOR1wiIE1DSEoiLCJyb2xlIjoiUEFSVE5FUiIsInRpbiI6IjMwNzg2NTA1OCIsImlhdCI6MTc1MTM0NTA3MywiZXhwIjo0OTA3MTA1MDczfQ.ELZ0nE7sVmYmu2V7TFQAqg68Ut_qCl5Zmehw9cpMAZs', // Add your Didox partner token here
-    
+
     // BTS delivery service integration settings
     'bts_token' => 'sample_logistics_token', // Your current BTS token
     'bts_username' => '8198', // Add your BTS username for token generation
     'bts_password' => '4?Fp&e-Icz', // Add your BTS password for token generation  
     'bts_inn' => '123456789', // Add your company INN for BTS authentication
-    
+
     // MinIO settings
     'minio' => [
         'user' => $minioUser,
@@ -37,11 +37,12 @@ return [
         'secure' => $minioSecure
     ],
     // Base URL
-    'baseUrl' => 'http://localhost:8080',//'http://shop.test',
+    'baseUrl' => 'https://api.example.com',
+    'operatorApiUrl' => 'https://api.operator.example.com', // Default operator API URL
+    'warehouseApiUrl' => 'https://api.warehouse.example.com', // Default warehouse API URL
     'apiSecretKey' => '123',
     'warehouseSyncEnabled' => false,
-    'warehouseApiUrl' => 'http://localhost:8000', // Default warehouse API URL
-    
+
     // Sklad uses X-Api-Token: md5(branch_id + apiSecretKey) for authentication
     // Same apiSecretKey is used for both Order sync and Product submissions
 
@@ -63,3 +64,11 @@ return [
     'walletDefaultToken' => 'USDT', // Default token symbol for wallet payments
 
 ];
+
+if (YII_ENV_DEV) {
+    $config['baseUrl'] = 'http://localhost:8001';
+    $config['warehouseApiUrl'] = 'http://localhost:8002';
+    $config['operatorApiUrl'] = 'http://localhost:8003';
+}
+
+return $config;

@@ -94,6 +94,16 @@ $config = [
                 ],
             ],
         ],
+        'httpClient' => [
+            'class' => \GuzzleHttp\Client::class,
+            'timeout' => 20,
+            'connect_timeout' => 10,
+            'verify' => YII_ENV_DEV ? false : true,
+            'headers' => [
+                'Accept' => 'application/json',
+            ],
+            'http_errors' => false,
+        ],
         'db' => $db,
         'urlManager' => [
             'enablePrettyUrl' => true,
