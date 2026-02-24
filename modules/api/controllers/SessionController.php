@@ -107,6 +107,7 @@ class SessionController extends Controller
         ];
 
         $operatorApiUrl = rtrim(Yii::$app->params['operatorApiUrl'], '/');
+
         try {
             /** @var \GuzzleHttp\Client $client */
             $client = Yii::$app->httpClient;
@@ -114,7 +115,7 @@ class SessionController extends Controller
 
             $status = $response->getStatusCode();
             $body = (string)$response->getBody();
-            $data = json_decode($body, true);
+            $res = json_decode($body, true);
 
             if ($status >= 400) {
                 Yii::warning("Operator sync failed: HTTP {$status} Body: {$body}", __METHOD__);
@@ -123,7 +124,7 @@ class SessionController extends Controller
             return [
                 'success' => $status < 400,
                 'status' => $status,
-                'data' => $data ?? $body,
+                'data' => $res ?? $body,
             ];
         } catch (\Throwable $e) {
             Yii::error("Operator sync fatal: {$e->getMessage()}", __METHOD__);
