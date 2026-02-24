@@ -13,14 +13,20 @@ use yii\web\Response;
 
 class SessionController extends Controller
 {
-    // public function behaviors()
-    // {
-    //     return [
-    //         'authenticator' => [
-    //             'class' => WebSessionAuth::class,
-    //         ]
-    //     ];
-    // }
+    public function behaviors()
+    {
+        $behaviors = parent::behaviors();
+
+        $behaviors['verbs'] = [
+            'class' => VerbFilter::class,
+            'actions' => [
+                'warehouse' => ['POST'],
+                'operator' => ['POST'],
+            ],
+        ];
+
+        return $behaviors;
+    }
 
     public function actionSessions()
     {
