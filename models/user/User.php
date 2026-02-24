@@ -43,6 +43,7 @@ class User extends ActiveRecord implements IdentityInterface {
     const ROLE_USER = 3;
     const ROLE_SHOP = 4;
     const ROLE_LOGIST = 5;
+    const ROLE_OPERATOR = 6;
 
     const PHOTO_PATH = 'uploads/user/';
     const PHOTO_DEFAULT = '/assets_files/images/user.png';
