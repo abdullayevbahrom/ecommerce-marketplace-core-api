@@ -102,6 +102,7 @@ class SessionController extends Controller
             'phone' => (string)$user->phone,
             'name' => trim($user->name . ' ' . $user->lastname . ' ' . $user->middlename),
             'role' => (int)$user->role,
+            'email' => (string)$user->email,
             'is_active' => $user->status === User::STATUS_ACTIVE,
         ];
 
