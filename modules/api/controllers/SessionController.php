@@ -25,6 +25,9 @@ class SessionController extends Controller
                 'operator' => ['POST'],
             ],
         ];
+        $behaviors['authenticator'] = [
+            'class' => \yii\filters\auth\HttpBearerAuth::class,
+        ];
 
         return $behaviors;
     }
