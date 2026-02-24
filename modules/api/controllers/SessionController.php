@@ -2,25 +2,33 @@
 
 namespace app\modules\api\controllers;
 
-use app\components\WebSessionAuth;
 use app\models\session\WebSession;
 use app\models\user\User;
 use Yii;
-use yii\filters\ContentNegotiator;
+use yii\filters\VerbFilter;
 use yii\rest\Controller;
 use yii\web\HttpException;
 use yii\web\Response;
 
 class SessionController extends Controller
 {
-    // public function behaviors()
-    // {
-    //     return [
-    //         'authenticator' => [
-    //             'class' => WebSessionAuth::class,
-    //         ]
-    //     ];
-    // }
+    public function behaviors()
+    {
+        $behaviors = parent::behaviors();
+
+        $behaviors['verbs'] = [
+            'class' => VerbFilter::class,
+            'actions' => [
+                'warehouse' => ['POST'],
+                'operator' => ['POST'],
+            ],
+        ];
+        $behaviors['authenticator'] = [
+            'class' => \yii\filters\auth\HttpBearerAuth::class,
+        ];
+
+        return $behaviors;
+    }
 
     public function actionSessions()
     {
@@ -95,10 +103,12 @@ class SessionController extends Controller
             'phone' => (string)$user->phone,
             'name' => trim($user->name . ' ' . $user->lastname . ' ' . $user->middlename),
             'role' => (int)$user->role,
+            'email' => (string)$user->email,
             'is_active' => $user->status === User::STATUS_ACTIVE,
         ];
 
         $operatorApiUrl = rtrim(Yii::$app->params['operatorApiUrl'], '/');
+
         try {
             /** @var \GuzzleHttp\Client $client */
             $client = Yii::$app->httpClient;
@@ -106,7 +116,7 @@ class SessionController extends Controller
 
             $status = $response->getStatusCode();
             $body = (string)$response->getBody();
-            $data = json_decode($body, true);
+            $res = json_decode($body, true);
 
             if ($status >= 400) {
                 Yii::warning("Operator sync failed: HTTP {$status} Body: {$body}", __METHOD__);
@@ -115,7 +125,7 @@ class SessionController extends Controller
             return [
                 'success' => $status < 400,
                 'status' => $status,
-                'data' => $data ?? $body,
+                'data' => $res ?? $body,
             ];
         } catch (\Throwable $e) {
             Yii::error("Operator sync fatal: {$e->getMessage()}", __METHOD__);

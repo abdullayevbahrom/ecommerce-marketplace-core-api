@@ -2,7 +2,7 @@ name: Deploy
 on:
   push:
     branches:
-      - allayar-v2
+      - master
 jobs:
   deploy:
     name: Deploy
