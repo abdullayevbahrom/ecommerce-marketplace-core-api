@@ -6,7 +6,7 @@ $db = require __DIR__ . '/db.php';
 $config = [
     'id' => 'basic-console',
     'basePath' => dirname(__DIR__),
-    'bootstrap' => ['log'],
+    'bootstrap' => ['log', 'queue'],
     'controllerNamespace' => 'app\commands',
     'aliases' => [
         '@bower' => '@vendor/bower-asset',
@@ -18,23 +18,66 @@ $config = [
             'class' => 'yii\caching\FileCache',
         ],
         'log' => [
+            'traceLevel' => YII_DEBUG ? 3 : 0,
             'targets' => [
+                // [
+                //     'class' => 'yii\log\FileTarget',
+                //     'levels' => ['error', 'warning'],
+                // ],
                 [
                     'class' => 'yii\log\FileTarget',
-                    'levels' => ['error', 'warning'],
+                    'levels' => ['error', 'warning', 'info'],
+                    'logFile' => 'php://stderr',
+                    'enableRotation' => false,
+                    'exportInterval' => 1,
+                    'logVars' => [],
                 ],
             ],
+        ],
+        'httpClient' => [
+            'class' => \GuzzleHttp\Client::class,
+            '__construct()' => [
+                [
+                    'timeout' => 20,
+                    'connect_timeout' => 10,
+                    'verify' => YII_ENV_DEV ? false : true,
+                    'headers' => [
+                        'Accept' => 'application/json',
+                    ],
+                    'http_errors' => false,
+                ]
+            ],
+        ],
+        'elasticsearch' => [
+            'class' => 'yii\elasticsearch\Connection',
+            'nodes' => [
+                ['http_address' => 'elasticsearch:9200'],
+            ],
+        ],
+        'redis' => [
+            'class' => 'yii\redis\Connection',
+            'hostname' => 'redis',
+            'port' => 6379,
+            'database' => 0,
+        ],
+        'queue' => [
+            'class' => 'yii\queue\redis\Queue',
+            'redis' => 'redis',
+            'channel' => 'es-index',
+            'as log' => 'yii\queue\LogBehavior',
+            'attempts' => 5,
+            'ttr' => 60,
         ],
         'db' => $db,
     ],
     'params' => $params,
-    /*
+
     'controllerMap' => [
-        'fixture' => [ // Fixture generation command line.
-            'class' => 'yii\faker\FixtureController',
-        ],
+        // 'fixture' => [ // Fixture generation command line.
+        //     'class' => 'yii\faker\FixtureController',
+        // ],
     ],
-    */
+
 ];
 
 

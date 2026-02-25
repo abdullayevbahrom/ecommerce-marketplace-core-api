@@ -8,8 +8,11 @@ use yii\web\HttpException;
 use yii\web\UploadedFile;
 use yii\rest\Controller;
 use yii\data\ActiveDataProvider;
-use yii\filters\auth\HttpBearerAuth;
+use yii\data\ArrayDataProvider;
 use yii\helpers\ArrayHelper;
+use yii\helpers\Json;
+use yii\helpers\Url;
+use yii\filters\auth\HttpBearerAuth;
 
 use app\models\Images;
 use app\models\Category;
@@ -32,6 +35,7 @@ use Jenssegers\ImageHash\Implementations\DifferenceHash;
 use Jenssegers\ImageHash\Hash;
 use app\modules\api\components\ErrorCodes;
 use app\modules\api\components\ApiResponseTrait;
+
 
 class ProductController extends Controller
 {
@@ -61,7 +65,7 @@ class ProductController extends Controller
         $boundsQuery = clone $query;
         $boundsQuery->orderBy(null);
         $boundsQuery->limit(null)->offset(null);
-        
+
         // When query has groupBy, Yii2 wraps min/max in a subquery where table aliases are lost.
         // Strip the alias prefix so the aggregate works on the subquery's bare column names.
         $aggregateColumn = !empty($boundsQuery->groupBy) ? preg_replace('/^\w+\./', '', $column) : $column;
@@ -70,7 +74,7 @@ class ProductController extends Controller
         $boundsQuery2 = clone $query;
         $boundsQuery2->orderBy(null)->limit(null)->offset(null);
         $max = $boundsQuery2->max($aggregateColumn);
-        
+
         $this->minMaxPrices = [
             'min' => $min !== null ? (float)$min : 0,
             'max' => $max !== null ? (float)$max : 0
@@ -468,7 +472,10 @@ class ProductController extends Controller
     // general product methods
     public function actionIndex()
     {
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->orderBy('id desc');
+        $query = Product::find()
+            ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
+            ->where(['status' => 1])
+            ->orderBy('id desc');
 
         if ($sort = Yii::$app->request->get('sort')) {
             if (($sort == 'new') || ($sort == 'recently')) {
@@ -576,6 +583,264 @@ class ProductController extends Controller
         ]);
 
         return $dataProvider;
+    }
+
+    protected function applyEsPriceFilterWithBoundsEs(array &$filters, array $must, string $field = 'price'): void
+    {
+        $boundsBody = [
+            'size' => 0,
+            'query' => [
+                'bool' => [
+                    'must' => $must ?: [['match_all' => (object)[]]],
+                    'filter' => $filters,
+                ],
+            ],
+            'aggs' => [
+                'min_price' => ['min' => ['field' => $field]],
+                'max_price' => ['max' => ['field' => $field]],
+            ],
+        ];
+
+        $boundsRes = \Yii::$app->elasticsearch->post(
+            'products/_search',
+            [],
+            Json::encode($boundsBody)
+        );
+
+        $min = (float)($boundsRes['aggregations']['min_price']['value'] ?? 0);
+        $max = (float)($boundsRes['aggregations']['max_price']['value'] ?? 0);
+
+        $this->minMaxPrices = ['min' => $min, 'max' => $max];
+
+        $req = \Yii::$app->request;
+        $priceMin = $req->get('price_min');
+        $priceMax = $req->get('price_max');
+
+        if ($priceMin !== null || $priceMax !== null) {
+            $range = [];
+            if ($priceMin !== null) $range['gte'] = (float)$priceMin;
+            if ($priceMax !== null) $range['lte'] = (float)$priceMax;
+            $filters[] = ['range' => [$field => $range]];
+        }
+    }
+
+    private function buildOneNestedFilterClause(int $filterId, $filterValue): array
+    {
+        if (is_numeric($filterValue)) {
+            return [
+                'nested' => [
+                    'path' => 'filters',
+                    'query' => [
+                        'bool' => [
+                            'must' => [
+                                ['term' => ['filters.filter_id' => $filterId]],
+                                ['term' => ['filters.pf_id' => (int)$filterValue]],
+                            ],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
+        $v = trim((string)$filterValue);
+
+        return [
+            'nested' => [
+                'path' => 'filters',
+                'query' => [
+                    'bool' => [
+                        'must' => [
+                            ['term' => ['filters.filter_id' => $filterId]],
+                        ],
+                        'should' => [
+                            ['term' => ['filters.value_ru' => $v]],
+                            ['term' => ['filters.value_en' => $v]],
+                            ['term' => ['filters.value_uz' => $v]],
+                        ],
+                        'minimum_should_match' => 1,
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    public function actionIndexEs()
+    {
+        $req = \Yii::$app->request;
+        $q = trim((string)$req->get('q', ''));
+        $sort = (string)$req->get('sort', 'new');
+        $categoryId = $req->get('category_id');
+        $brandId = $req->get('brand_id');
+        $shopId = $req->get('shop_id');
+        $tagId = $req->get('tag_id');
+        $perPage = (int)($req->get('per-page', 12));
+        $page = max(1, (int)$req->get('page', 1));
+        $filter = $req->get('filter');
+        $filterLogic = $req->get('filter_logic', 'and');
+
+        $perPage = max(1, min(50, $perPage));
+        $from = ($page - 1) * $perPage;
+
+        $must = [];
+        if ($q !== '') {
+            $must[] = [
+                'multi_match' => [
+                    'query' => $q,
+                    'fields' => [
+                        'search_name^5',
+                        'name_uz^4',
+                        'name_ru^4',
+                        'name_en^4',
+                        'search_desc',
+                        'sku^10',
+                        'barcode^10',
+                    ],
+                    'type' => 'best_fields',
+                    'fuzziness' => 'AUTO',
+                ]
+            ];
+        }
+        $filters = [];
+        $filters[] = ['term' => ['status' => 1]];
+        $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
+        if ($brandId) $filters[] = ['term' => ['brand_id' => (int)$brandId]];
+        if ($shopId)  $filters[] = ['term' => ['shop_id' => (int)$shopId]];
+        if ($tagId)  $filters[] = ['term' => ['tag_id' => (int)$tagId]];
+
+        if ($categoryId) {
+            $catIds = [(int)$categoryId];
+
+            $subcats = Category::find()->select('id')->where(['parent_id' => (int)$categoryId])->column();
+            foreach ($subcats as $sid) $catIds[] = (int)$sid;
+
+            $filters[] = ['terms' => ['category_id' => array_values(array_unique($catIds))]];
+        }
+
+        $esSort = [];
+        if ($sort === 'price_down') $esSort[] = ['price' => 'desc'];
+        elseif ($sort === 'price_up') $esSort[] = ['price' => 'asc'];
+        elseif ($sort === 'popular') $esSort[] = ['views' => 'desc'];
+        else $esSort[] = ['id' => 'desc'];
+
+        $nestedClauses = [];
+
+        if (\is_array($filter)) {
+            foreach ($filter as $filterId => $filterValue) {
+                $nestedClauses[] = $this->buildOneNestedFilterClause((int)$filterId, $filterValue);
+            }
+        }
+
+        if ($nestedClauses) {
+            if ($filterLogic === 'or') {
+                $filters[] = [
+                    'bool' => [
+                        'should' => $nestedClauses,
+                        'minimum_should_match' => 1,
+                    ],
+                ];
+            } else {
+                foreach ($nestedClauses as $c) {
+                    $filters[] = $c;
+                }
+            }
+        }
+
+        $this->applyEsPriceFilterWithBoundsEs($filters, $must, 'price');
+
+
+        $body = [
+            '_source' => ['id'],
+            'from' => $from,
+            'size' => $perPage,
+            'query' => [
+                'bool' => [
+                    'must' => $must ?: [['match_all' => (object)[]]],
+                    'filter' => $filters,
+                ],
+            ],
+            'sort' => $esSort,
+        ];
+
+        $esRes = \Yii::$app->elasticsearch->post('products/_search', [], Json::encode($body));
+
+        $hits = $esRes['hits']['hits'] ?? [];
+        $total = $esRes['hits']['total']['value'] ?? 0;
+
+
+        $ids = [];
+        foreach ($hits as $h) {
+            if (!empty($h['_source']['id'])) $ids[] = (int)$h['_source']['id'];
+        }
+
+        if (!$ids) {
+            return new ArrayDataProvider([
+                'allModels' => [],
+                'totalCount' => 0,
+                'pagination' => [
+                    'pageSize' => $perPage,
+                    'page' => $page - 1,
+                ],
+            ]);
+        }
+
+        $models = Product::find()
+            ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
+            ->where(['id' => $ids, 'status' => 1])
+            ->andWhere(['deleted_at' => null])
+            ->indexBy('id')
+            ->all();
+
+        $ordered = [];
+        foreach ($ids as $id) {
+            if (isset($models[$id])) $ordered[] = $models[$id];
+        }
+
+        $pageCount = $perPage > 0 ? (int)ceil($total / $perPage) : 0;
+
+        $params = $req->getQueryParams();
+        $params['per-page'] = $perPage;
+
+        $buildUrl = function (int $p) use ($req, $params) {
+            $params['page'] = $p;
+
+            return Url::toRoute(array_merge(['/api/product/index-es'], $params), true);
+        };
+
+        $data = array_map(function ($m) {
+            return $m->toArray([], [
+                'image',
+                'category',
+                'gallery',
+                'productFilters',
+                'productColors',
+                'productColors.color',
+            ]);
+        }, $ordered);
+
+        return [
+            'data' => $data,
+            '_links' => [
+                'self'  => ['href' => $buildUrl($page)],
+                'first' => ['href' => $buildUrl(1)],
+                'last'  => ['href' => $buildUrl(max(1, $pageCount))],
+                'prev'  => $page > 1 ? ['href' => $buildUrl($page - 1)] : null,
+                'next'  => $page < $pageCount ? ['href' => $buildUrl($page + 1)] : null,
+            ],
+            '_meta' => [
+                'totalCount' => (int)$total,
+                'pageCount' => (int)$pageCount,
+                'currentPage' => (int)$page,
+                'perPage' => (int)$perPage,
+                'bounds' => [
+                    'min' => (float)($this->minMaxPrices['min'] ?? 0),
+                    'max' => (float)($this->minMaxPrices['max'] ?? 0),
+                ],
+                'selected' => [
+                    'min' => $req->get('price_min'),
+                    'max' => $req->get('price_max'),
+                ],
+            ],
+        ];
     }
 
     public function actionBestProducts()
@@ -922,7 +1187,7 @@ class ProductController extends Controller
         if ($filter = Yii::$app->request->get('filter')) {
             // Check if we should use OR logic instead of AND
             $filterLogic = Yii::$app->request->get('filter_logic', 'and'); // 'and' or 'or'
-            
+
             $productIds = [];
             $filterCount = 0;
 
@@ -936,14 +1201,15 @@ class ProductController extends Controller
 
                 // Apply value matching (supports single value or array for checkboxes)
                 if (!empty($filterValue)) {
-                    $subQuery->andWhere(['or',
+                    $subQuery->andWhere([
+                        'or',
                         ['id' => $filterValue],
                         ['value_ru' => $filterValue],
                         ['value_en' => $filterValue],
                         ['value_uz' => $filterValue]
                     ]);
                 }
-                
+
                 if ($filterCount === 1) {
                     $productIds = $subQuery->column();
                 } else {
@@ -1022,11 +1288,20 @@ class ProductController extends Controller
             $searchTerms = explode(' ', $query);
 
             $searchFields = [
-                'product.name_ru', 'product.name_uz', 'product.name_en',
-                'product.name_trans_ru', 'product.name_trans_en',
-                'product.description_ru', 'product.description_uz', 'product.description_en',
-                'product.composition_ru', 'product.composition_uz', 'product.composition_en',
-                'product.recommendation_ru', 'product.recommendation_uz', 'product.recommendation_en',
+                'product.name_ru',
+                'product.name_uz',
+                'product.name_en',
+                'product.name_trans_ru',
+                'product.name_trans_en',
+                'product.description_ru',
+                'product.description_uz',
+                'product.description_en',
+                'product.composition_ru',
+                'product.composition_uz',
+                'product.composition_en',
+                'product.recommendation_ru',
+                'product.recommendation_uz',
+                'product.recommendation_en',
             ];
 
             // Each term must appear in at least one field (AND between terms, OR between fields)
@@ -1465,7 +1740,7 @@ class ProductController extends Controller
             'products.productProductTypes',
             'products.productProductTypes.productType',
             'products.productProductTypes.productTypeValue'
-        ])->where(['id'=>$id])->one();
+        ])->where(['id' => $id])->one();
 
         if ($product === null) {
             throw new \yii\web\NotFoundHttpException('Товар не найден.');

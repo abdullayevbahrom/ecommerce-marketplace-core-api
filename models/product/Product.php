@@ -2,32 +2,31 @@
 
 namespace app\models\product;
 
-use Yii;
-use yii\web\UploadedFile;
-use yii\helpers\ArrayHelper;
-
-use app\models\user\User;
-use app\models\user\favorite\UserFavorite;
-use app\models\user\cart\UserCart;
-use app\models\product\review\ProductReview;
-use app\models\product\ProductProperty;
-use app\models\product\ProductFilter;
-use app\models\product\ProductProductType;
-use app\models\product\ProductType;
-use app\models\color\Color;
-use app\models\Category;
+use app\jobs\EsSyncProductJob;
 use app\models\brand\CategoryBrand;
+use app\models\Category;
+use app\models\color\Color;
+use app\models\delivery\Delivery;
+use app\models\Ikpu;
 use app\models\Images;
 use app\models\Notification;
-use app\models\delivery\Delivery;
 use app\models\office\ProductOffice;
+use app\models\product\ProductFilter;
+use app\models\product\ProductProductType;
+use app\models\product\ProductProperty;
+use app\models\product\ProductType;
+use app\models\product\review\ProductReview;
 use app\models\shop\Shop;
 use app\models\stock\Stock;
-use app\models\Ikpu;
-
+use app\models\user\cart\UserCart;
+use app\models\user\favorite\UserFavorite;
+use app\models\user\User;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Intervention\Image\ImageManager;
+use Yii;
+use yii\helpers\ArrayHelper;
+use yii\web\UploadedFile;
 
 /**
  * This is the model class for table "product".
@@ -303,7 +302,8 @@ class Product extends \yii\db\ActiveRecord
         return $this->sub_category_id;
     }
 
-    public function saveObject($dashboard = false, $color = null, $token_key = null, $category_tree = null, $product_types = null, $price_data = null) {
+    public function saveObject($dashboard = false, $color = null, $token_key = null, $category_tree = null, $product_types = null, $price_data = null)
+    {
         // Create new product instance when we have variants (color or product_types)
         if ($color || $product_types) {
             $product = new Product;
@@ -1165,7 +1165,8 @@ class Product extends \yii\db\ActiveRecord
         ];
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
@@ -1289,22 +1290,22 @@ class Product extends \yii\db\ActiveRecord
             'status',
             'productProperties',
             'productColors',
-            'productTypes' => function() use($language) {
+            'productTypes' => function () use ($language) {
                 $productTypesData = [];
-                
+
                 if ($this->productProductTypes) {
                     foreach ($this->productProductTypes as $productProductType) {
                         if ($productProductType->productType) {
                             $valueId = null;
                             $displayValue = null;
-                            
+
                             if ($productProductType->productTypeValue) {
                                 $valueId = $productProductType->product_type_value_id;
                                 $displayValue = $productProductType->productTypeValue->{'value_' . $language} ?: $productProductType->productTypeValue->value_ru;
                             } elseif ($productProductType->custom_value) {
                                 $displayValue = $productProductType->custom_value;
                             }
-                            
+
                             $productTypesData[] = [
                                 'type_id' => $productProductType->product_type_id,
                                 'type_name' => $productProductType->productType->{'name_' . $language} ?: $productProductType->productType->name_ru,
@@ -1332,19 +1333,37 @@ class Product extends \yii\db\ActiveRecord
 
         if (($controller == 'product') && in_array($action, $exception)) {
             $detail = [
-                'description' => function() use($language) { return $this->{'description_'.$language} ? strip_tags(html_entity_decode(htmlspecialchars_decode($this->{'description_'.$language}))) : $this->description_ru;},
-                'description_ru' => function() {return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_ru)));},
-                'description_en' => function() {return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_en)));},
-                'description_uz' => function() {return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_uz)));},
-                'filters' => function() {return $this->getFilter();},
-                'reviews' => function() {return $this->productReviews;},
-                'reviews_count' => function() {return count($this->productReviews);},
-                'review_separate' => function() {return $this->getCountRating();},
-                'products' => function() {return $this->getOtherProducts();},
-                'variants' => function() use($language) {
+                'description' => function () use ($language) {
+                    return $this->{'description_' . $language} ? strip_tags(html_entity_decode(htmlspecialchars_decode($this->{'description_' . $language}))) : $this->description_ru;
+                },
+                'description_ru' => function () {
+                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_ru)));
+                },
+                'description_en' => function () {
+                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_en)));
+                },
+                'description_uz' => function () {
+                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_uz)));
+                },
+                'filters' => function () {
+                    return $this->getFilter();
+                },
+                'reviews' => function () {
+                    return $this->productReviews;
+                },
+                'reviews_count' => function () {
+                    return count($this->productReviews);
+                },
+                'review_separate' => function () {
+                    return $this->getCountRating();
+                },
+                'products' => function () {
+                    return $this->getOtherProducts();
+                },
+                'variants' => function () use ($language) {
                     return $this->getVariantsData($language);
                 },
-                'cart_amount' => function() {
+                'cart_amount' => function () {
                     if (Yii::$app->user->isGuest) {
                         return 0;
                     }
@@ -1475,8 +1494,9 @@ class Product extends \yii\db\ActiveRecord
     }
 
     // images
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'product', 'main'=>1]);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 1]);
     }
 
     // public function getImage()
@@ -1486,8 +1506,9 @@ class Product extends \yii\db\ActiveRecord
     // }
 
 
-    public function getGallery() {
-        return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type'=>'product', 'main'=>2]);
+    public function getGallery()
+    {
+        return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 2]);
     }
 
     // public function getGallery()
@@ -1679,14 +1700,20 @@ class Product extends \yii\db\ActiveRecord
     {
         parent::afterSave($insert, $changedAttributes);
 
-        // DEPRECATED: Sync is now handled by Sklad pulling data via API to prevent UI freezing
-        /*
-        if ($insert) {
-            $this->syncToWarehouse();
-        } elseif (isset($changedAttributes['name_ru']) || isset($changedAttributes['price'])) {
-            $this->syncToWarehouse();
-        }
-        */
+        \Yii::$app->queue->push(new EsSyncProductJob([
+            'productId' => (int)$this->id,
+            'action' => 'upsert',
+        ]));
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        \Yii::$app->queue->push(new EsSyncProductJob([
+            'productId' => (int)$this->id,
+            'action' => 'delete',
+        ]));
     }
 
     private function syncToWarehouse()

@@ -22,7 +22,7 @@ trait ApiResponseTrait
         }
 
         Yii::$app->response->statusCode = $statusCode;
-        
+
         if ($message === null) {
             $message = ErrorCodes::getMessage($code);
         }
@@ -49,7 +49,7 @@ trait ApiResponseTrait
     protected function sendSuccess($data = [], $message = 'Success')
     {
         Yii::$app->response->statusCode = 200;
-        
+
         return [
             'message' => $message,
             'error_code' => ErrorCodes::SUCCESS,
