@@ -96,15 +96,36 @@ $config = [
         ],
         'httpClient' => [
             'class' => \GuzzleHttp\Client::class,
-            '__construct()' => [[
-                'timeout' => 20,
-                'connect_timeout' => 10,
-                'verify' => YII_ENV_DEV ? false : true,
-                'headers' => [
-                    'Accept' => 'application/json',
-                ],
-                'http_errors' => false,
-            ]],
+            '__construct()' => [
+                [
+                    'timeout' => 20,
+                    'connect_timeout' => 10,
+                    'verify' => YII_ENV_DEV ? false : true,
+                    'headers' => [
+                        'Accept' => 'application/json',
+                    ],
+                    'http_errors' => false,
+                ]
+            ],
+        ],
+        'elasticsearch' => [
+            'class' => 'yii\elasticsearch\Connection',
+            'nodes' => [
+                ['http_address' => 'elasticsearch:9200'],
+            ],
+        ],
+        'redis' => [
+            'class' => 'yii\redis\Connection',
+            'hostname' => 'redis',
+            'port' => 6379,
+            'database' => 0,
+        ],
+        'queue' => [
+            'class' => 'yii\queue\redis\Queue',
+            'redis' => 'redis',
+            'channel' => 'es-index',
+            'attempts' => 5,
+            'ttr' => 60,
         ],
         'db' => $db,
         'urlManager' => [
