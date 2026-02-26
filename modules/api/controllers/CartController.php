@@ -124,6 +124,7 @@ class CartController extends Controller {
                 'name_ru' => $item->product->name_ru,
                 'name_uz' => $item->product->name_uz,
                 'name_en' => $item->product->name_en,
+                'image' => $item->product->getPhoto(),
                 'amount' => $item->amount,
                 'price' => $item->price,
                 'unit_price' => $item->amount > 0 ? $item->price / $item->amount : 0,

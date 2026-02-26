@@ -1141,6 +1141,14 @@ class Product extends \yii\db\ActiveRecord
                 }
             }
 
+            // Get cart amount for this variant
+            $variantCartAmount = 0;
+            $user = Yii::$app->user->identity;
+            if ($user && !empty($user->id)) {
+                $cartItem = \app\models\user\cart\UserCart::findOne(['product_id' => $variant->id, 'user_id' => $user->id]);
+                $variantCartAmount = $cartItem ? (int)$cartItem->amount : 0;
+            }
+
             // Build variant product entry for the lookup table
             $variantProducts[] = [
                 'product_id' => $variant->id,
@@ -1153,6 +1161,7 @@ class Product extends \yii\db\ActiveRecord
                 'qty_big_wholesale' => $variant->qty_big_wholesale ? (int)$variant->qty_big_wholesale : null,
                 'min_order' => $variant->min_order ? (int)$variant->min_order : null,
                 'amount' => $variant->amount !== null ? (int)$variant->amount : null,
+                'cart_amount' => $variantCartAmount,
                 'photo' => $variant->getPhoto(),
                 'is_current' => ($variant->id == $this->id)
             ];
