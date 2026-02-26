@@ -109,7 +109,7 @@ class ProductController extends Controller
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
-            'optional' => ['index', 'by-category', 'by-brand', 'by-shop', 'by-filter', 'search', 'search-suggestions', 'detail', 'reviews', 'recently-viewed', 'related-products', 'by-photo', 'for-you', 'best-products'], // Removed 'request' - now requires auth
+            'optional' => ['index', 'index-es', 'by-category', 'by-brand', 'by-shop', 'by-filter', 'search', 'search-suggestions', 'detail', 'reviews', 'recently-viewed', 'related-products', 'by-photo', 'for-you', 'best-products'], // Removed 'request' - now requires auth
         ];
 
         $auth = $behaviors['authenticator'];
@@ -127,8 +127,7 @@ class ProductController extends Controller
             ]
         ];
 
-        $behaviors['authenticator']['except'] = ['options'];
-
+        $auth['except'] = ['options'];
         $behaviors['authenticator'] = $auth;
 
         return $behaviors;
@@ -831,14 +830,6 @@ class ProductController extends Controller
                 'pageCount' => (int)$pageCount,
                 'currentPage' => (int)$page,
                 'perPage' => (int)$perPage,
-                'bounds' => [
-                    'min' => (float)($this->minMaxPrices['min'] ?? 0),
-                    'max' => (float)($this->minMaxPrices['max'] ?? 0),
-                ],
-                'selected' => [
-                    'min' => $req->get('price_min'),
-                    'max' => $req->get('price_max'),
-                ],
             ],
         ];
     }
