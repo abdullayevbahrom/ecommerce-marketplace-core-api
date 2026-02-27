@@ -8,6 +8,8 @@ use yii\console\Controller;
 use app\models\product\Product;
 use app\models\product\ProductFilter;
 use app\models\elasticsearch\ProductEs;
+use app\models\order\product\OrderProduct;
+use app\models\product\review\ProductReview;
 use yii\elasticsearch\Command;
 use yii\console\ExitCode;
 
@@ -49,6 +51,10 @@ class ReindexController extends Controller
                         'value_uz'  => (string)($r['value_uz'] ?? ''),
                     ];
                 }
+                $ordersCount = (int)OrderProduct::find()->where(['product_id' => $docId])->count('DISTINCT id') ?? 0;
+                $reviewsCount = (int)ProductReview::find()->where(['product_id' => $docId])->count('DISTINCT id') ?? 0;
+                $avgRate = (float)ProductReview::find()->where(['product_id' => $docId])->average('rate') ?? 0.0;
+                $goodReviewsCount = (int)ProductReview::find()->where(['product_id' => $docId])->andWhere(['>=', 'rate', 4])->count('DISTINCT id') ?? 0;
 
                 $doc = [
                     'id' => $docId,
@@ -60,6 +66,10 @@ class ReindexController extends Controller
                     'currency_id' => $p->currency_id ? (int)$p->currency_id : null,
                     'tag_id' => $p->tag_id ? (int)$p->tag_id : null,
                     'views' => $p->views ? (int)$p->views : null,
+                    'orders_count' => $ordersCount,
+                    'reviews_count' => $reviewsCount,
+                    'avg_rate' => $avgRate,
+                    'good_reviews_count' => $goodReviewsCount,
 
                     'status' => (int)$p->status,
                     'deleted_at' => $p->deleted_at ? date('c', strtotime($p->deleted_at)) : null,

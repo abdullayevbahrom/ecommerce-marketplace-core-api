@@ -51,6 +51,10 @@ class EsController extends Controller
                     'currency_id' => ['type' => 'integer'],
                     'tag_id' => ['type' => 'integer'],
                     'views' => ['type' => 'integer'],
+                    'orders_count' => ['type' => 'integer'],
+                    'reviews_count' => ['type' => 'integer'],
+                    'avg_rate' => ['type' => 'double'],
+                    'good_reviews_count' => ['type' => 'integer'],
 
                     'status' => ['type' => 'integer'],
                     'deleted_at' => ['type' => 'date', 'ignore_malformed' => true],

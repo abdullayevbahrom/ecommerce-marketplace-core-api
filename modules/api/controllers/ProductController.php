@@ -109,7 +109,7 @@ class ProductController extends Controller
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
-            'optional' => ['index', 'index-es', 'by-category', 'by-brand', 'by-shop', 'by-filter', 'search', 'search-suggestions', 'detail', 'reviews', 'recently-viewed', 'related-products', 'by-photo', 'for-you', 'best-products'], // Removed 'request' - now requires auth
+            'optional' => ['index', 'index-es', 'best-products-es', 'by-category', 'by-brand', 'by-shop', 'by-filter', 'search', 'search-suggestions', 'detail', 'reviews', 'recently-viewed', 'related-products', 'by-photo', 'for-you', 'best-products'], // Removed 'request' - now requires auth
         ];
 
         $auth = $behaviors['authenticator'];
@@ -803,6 +803,178 @@ class ProductController extends Controller
             $params['page'] = $p;
 
             return Url::toRoute(array_merge(['/api/product/index-es'], $params), true);
+        };
+
+        $data = array_map(function ($m) {
+            return $m->toArray([], [
+                'image',
+                'category',
+                'gallery',
+                'productFilters',
+                'productColors',
+                'productColors.color',
+            ]);
+        }, $ordered);
+
+        return [
+            'data' => $data,
+            '_links' => [
+                'self'  => ['href' => $buildUrl($page)],
+                'first' => ['href' => $buildUrl(1)],
+                'last'  => ['href' => $buildUrl(max(1, $pageCount))],
+                'prev'  => $page > 1 ? ['href' => $buildUrl($page - 1)] : null,
+                'next'  => $page < $pageCount ? ['href' => $buildUrl($page + 1)] : null,
+            ],
+            '_meta' => [
+                'totalCount' => (int)$total,
+                'pageCount' => (int)$pageCount,
+                'currentPage' => (int)$page,
+                'perPage' => (int)$perPage,
+            ],
+        ];
+    }
+
+    public function actionBestProductsEs()
+    {
+        $req = \Yii::$app->request;
+        $q = trim((string)$req->get('q', ''));
+        $sort = (string)$req->get('sort', 'new');
+        $categoryId = $req->get('category_id');
+        $brandId = $req->get('brand_id');
+        $shopId = $req->get('shop_id');
+        $tagId = $req->get('tag_id');
+        $perPage = (int)($req->get('per-page', 12));
+        $page = max(1, (int)$req->get('page', 1));
+        $perPage = max(1, min(50, $perPage));
+        $from = ($page - 1) * $perPage;
+
+        $must = [];
+        $filters = [];
+
+        if ($q !== '') {
+            $must[] = [
+                'multi_match' => [
+                    'query' => $q,
+                    'fields' => [
+                        'search_name^5',
+                        'name_uz^4',
+                        'name_ru^4',
+                        'name_en^4',
+                        'search_desc',
+                        'sku^10',
+                        'barcode^10',
+                    ],
+                    'type' => 'best_fields',
+                    'fuzziness' => 'AUTO',
+                ]
+            ];
+        }
+
+        $filters[] = ['term' => ['status' => 1]];
+        $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
+        if ($brandId) $filters[] = ['term' => ['brand_id' => (int)$brandId]];
+        if ($shopId)  $filters[] = ['term' => ['shop_id' => (int)$shopId]];
+        if ($tagId)  $filters[] = ['term' => ['tag_id' => (int)$tagId]];
+
+        if ($categoryId) {
+            $catIds = [(int)$categoryId];
+
+            $subcats = Category::find()->select('id')->where(['parent_id' => (int)$categoryId])->column();
+            foreach ($subcats as $sid) $catIds[] = (int)$sid;
+
+            $filters[] = ['terms' => ['category_id' => array_values(array_unique($catIds))]];
+        }
+
+        $esSort = [];
+        switch ($sort) {
+            case 'rating':
+                $esSort[] = ['avg_rate' => 'desc'];
+                $esSort[] = ['views' => 'desc'];
+                break;
+
+            case 'popular':
+                $esSort[] = ['views' => 'desc'];
+                $esSort[] = ['avg_rate' => 'desc'];
+                break;
+
+            case 'orders':
+                $esSort[] = ['orders_count' => 'desc'];
+                $esSort[] = ['avg_rate' => 'desc'];
+                break;
+
+            case 'price_down':
+                $esSort[] = ['price' => 'desc'];
+                break;
+
+            case 'price_up':
+                $esSort[] = ['price' => 'asc'];
+                break;
+
+            default:
+                $esSort[] = ['avg_rate' => 'desc'];
+                $esSort[] = ['orders_count' => 'desc'];
+                $esSort[] = ['views' => 'desc'];
+                break;
+        }
+
+        $this->applyEsPriceFilterWithBoundsEs($filters, $must, 'price');
+
+        $body = [
+            '_source' => ['id'],
+            'from' => $from,
+            'size' => $perPage,
+            'query' => [
+                'bool' => [
+                    'must' => $must ?: [['match_all' => (object)[]]],
+                    'filter' => $filters,
+                ],
+            ],
+            'sort' => $esSort,
+        ];
+
+        $esRes = \Yii::$app->elasticsearch->post('products/_search', [], Json::encode($body));
+
+        $hits = $esRes['hits']['hits'] ?? [];
+        $total = $esRes['hits']['total']['value'] ?? 0;
+
+
+        $ids = [];
+        foreach ($hits as $h) {
+            if (!empty($h['_source']['id'])) $ids[] = (int)$h['_source']['id'];
+        }
+
+        if (!$ids) {
+            return new ArrayDataProvider([
+                'allModels' => [],
+                'totalCount' => 0,
+                'pagination' => [
+                    'pageSize' => $perPage,
+                    'page' => $page - 1,
+                ],
+            ]);
+        }
+
+        $models = Product::find()
+            ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
+            ->where(['id' => $ids, 'status' => 1])
+            ->andWhere(['deleted_at' => null])
+            ->indexBy('id')
+            ->all();
+
+        $ordered = [];
+        foreach ($ids as $id) {
+            if (isset($models[$id])) $ordered[] = $models[$id];
+        }
+
+        $pageCount = $perPage > 0 ? (int)ceil($total / $perPage) : 0;
+
+        $params = $req->getQueryParams();
+        $params['per-page'] = $perPage;
+
+        $buildUrl = function (int $p) use ($req, $params) {
+            $params['page'] = $p;
+
+            return Url::toRoute(array_merge(['/api/product/best-products-es'], $params), true);
         };
 
         $data = array_map(function ($m) {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\commands;
 
 use yii\console\Controller;
+use yii\console\ExitCode;
 use yii\elasticsearch\Connection;
 use yii\elasticsearch\Command;
 
@@ -18,6 +19,24 @@ class EsLabController extends Controller
         parent::__construct(...func_get_args());
         $this->es = \Yii::$app->elasticsearch;
         $this->cmd = $this->es->createCommand();
+    }
+
+    public function actionEnsureAll()
+    {
+        $registries = require \Yii::getAlias('@app/config/es-indexes.php');
+
+        foreach ($registries as $index => $actions) {
+            $index = (string)$actions['index'];
+            $reIndex = (string)$actions['reindex'];
+            \Yii::$app->runAction($index);
+            $this->stdout("Ensured index '{$index}'\n");
+            \Yii::$app->runAction($reIndex);
+            $this->stdout("Reindexed '{$index}'\n");
+        }
+
+        $this->stdout("All done!\n");
+
+        return ExitCode::OK;
     }
 
     public function actionSeedDemo()
