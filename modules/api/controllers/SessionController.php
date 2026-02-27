@@ -55,6 +55,12 @@ class SessionController extends Controller
             return ['success' => false, 'message' => 'Unauthorized'];
         }
 
+        if (!\in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_SHOP])) {
+            Yii::$app->response->statusCode = 403;
+
+            return ['success' => false, 'message' => 'Forbidden'];
+        }
+
         $payload = [
             'yii_id' => (int)$user->id,
             'phone' => (string)$user->phone,
@@ -96,6 +102,12 @@ class SessionController extends Controller
 
         if (!$user) {
             return ['success' => false, 'message' => 'Unauthorized'];
+        }
+
+        if (!\in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_USER, User::ROLE_OPERATOR])) {
+            Yii::$app->response->statusCode = 403;
+
+            return ['success' => false, 'message' => 'Forbidden'];
         }
 
         $payload = [
