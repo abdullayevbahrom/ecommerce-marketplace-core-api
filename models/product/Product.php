@@ -846,24 +846,24 @@ class Product extends \yii\db\ActiveRecord
             // } elseif ($this->token_key) {
             //     $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
             // } else {
-                $path = Images::PHOTO_PRODUCT_PATH . $this->image->object_id . '/' . $s . '/' . $this->image->photo;
-                if (is_file($path)) {
-                    $data[] = '/' . $path;
-                }
+            $path = Images::PHOTO_PRODUCT_PATH . $this->image->object_id . '/' . $s . '/' . $this->image->photo;
+            if (is_file($path)) {
+                $data[] = '/' . $path;
+            }
             // }
         }
 
         if ($this->gallery) {
             foreach ($this->gallery as $photo) {
                 // if ($photo->web == 1) {
-                    // $data[] = $photo->photo;
+                // $data[] = $photo->photo;
                 // } elseif ($this->token_key) {
-                    // $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $photo->photo;
+                // $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $photo->photo;
                 // } else {
-                    $path = Images::PHOTO_PRODUCT_PATH . $photo->object_id . '/' . $s . '/' . $photo->photo;
-                    if (is_file($path)) {
-                        $data[] = '/' . $path;
-                    }
+                $path = Images::PHOTO_PRODUCT_PATH . $photo->object_id . '/' . $s . '/' . $photo->photo;
+                if (is_file($path)) {
+                    $data[] = '/' . $path;
+                }
                 // }
             }
         }
@@ -935,8 +935,10 @@ class Product extends \yii\db\ActiveRecord
 
         if ($reviews) {
             foreach ($reviews as $review) {
-                if ($review->rate >= 1 && $review->rate <= 5) {
-                    $data['rate_' . $review->rate] = $data['rate_' . $review->rate] ?? 0 + 1;
+                $rate = (int)($review->rate ?? 0);
+                if ($rate >= 1 && $rate <= 5) {
+                    $key = 'rate_' . $rate;
+                    $data[$key] = ($data[$key] ?? 0) + 1;
                 }
             }
         }
