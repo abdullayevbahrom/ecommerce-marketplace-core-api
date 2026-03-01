@@ -841,30 +841,30 @@ class Product extends \yii\db\ActiveRecord
         $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
 
         if ($this->image) {
-            if ($this->image->web == 1) {
-                $data[] = $this->image->photo;
-            } elseif ($this->token_key) {
-                $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
-            } else {
+            // if ($this->image->web == 1) {
+            //     $data[] = $this->image->photo;
+            // } elseif ($this->token_key) {
+            //     $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
+            // } else {
                 $path = Images::PHOTO_PRODUCT_PATH . $this->image->object_id . '/' . $s . '/' . $this->image->photo;
                 if (is_file($path)) {
                     $data[] = '/' . $path;
                 }
-            }
+            // }
         }
 
         if ($this->gallery) {
             foreach ($this->gallery as $photo) {
-                if ($photo->web == 1) {
-                    $data[] = $photo->photo;
-                } elseif ($this->token_key) {
-                    $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $photo->photo;
-                } else {
+                // if ($photo->web == 1) {
+                    // $data[] = $photo->photo;
+                // } elseif ($this->token_key) {
+                    // $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $photo->photo;
+                // } else {
                     $path = Images::PHOTO_PRODUCT_PATH . $photo->object_id . '/' . $s . '/' . $photo->photo;
                     if (is_file($path)) {
                         $data[] = '/' . $path;
                     }
-                }
+                // }
             }
         }
 
