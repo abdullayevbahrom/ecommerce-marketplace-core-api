@@ -1911,29 +1911,20 @@ class ProductController extends Controller
 
         UserActivity::trackView($product->id, $product->category_id);
 
-        // set views
-        if ($product) {
-            $view = ProductView::findOne(['product_id' => $product->id, 'ip' => Yii::$app->request->userIP]);
-            if (!$view) {
-                $view = new ProductView;
-                $view->saveObject($product);
-            }
+        $view = ProductView::findOne(['product_id' => $product->id, 'ip' => Yii::$app->request->userIP]);
+        if (!$view) {
+            $view = new ProductView;
+            $view->saveObject($product);
         }
-        // end set views
 
-        // set view recently
-        if ($product) {
-            $recently = ProductViewRecently::findOne(['product_id' => $product->id, 'ip' => Yii::$app->request->userIP]);
-            if (!$recently) {
-                $recently = new ProductViewRecently;
-                $recently->saveObject($product);
-            }
+        $recently = ProductViewRecently::findOne(['product_id' => $product->id, 'ip' => Yii::$app->request->userIP]);
+        if (!$recently) {
+            $recently = new ProductViewRecently;
+            $recently->saveObject($product);
         }
-        // end set view recently
 
         return ['data' => $product];
     }
-    // end general product methods
 
     // favorites
     public function actionFavorites()
