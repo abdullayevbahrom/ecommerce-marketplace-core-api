@@ -648,6 +648,11 @@ class CartController extends Controller {
             return ['errors' => ['bts_city_id' => 'Please provide bts_city_id parameter or set your location in profile to calculate delivery cost']];
         }
 
+        if ($user === null) {
+            Yii::$app->response->statusCode = 401;
+            return ['errors' => ['user' => 'Unauthorized']];
+        }
+
         // Get all cart items with related data
         $cartItems = UserCart::find()
             ->with(['product', 'product.stock', 'product.shop.stock'])
