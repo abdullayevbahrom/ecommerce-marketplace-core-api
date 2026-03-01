@@ -936,7 +936,7 @@ class Product extends \yii\db\ActiveRecord
         if ($reviews) {
             foreach ($reviews as $review) {
                 if ($review->rate >= 1 && $review->rate <= 5) {
-                    $data['rate_' . $review->rate] = $data['rate_' . $review->rate] + 1;
+                    $data['rate_' . $review->rate] = $data['rate_' . $review->rate] ?? 0 + 1;
                 }
             }
         }
