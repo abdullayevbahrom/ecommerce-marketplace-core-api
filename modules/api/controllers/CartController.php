@@ -636,11 +636,11 @@ class CartController extends Controller {
      * @return array
      */
     public function actionCalculate() {
-        $user = Yii::$app->user->identity;
+        $user = Yii::$app->user->identity ?? null;
         
         // Get custom BTS city ID from request parameter or use user's default
         $customBtsCityId = Yii::$app->request->get('bts_city_id') ?: Yii::$app->request->post('bts_city_id');
-        $receiverCityId = $customBtsCityId ?: $user->bts_city_id;
+        $receiverCityId = $customBtsCityId ?: $user?->bts_city_id;
 
         // Check if we have a valid BTS city ID (either custom or from user profile)
         if (empty($receiverCityId)) {
@@ -651,7 +651,7 @@ class CartController extends Controller {
         // Get all cart items with related data
         $cartItems = UserCart::find()
             ->with(['product', 'product.stock', 'product.shop.stock'])
-            ->where(['user_id' => $user->id])
+            ->where(['user_id' => $user?->id])
             ->all();
 
         if (empty($cartItems)) {
@@ -895,7 +895,7 @@ class CartController extends Controller {
                 ],
                 'user_info' => [
                     'bts_city_id' => $receiverCityId,
-                    'bts_region_id' => $user->bts_region_id,
+                    'bts_region_id' => $user?->bts_region_id,
                     'is_custom_city' => !empty($customBtsCityId)
                 ]
             ]
