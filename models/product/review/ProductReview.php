@@ -77,16 +77,19 @@ class ProductReview extends \yii\db\ActiveRecord
         $this->review = trim(stripslashes($this->review));
 
         if ($this->save()) {
-            $count = 0;
-            $rates = self::find()->where(['product_id' => $product->id])->all();
-            if ($rates) {
-                foreach ($rates as $value) {
-                    $count += $value->rate;
-                }
-            }
-
-            $product->rating = preg_replace('/(\..{1}).*/', '$1', $count / count($rates));
+            $avg = (float) self::find()->where(['product_id' => $product->id])->average('rate');
+            $product->rating = $avg ? round($avg, 1) : 0;
             $product->save(false);
+            // $count = 0;
+            // $rates = self::find()->where(['product_id' => $product->id])->all();
+            // if ($rates) {
+            //     foreach ($rates as $value) {
+            //         $count += $value->rate;
+            //     }
+            // }
+
+            // $product->rating = preg_replace('/(\..{1}).*/', '$1', $count / count($rates));
+            // $product->save(false);
             return true;
         }
 
@@ -127,11 +130,6 @@ class ProductReview extends \yii\db\ActiveRecord
     public function getUser()
     {
         return $this->hasOne(User::className(), ['id' => 'user_id']);
-    }
-
-    public function getOrderProduct()
-    {
-        return $this->hasOne(OrderProduct::className(), ['product_id' => 'product_id'])->andOnCondition(['user_id' => Yii::$app->user->identity?->id]);
     }
 
     public function getOrderProduct()
