@@ -40,7 +40,7 @@ class ProductReview extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['product_id', 'rate', 'review'], 'required', 'message'=>'Заполните поле'],
+            [['product_id', 'rate', 'review'], 'required', 'message' => 'Заполните поле'],
             [['user_id', 'product_id', 'status', 'status_user_id'], 'integer'],
             [['rate'], 'number', 'max' => 5, 'min' => 1],
             [['review', 'status_comment'], 'string'],
@@ -71,20 +71,21 @@ class ProductReview extends \yii\db\ActiveRecord
         ];
     }
 
-    public function saveObject($user_id, $product) {
+    public function saveObject($user_id, $product)
+    {
         $this->user_id = $user_id;
         $this->review = trim(stripslashes($this->review));
-        
+
         if ($this->save()) {
             $count = 0;
-            $rates = self::find()->where(['product_id'=>$product->id])->all();
+            $rates = self::find()->where(['product_id' => $product->id])->all();
             if ($rates) {
                 foreach ($rates as $value) {
                     $count += $value->rate;
                 }
             }
 
-            $product->rating = preg_replace('/(\..{1}).*/', '$1', $count/count($rates));
+            $product->rating = preg_replace('/(\..{1}).*/', '$1', $count / count($rates));
             $product->save(false);
             return true;
         }
@@ -92,20 +93,20 @@ class ProductReview extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function getBought() {
-        $flag = false;
-
-        if ($this->product) {
-            if ($this->orderProduct) {
-                $flag = true;
-            }
+    public function getBought(): bool
+    {
+        if (Yii::$app->user->isGuest) {
+            return false;
         }
 
-        return $flag;
+        return $this->orderProduct !== null;
     }
 
-    public function fields() {
-        return ['id', 'bought'=>function(){return $this->getBought();}, 'review', 'rate', 'user', 'date'];
+    public function fields()
+    {
+        return ['id', 'bought' => function () {
+            return $this->getBought();
+        }, 'review', 'rate', 'user', 'date'];
     }
 
     /**
@@ -128,8 +129,20 @@ class ProductReview extends \yii\db\ActiveRecord
         return $this->hasOne(User::className(), ['id' => 'user_id']);
     }
 
-    public function getOrderProduct() {
-        return $this->hasOne(OrderProduct::className(), ['product_id' => 'product_id'])->andOnCondition(['user_id' => Yii::$app->user->identity->id]);
+    public function getOrderProduct()
+    {
+        return $this->hasOne(OrderProduct::className(), ['product_id' => 'product_id'])->andOnCondition(['user_id' => Yii::$app->user->identity?->id]);
+    }
+
+    public function getOrderProduct()
+    {
+        if (Yii::$app->user->isGuest) {
+            return $this->hasOne(OrderProduct::class, ['product_id' => 'product_id'])
+                ->andOnCondition('0=1');
+        }
+
+        return $this->hasOne(OrderProduct::class, ['product_id' => 'product_id'])
+            ->andOnCondition(['user_id' => Yii::$app->user->identity?->id]);
     }
 
     /**
@@ -159,7 +172,7 @@ class ProductReview extends \yii\db\ActiveRecord
     {
         $colors = [
             self::STATUS_PENDING => 'warning',
-            self::STATUS_ACCEPTED => 'success', 
+            self::STATUS_ACCEPTED => 'success',
             self::STATUS_REJECTED => 'danger',
             self::STATUS_PROCESSED => 'info'
         ];
@@ -175,7 +188,7 @@ class ProductReview extends \yii\db\ActiveRecord
         return [
             self::STATUS_PENDING => 'В ожидании',
             self::STATUS_ACCEPTED => 'Принят',
-            self::STATUS_REJECTED => 'Отклонен', 
+            self::STATUS_REJECTED => 'Отклонен',
             self::STATUS_PROCESSED => 'Обработан'
         ];
     }
