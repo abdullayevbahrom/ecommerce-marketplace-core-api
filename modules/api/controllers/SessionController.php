@@ -7,7 +7,6 @@ use app\models\user\User;
 use Yii;
 use yii\filters\VerbFilter;
 use yii\rest\Controller;
-use yii\web\HttpException;
 use yii\web\Response;
 use yii\web\HttpException;
 use yii\filters\Cors;
