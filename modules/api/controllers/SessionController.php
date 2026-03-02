@@ -10,6 +10,7 @@ use yii\rest\Controller;
 use yii\web\HttpException;
 use yii\web\Response;
 use yii\web\HttpException;
+use yii\filters\Cors;
 
 class SessionController extends Controller
 {
@@ -31,17 +32,17 @@ class SessionController extends Controller
     public function behaviors()
     {
         $behaviors = parent::behaviors();
-        $behaviors['corsFilter'] = [
-            'class' => \yii\filters\Cors::className(),
-            'cors' => [
-                'Access-Control-Allow-Origin' => ['*'],
-                'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
-                'Access-Control-Request-Headers' => ['*'],
-                'Access-Control-Allow-Credentials' => false,
-                'Access-Control-Max-Age' => 86400,
-                'Access-Control-Expose-Headers' => [],
-            ]
-        ];
+    $behaviors['corsFilter'] = [
+        'class' => Cors::class,
+        'cors' => [
+            'Origin' => ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000'],
+            'Access-Control-Request-Method' => ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+            'Access-Control-Request-Headers' => ['*'],
+            'Access-Control-Allow-Credentials' => true,
+            'Access-Control-Max-Age' => 86400,
+            'Access-Control-Expose-Headers' => ['X-Pagination-Total-Count','X-Pagination-Page-Count','X-Pagination-Current-Page','X-Pagination-Per-Page'],
+        ],
+    ];
 
         $behaviors['verbs'] = [
             'class' => VerbFilter::class,
@@ -51,7 +52,7 @@ class SessionController extends Controller
                 'options' => ['OPTIONS'],
             ],
         ];
-        
+
         $behaviors['authenticator'] = [
             'class' => \yii\filters\auth\HttpBearerAuth::class,
             'except' => ['options'],
