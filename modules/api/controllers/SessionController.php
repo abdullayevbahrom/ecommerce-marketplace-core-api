@@ -9,25 +9,64 @@ use yii\filters\VerbFilter;
 use yii\rest\Controller;
 use yii\web\HttpException;
 use yii\web\Response;
+use yii\web\HttpException;
 
 class SessionController extends Controller
 {
+    public function beforeAction($action)
+    {
+        $this->enableCsrfValidation = false;
+
+        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Origin', '*');
+        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS');
+        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token, Origin, Authorization');
+
+        if (Yii::$app->request->headers->has('OPTIONS')) {
+            throw new HttpException(200, 'OK');
+        }
+
+        return parent::beforeAction($action);
+    }
+
     public function behaviors()
     {
         $behaviors = parent::behaviors();
+        $behaviors['corsFilter'] = [
+            'class' => \yii\filters\Cors::className(),
+            'cors' => [
+                'Access-Control-Allow-Origin' => ['*'],
+                'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
+                'Access-Control-Request-Headers' => ['*'],
+                'Access-Control-Allow-Credentials' => false,
+                'Access-Control-Max-Age' => 86400,
+                'Access-Control-Expose-Headers' => [],
+            ]
+        ];
 
         $behaviors['verbs'] = [
             'class' => VerbFilter::class,
             'actions' => [
                 'warehouse' => ['POST'],
                 'operator' => ['POST'],
+                'options' => ['OPTIONS'],
             ],
         ];
+        
         $behaviors['authenticator'] = [
             'class' => \yii\filters\auth\HttpBearerAuth::class,
+            'except' => ['options'],
         ];
 
         return $behaviors;
+    }
+
+    public function actions()
+    {
+        $actions = parent::actions();
+        $actions['options'] = [
+            'class' => \yii\rest\OptionsAction::class,
+        ];
+        return $actions;
     }
 
     public function actionSessions()
