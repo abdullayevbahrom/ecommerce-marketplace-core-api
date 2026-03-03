@@ -47,7 +47,7 @@ class MyidController extends Controller
 
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
-            'optional' => ['options', 'init-web', 'callback', 'verify', 'register', 'sdk-config', 'session-result'],
+            'optional' => ['options', 'init-web', 'callback', 'verify', 'register', 'sdk-config', 'session-result', 'create-session', 'session-status'],
         ];
 
         $auth = $behaviors['authenticator'];
@@ -228,17 +228,112 @@ class MyidController extends Controller
     }
 
     // =========================================================================
-    // Mobile SDK Endpoints
+    // SDK New Flow Endpoints (Mobile)
     // =========================================================================
 
     /**
-     * Verify user with MyID (Mobile SDK flow).
+     * Create a session for mobile SDK initialization (SDK New Flow).
+     *
+     * POST /api/myid/create-session
+     * Body (all optional): {
+     *   "pinfl": "12345678901234",
+     *   "pass_data": "AA1234567",
+     *   "phone_number": "998901234567",
+     *   "birth_date": "1990-01-15",
+     *   "is_resident": true,
+     *   "threshold": 0.7
+     * }
+     */
+    public function actionCreateSession()
+    {
+        Yii::$app->response->format = Response::FORMAT_JSON;
+
+        if (!Yii::$app->request->isPost) {
+            return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Method not allowed', [], 405);
+        }
+
+        $myidService = new MyidService();
+        if (!$myidService->isConfigured()) {
+            return $this->sendError(ErrorCodes::ERROR_MYID_NOT_CONFIGURED);
+        }
+
+        $post = Yii::$app->request->post();
+
+        $params = [];
+        $allowedFields = ['pinfl', 'pass_data', 'phone_number', 'birth_date', 'is_resident', 'threshold'];
+        foreach ($allowedFields as $field) {
+            if (isset($post[$field]) && $post[$field] !== '') {
+                $params[$field] = $post[$field];
+            }
+        }
+
+        // If authenticated user has a reuid, support secondary flow
+        $currentUser = Yii::$app->user->identity;
+        if ($currentUser && isset($post['use_reuid']) && $post['use_reuid']) {
+            $existingMyid = UserMyid::findByUserId($currentUser->id);
+            if ($existingMyid && $existingMyid->hasValidReuid()) {
+                $params['reuid'] = $existingMyid->reuid;
+            }
+        }
+
+        $result = $myidService->createSdkSession($params);
+
+        if (!$result['success']) {
+            $step = $result['step'] ?? 'unknown';
+            $error = $result['error'] ?? 'Unknown error';
+            return $this->sendError(ErrorCodes::ERROR_MYID_SESSION_FAILED, "MyID {$step} failed: {$error}");
+        }
+
+        return $this->sendSuccess([
+            'session_id' => $result['session_id'],
+        ]);
+    }
+
+    /**
+     * Session recovery - check session status if code was lost (SDK New Flow).
+     *
+     * GET /api/myid/session-status?session_id={session_id}
+     */
+    public function actionSessionStatus()
+    {
+        Yii::$app->response->format = Response::FORMAT_JSON;
+
+        $sessionId = Yii::$app->request->get('session_id');
+        if (empty($sessionId)) {
+            return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'session_id is required');
+        }
+
+        $myidService = new MyidService();
+        if (!$myidService->isConfigured()) {
+            return $this->sendError(ErrorCodes::ERROR_MYID_NOT_CONFIGURED);
+        }
+
+        $result = $myidService->getSessionStatus($sessionId);
+
+        if (!$result['success']) {
+            return $this->sendError(ErrorCodes::ERROR_MYID_SESSION_FAILED, 'Failed to get session status: ' . ($result['error'] ?? 'Unknown error'));
+        }
+
+        return $this->sendSuccess([
+            'code' => $result['code'],
+            'status' => $result['status'],
+            'attempts' => $result['attempts'],
+        ]);
+    }
+
+    // =========================================================================
+    // Mobile SDK Legacy Endpoints
+    // =========================================================================
+
+    /**
+     * Verify user with MyID (supports both Legacy and SDK New Flow).
      *
      * Mobile app sends the authorization code received from SDK after biometric check.
      *
      * POST /api/myid/verify
      * Body: {
      *   "code": "auth_code_from_sdk",   // required
+     *   "flow": "sdk_new",              // optional - "sdk_new" for new flow, default is legacy
      *   "register": false               // optional - true to create new user if not exists
      * }
      * Authorization: Bearer {token}     // optional - links to existing user
@@ -253,6 +348,7 @@ class MyidController extends Controller
 
         $post = Yii::$app->request->post();
         $code = $post['code'] ?? null;
+        $flow = $post['flow'] ?? 'legacy';
         $registerNew = $post['register'] ?? false;
 
         if (empty($code)) {
@@ -264,7 +360,28 @@ class MyidController extends Controller
             return $this->sendError(ErrorCodes::ERROR_MYID_NOT_CONFIGURED);
         }
 
-        // Exchange code for token and get user data
+        $currentUser = Yii::$app->user->identity;
+        $userId = $currentUser ? $currentUser->id : null;
+
+        // SDK New Flow path
+        if ($flow === 'sdk_new') {
+            $result = $myidService->verifyAndSaveSdk($code, $userId);
+
+            if (!$result['success']) {
+                $errorCode = $this->mapStepToErrorCode($result['step'] ?? '');
+                return $this->sendError($errorCode, $result['error'] ?? null);
+            }
+
+            $linkedUserId = $result['user_id'] ?? $userId;
+            $user = $linkedUserId ? User::findOne($linkedUserId) : null;
+
+            return $this->sendSuccess([
+                'user' => $user ? $this->formatUserResponse($user) : null,
+                'verification' => $result['verification'],
+            ], 'Verification successful');
+        }
+
+        // Legacy flow: Exchange code for token and get user data
         $tokenResult = $myidService->exchangeCodeForToken($code);
         if (!$tokenResult['success']) {
             return $this->sendError(ErrorCodes::ERROR_MYID_TOKEN_EXCHANGE_FAILED, $tokenResult['error'] ?? null);
@@ -282,19 +399,12 @@ class MyidController extends Controller
             return $this->sendError(ErrorCodes::ERROR_MYID_PINFL_MISSING);
         }
 
-        // Check if PINFL already exists
         $existingMyid = UserMyid::findByPinfl($pinfl);
 
-        // Get current authenticated user (if any)
-        $currentUser = Yii::$app->user->identity;
-        $userId = $currentUser ? $currentUser->id : null;
-
-        // If PINFL is linked to another user
         if ($existingMyid && $existingMyid->user_id && $userId && $existingMyid->user_id !== $userId) {
             return $this->sendError(ErrorCodes::ERROR_MYID_PINFL_LINKED);
         }
 
-        // If no authenticated user and not registering, check if PINFL has linked user
         if (!$userId && !$registerNew) {
             if ($existingMyid && $existingMyid->user_id) {
                 $user = $existingMyid->user;
@@ -309,7 +419,6 @@ class MyidController extends Controller
             return $this->sendError(ErrorCodes::ERROR_USER_NOT_FOUND, 'No user linked to this PINFL. Set register=true to create new user.');
         }
 
-        // Register new user if requested
         if (!$userId && $registerNew) {
             $user = new User();
             $user->scenario = User::USER_SIGNUP;
@@ -330,7 +439,6 @@ class MyidController extends Controller
             $userId = $user->id;
         }
 
-        // Create or update MyID verification record
         $verification = UserMyid::createFromMyidData($myidData, $userId);
         if (!$verification) {
             return $this->sendError(ErrorCodes::ERROR_MYID_VERIFICATION_FAILED, 'Failed to save verification data');
@@ -453,6 +561,7 @@ class MyidController extends Controller
 
         return $this->sendSuccess([
             'client_id' => $myidService->getClientId(),
+            'client_hash_id' => $myidService->getClientHashId(),
             'base_url' => $myidService->getBaseUrl(),
             'scope' => $myidService->getScope(),
             'sdk_hash' => $sdkHash['hash'],
@@ -488,10 +597,12 @@ class MyidController extends Controller
         $map = [
             'token_exchange' => ErrorCodes::ERROR_MYID_TOKEN_EXCHANGE_FAILED,
             'user_data' => ErrorCodes::ERROR_MYID_USER_DATA_FAILED,
+            'get_user_data' => ErrorCodes::ERROR_MYID_USER_DATA_FAILED,
             'pinfl_check' => ErrorCodes::ERROR_MYID_PINFL_LINKED,
             'save' => ErrorCodes::ERROR_MYID_VERIFICATION_FAILED,
             'registration' => ErrorCodes::ERROR_MYID_VERIFICATION_FAILED,
             'client_token' => ErrorCodes::ERROR_MYID_SESSION_FAILED,
+            'access_token' => ErrorCodes::ERROR_MYID_SESSION_FAILED,
         ];
 
         return $map[$step] ?? ErrorCodes::ERROR_MYID_VERIFICATION_FAILED;
