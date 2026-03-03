@@ -17,29 +17,30 @@ class SessionController extends Controller
     {
         $this->enableCsrfValidation = false;
 
-        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Origin', '*');
-        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS');
-        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token, Origin, Authorization');
-
-        if (Yii::$app->request->headers->has('OPTIONS')) {
-            throw new HttpException(200, 'OK');
-        }
-
         return parent::beforeAction($action);
     }
 
     public function behaviors()
     {
         $behaviors = parent::behaviors();
+
+        $auth = $behaviors['authenticator'] ?? null;
+        unset($behaviors['authenticator']);
+
         $behaviors['corsFilter'] = [
             'class' => Cors::class,
             'cors' => [
-                'Origin' => ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000'],
+                'Origin' => ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-                'Access-Control-Request-Headers' => ['*'],
+                'Access-Control-Request-Headers' => ['Authorization', 'Content-Type', 'X-Requested-With'],
                 'Access-Control-Allow-Credentials' => true,
                 'Access-Control-Max-Age' => 86400,
-                'Access-Control-Expose-Headers' => ['X-Pagination-Total-Count', 'X-Pagination-Page-Count', 'X-Pagination-Current-Page', 'X-Pagination-Per-Page'],
+                'Access-Control-Expose-Headers' => [
+                    'X-Pagination-Total-Count',
+                    'X-Pagination-Page-Count',
+                    'X-Pagination-Current-Page',
+                    'X-Pagination-Per-Page',
+                ],
             ],
         ];
 
@@ -52,10 +53,14 @@ class SessionController extends Controller
             ],
         ];
 
-        $behaviors['authenticator'] = [
-            'class' => \yii\filters\auth\HttpBearerAuth::class,
-            'except' => ['options'],
-        ];
+        if ($auth) {
+            $behaviors['authenticator'] = $auth;
+        } else {
+            $behaviors['authenticator'] = [
+                'class' => HttpBearerAuth::class,
+            ];
+        }
+        $behaviors['authenticator']['except'] = ['options'];
 
         return $behaviors;
     }
@@ -66,6 +71,7 @@ class SessionController extends Controller
         $actions['options'] = [
             'class' => \yii\rest\OptionsAction::class,
         ];
+
         return $actions;
     }
 
