@@ -4,7 +4,7 @@ $host = getenv('DB_HOST') ?: 'localhost';
 $dbName = getenv('DB_NAME') ?: 'shop';
 $port = getenv('DB_PORT') ?: 3306;
 $user = getenv('DB_USER') ?: 'root';
-$password = getenv('DB_PASSWORD') ?: 'password';
+$password = getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : 'password';
 
 return [
     'class' => 'yii\db\Connection',

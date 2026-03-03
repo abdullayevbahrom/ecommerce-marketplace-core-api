@@ -9,29 +9,39 @@ use app\models\user\UserMyid;
 /**
  * MyID Service - Handles communication with MyID API
  *
- * Supports both WebSDK (session-based) and Mobile SDK (code exchange) flows.
+ * Supports three flows:
+ * 1. WebSDK (session-based browser verification)
+ * 2. Mobile SDK Legacy (code exchange via OAuth)
+ * 3. SDK New Flow (mobile-first session-based with extended fields)
  *
  * WebSDK docs: https://docs.identity.example.com/#/en/websdk
- * Mobile SDK docs: https://docs.identity.example.com/#/en/sdk
+ * SDK New Flow docs: https://docs.identity.example.com/#/en/sdknew
  */
 class MyidService
 {
     // API base URLs
     const PROD_URL = 'https://identity.example.com';
-    const SANDBOX_URL = 'https://devidentity.example.com';
+    const SANDBOX_URL = 'https://api.devid.example.com';
 
     // Web SDK URLs
     const WEB_PROD_URL = 'https://web.identity.example.com';
     const WEB_SANDBOX_URL = 'https://web.devid.example.com';
 
-    // API endpoints
+    // WebSDK / Legacy OAuth endpoints
     const OAUTH_ACCESS_TOKEN = '/api/v1/oauth2/access-token';
     const OAUTH_REFRESH_TOKEN = '/api/v1/oauth2/refresh-token';
     const USER_INFO = '/api/v1/users/me';
     const WEB_SESSIONS = '/api/v1/web/sessions';
 
+    // SDK New Flow endpoints
+    const SDK_ACCESS_TOKEN_ENDPOINT = '/api/v1/auth/clients/access-token';
+    const SDK_CREATE_SESSION_ENDPOINT = '/api/v2/sdk/sessions';
+    const SDK_GET_DATA_ENDPOINT = '/api/v1/sdk/data';
+    const SDK_SESSION_STATUS_ENDPOINT = '/api/v1/sdk/sessions';
+
     private $clientId;
     private $clientSecret;
+    private $clientHashId;
     private $baseUrl;
     private $webUrl;
     private $redirectUri;
@@ -42,6 +52,7 @@ class MyidService
 
         $this->clientId = $config['client_id'] ?? '';
         $this->clientSecret = $config['client_secret'] ?? '';
+        $this->clientHashId = $config['client_hash_id'] ?? '';
         $this->redirectUri = $config['redirect_uri'] ?? '';
 
         $useSandbox = $config['sandbox'] ?? false;
@@ -49,9 +60,237 @@ class MyidService
         $this->webUrl = $useSandbox ? self::WEB_SANDBOX_URL : ($config['web_url'] ?? self::WEB_PROD_URL);
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // SDK New Flow Methods (Mobile)
+    // =========================================================================
+
+    /**
+     * Get access token for SDK New Flow using client credentials.
+     * POST {myid_host}/api/v1/auth/clients/access-token
+     *
+     * @return array ['success' => bool, 'access_token' => string, 'expires_in' => int]
+     */
+    public function getSdkAccessToken()
+    {
+        try {
+            $response = $this->makeRequest('POST', self::SDK_ACCESS_TOKEN_ENDPOINT, [
+                'client_id' => $this->clientId,
+                'client_secret' => $this->clientSecret,
+            ]);
+
+            if (isset($response['access_token'])) {
+                return [
+                    'success' => true,
+                    'access_token' => $response['access_token'],
+                    'expires_in' => $response['expires_in'] ?? null,
+                    'token_type' => $response['token_type'] ?? 'Bearer',
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $response['detail'] ?? $response['error'] ?? 'Failed to get access token',
+            ];
+        } catch (\Exception $e) {
+            Yii::error('MyID SDK access token error: ' . $e->getMessage(), __METHOD__);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Create a session for the mobile SDK (New Flow).
+     * POST {myid_host}/api/v2/sdk/sessions
+     *
+     * @param array $params Optional: pinfl, pass_data, phone_number, birth_date, is_resident, threshold, reuid
+     * @return array ['success' => bool, 'session_id' => string]
+     */
+    public function createSdkSession($params = [])
+    {
+        $tokenResult = $this->getSdkAccessToken();
+        if (!$tokenResult['success']) {
+            return [
+                'success' => false,
+                'error' => 'Access token failed: ' . ($tokenResult['error'] ?? 'Unknown'),
+                'step' => 'access_token',
+            ];
+        }
+
+        try {
+            $body = [];
+            $allowedParams = ['pinfl', 'pass_data', 'phone_number', 'birth_date', 'is_resident', 'threshold', 'reuid'];
+            foreach ($allowedParams as $param) {
+                if (isset($params[$param]) && $params[$param] !== null) {
+                    $body[$param] = $params[$param];
+                }
+            }
+
+            $response = $this->makeRequest('POST', self::SDK_CREATE_SESSION_ENDPOINT, $body, [
+                'Authorization: Bearer ' . $tokenResult['access_token'],
+            ]);
+
+            if (isset($response['session_id'])) {
+                return [
+                    'success' => true,
+                    'session_id' => $response['session_id'],
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $response['detail'] ?? $response['error'] ?? 'No session_id in response',
+                'step' => 'create_session',
+            ];
+        } catch (\Exception $e) {
+            Yii::error('MyID SDK create session error: ' . $e->getMessage(), __METHOD__);
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'step' => 'create_session',
+            ];
+        }
+    }
+
+    /**
+     * Retrieve user data using code from SDK New Flow.
+     * GET {myid_host}/api/v1/sdk/data?code={code}
+     *
+     * @param string $code Authorization code from mobile SDK
+     * @return array ['success' => bool, 'data' => array]
+     */
+    public function getSdkUserData($code)
+    {
+        $tokenResult = $this->getSdkAccessToken();
+        if (!$tokenResult['success']) {
+            return $tokenResult;
+        }
+
+        try {
+            $response = $this->makeRequest(
+                'GET',
+                self::SDK_GET_DATA_ENDPOINT . '?code=' . urlencode($code),
+                [],
+                ['Authorization: Bearer ' . $tokenResult['access_token']]
+            );
+
+            if (isset($response['data'])) {
+                return [
+                    'success' => true,
+                    'data' => $response['data'],
+                    'reuid' => $response['reuid'] ?? null,
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $response['detail'] ?? $response['err'] ?? 'Failed to get user data',
+            ];
+        } catch (\Exception $e) {
+            Yii::error('MyID SDK get user data error: ' . $e->getMessage(), __METHOD__);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Session recovery - get session status if code was lost (SDK New Flow).
+     * GET {myid_host}/api/v1/sdk/sessions/{session_id}
+     *
+     * @param string $sessionId
+     * @return array ['success' => bool, 'code' => string|null, 'status' => string, 'attempts' => array]
+     */
+    public function getSessionStatus($sessionId)
+    {
+        $tokenResult = $this->getSdkAccessToken();
+        if (!$tokenResult['success']) {
+            return $tokenResult;
+        }
+
+        try {
+            $response = $this->makeRequest(
+                'GET',
+                self::SDK_SESSION_STATUS_ENDPOINT . '/' . urlencode($sessionId),
+                [],
+                ['Authorization: Bearer ' . $tokenResult['access_token']]
+            );
+
+            if (isset($response['status'])) {
+                return [
+                    'success' => true,
+                    'code' => $response['code'] ?? null,
+                    'status' => $response['status'],
+                    'attempts' => $response['attempts'] ?? [],
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $response['detail'] ?? 'Failed to get session status',
+            ];
+        } catch (\Exception $e) {
+            Yii::error('MyID session status error: ' . $e->getMessage(), __METHOD__);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Complete SDK New Flow verification: get user data by code and save to user_myid.
+     *
+     * @param string $code Code from mobile SDK
+     * @param int|null $userId User ID to link verification to
+     * @return array
+     */
+    public function verifyAndSaveSdk($code, $userId = null)
+    {
+        $result = $this->getSdkUserData($code);
+        if (!$result['success']) {
+            return [
+                'success' => false,
+                'error' => $result['error'],
+                'step' => 'get_user_data',
+            ];
+        }
+
+        $myidData = $result['data'];
+        $reuid = $result['reuid'];
+        $profile = $myidData['profile'] ?? null;
+        $commonData = $profile['common_data'] ?? [];
+        $pinfl = $commonData['pinfl'] ?? null;
+
+        if (empty($pinfl)) {
+            return [
+                'success' => false,
+                'error' => 'MyID response missing PINFL',
+                'step' => 'pinfl_check',
+            ];
+        }
+
+        $existingMyid = UserMyid::findByPinfl($pinfl);
+        if ($existingMyid && $existingMyid->user_id && $userId && $existingMyid->user_id != $userId) {
+            return [
+                'success' => false,
+                'error' => 'This PINFL is already linked to another account',
+                'step' => 'pinfl_check',
+            ];
+        }
+
+        $userMyid = UserMyid::createFromSdkData($myidData, $reuid, $userId);
+        if (!$userMyid) {
+            return [
+                'success' => false,
+                'error' => 'Failed to save verification data',
+                'step' => 'save',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'verification' => $userMyid->toApiArray(),
+            'user_id' => $userMyid->user_id,
+        ];
+    }
+
+    // =========================================================================
     // WebSDK Flow Methods
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     /**
      * Get client access token using client_credentials grant.
@@ -99,7 +338,6 @@ class MyidService
      */
     public function createWebSession($externalId, $ipAddress, $maxRetries = 3)
     {
-        // Step 1: Get client access token
         $tokenResult = $this->getClientAccessToken();
         if (!$tokenResult['success']) {
             return [
@@ -109,7 +347,6 @@ class MyidService
             ];
         }
 
-        // Step 2: Create session
         $data = [
             'max_retries' => $maxRetries,
             'external_id' => $externalId,
@@ -143,7 +380,7 @@ class MyidService
      * Build the WebSDK URL for user redirect/iframe.
      *
      * @param string $sessionId Session ID from createWebSession()
-     * @param array $params Additional URL params (redirect_uri, pinfl, birth_date, lang, etc.)
+     * @param array $params Additional URL params
      * @return string Full URL for web.identity.example.com
      */
     public function buildWebUrl($sessionId, $params = [])
@@ -173,7 +410,6 @@ class MyidService
                 'Authorization: Bearer ' . $tokenResult['access_token'],
             ], 'json');
 
-            // Check if there's a successful attempt with auth_code
             if (isset($response['attempts'])) {
                 foreach ($response['attempts'] as $attempt) {
                     if (isset($attempt['result_code']) && $attempt['result_code'] == 1 && isset($attempt['auth_code'])) {
@@ -229,16 +465,15 @@ class MyidService
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Common OAuth Methods (used by both WebSDK and Mobile SDK)
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // Common OAuth Methods (used by WebSDK and Mobile SDK Legacy)
+    // =========================================================================
 
     /**
      * Exchange authorization code for access token.
-     * Used after WebSDK callback (auth_code) or Mobile SDK (code).
      *
-     * @param string $code Authorization code (5-minute lifetime, single-use)
-     * @param string|null $redirectUri Redirect URI used in authorization (for WebSDK)
+     * @param string $code Authorization code
+     * @param string|null $redirectUri Redirect URI used in authorization
      * @return array
      */
     public function exchangeCodeForToken($code, $redirectUri = null)
@@ -248,11 +483,9 @@ class MyidService
             'code' => $code,
             'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
+            'method' => 'strong',
+            'scope' => 'common_data',
         ];
-
-        // WebSDK requires method and scope
-        $data['method'] = 'strong';
-        $data['scope'] = 'common_data';
 
         if ($redirectUri) {
             $data['redirect_uri'] = $redirectUri;
@@ -284,7 +517,7 @@ class MyidService
     }
 
     /**
-     * Get user data from MyID using access token.
+     * Get user data from MyID using access token (WebSDK/Legacy flow).
      * Returns normalized (flattened) user data.
      *
      * @param string $accessToken
@@ -318,32 +551,27 @@ class MyidService
 
     /**
      * Normalize MyID API response into a flat structure.
-     * Handles both nested (profile.common_data, etc.) and flat formats.
      *
      * @param array $response Raw API response
      * @return array|null Normalized flat data or null if no valid data
      */
     public function normalizeUserData($response)
     {
-        // Handle nested profile structure from /api/v1/users/me
         $profile = $response['profile'] ?? $response;
         $commonData = $profile['common_data'] ?? $profile;
         $docData = $profile['doc_data'] ?? [];
         $contacts = $profile['contacts'] ?? [];
         $address = $profile['address'] ?? [];
 
-        // Extract PINFL - required field
         $pinfl = $commonData['pinfl'] ?? $response['pinfl'] ?? null;
         if (empty($pinfl)) {
             return null;
         }
 
-        // Parse passport from pass_data (e.g. "AA1234567")
         $passData = $docData['pass_data'] ?? '';
         $passportSeries = $passData ? substr($passData, 0, 2) : ($commonData['passport_series'] ?? null);
         $passportNumber = $passData ? substr($passData, 2) : ($commonData['passport_number'] ?? null);
 
-        // Parse address
         $livingAddress = null;
         if (is_array($address)) {
             $permanentAddr = $address['permanent_address'] ?? null;
@@ -385,12 +613,12 @@ class MyidService
         ];
     }
 
-    // -------------------------------------------------------------------------
-    // Combined Flow Methods
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // Combined Flow Methods (WebSDK/Legacy)
+    // =========================================================================
 
     /**
-     * Complete verification: exchange code, get user data, save to UserMyid.
+     * Complete verification: exchange code, get user data, save to UserMyid (WebSDK flow).
      *
      * @param string $code Authorization code
      * @param int|null $userId User ID to link verification to
@@ -398,7 +626,6 @@ class MyidService
      */
     public function verifyAndSaveUser($code, $userId = null)
     {
-        // Step 1: Exchange code for token
         $tokenResult = $this->exchangeCodeForToken($code);
         if (!$tokenResult['success']) {
             return [
@@ -408,7 +635,6 @@ class MyidService
             ];
         }
 
-        // Step 2: Get user data
         $userResult = $this->getUserData($tokenResult['access_token']);
         if (!$userResult['success']) {
             return [
@@ -420,7 +646,6 @@ class MyidService
 
         $myidData = $userResult['data'];
 
-        // Step 3: Check PINFL conflict
         $existingMyid = UserMyid::findByPinfl($myidData['pinfl']);
         if ($existingMyid && $existingMyid->user_id && $userId && $existingMyid->user_id != $userId) {
             return [
@@ -430,7 +655,6 @@ class MyidService
             ];
         }
 
-        // Step 4: Save verification data
         $userMyid = UserMyid::createFromMyidData($myidData, $userId);
         if (!$userMyid) {
             return [
@@ -457,7 +681,6 @@ class MyidService
      */
     public function registerWithMyid($code, $phone = null)
     {
-        // Step 1: Exchange code for token
         $tokenResult = $this->exchangeCodeForToken($code);
         if (!$tokenResult['success']) {
             return [
@@ -467,7 +690,6 @@ class MyidService
             ];
         }
 
-        // Step 2: Get user data
         $userResult = $this->getUserData($tokenResult['access_token']);
         if (!$userResult['success']) {
             return [
@@ -479,7 +701,6 @@ class MyidService
 
         $myidData = $userResult['data'];
 
-        // Step 3: Check if PINFL already registered
         $existingMyid = UserMyid::findByPinfl($myidData['pinfl']);
         if ($existingMyid && $existingMyid->user_id) {
             $user = User::findOne($existingMyid->user_id);
@@ -493,7 +714,6 @@ class MyidService
             }
         }
 
-        // Step 4: Create new user
         $transaction = Yii::$app->db->beginTransaction();
         try {
             $user = new User();
@@ -523,7 +743,6 @@ class MyidService
                 throw new \Exception('Failed to create user: ' . json_encode($user->errors));
             }
 
-            // Step 5: Save MyID verification data
             $userMyid = UserMyid::createFromMyidData($myidData, $user->id);
             if (!$userMyid) {
                 throw new \Exception('Failed to save verification data');
@@ -575,12 +794,12 @@ class MyidService
         ];
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Mobile SDK Helpers
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     /**
-     * Generate SDK hash for mobile SDK initialization.
+     * Generate SDK hash for mobile SDK initialization (legacy).
      *
      * @param int|null $timestamp Timestamp in milliseconds
      * @return array {client_id, timestamp, hash}
@@ -601,9 +820,9 @@ class MyidService
         ];
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Utility Methods
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     /**
      * @return string
@@ -611,6 +830,14 @@ class MyidService
     public function getClientId()
     {
         return $this->clientId;
+    }
+
+    /**
+     * @return string
+     */
+    public function getClientHashId()
+    {
+        return $this->clientHashId;
     }
 
     /**
@@ -645,9 +872,9 @@ class MyidService
         return !empty($this->clientId) && !empty($this->clientSecret);
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // HTTP Request
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     /**
      * Make HTTP request to MyID API.
@@ -684,6 +911,7 @@ class MyidService
             CURLOPT_HTTPHEADER => $allHeaders,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
         ]);
 
         if ($method === 'POST') {
@@ -691,31 +919,40 @@ class MyidService
             if ($contentType === 'form') {
                 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
             } else {
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+                $jsonBody = empty($data) ? '{}' : json_encode($data);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonBody);
             }
         } elseif ($method === 'GET' && !empty($data)) {
             $url .= '?' . http_build_query($data);
             curl_setopt($ch, CURLOPT_URL, $url);
         }
 
+        Yii::info("MyID API: {$method} {$endpoint}", __METHOD__);
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
+        $curlErrno = curl_errno($ch);
+        $curlError = curl_error($ch);
         curl_close($ch);
 
-        if ($error) {
-            throw new \Exception('cURL Error: ' . $error);
+        if ($curlErrno) {
+            Yii::error("MyID cURL error #{$curlErrno}: {$curlError} for {$method} {$url}", __METHOD__);
+            throw new \Exception("cURL Error #{$curlErrno}: {$curlError}");
         }
 
-        Yii::info("MyID API: {$method} {$endpoint} -> HTTP {$httpCode}", __METHOD__);
+        Yii::info("MyID API Response: {$method} {$endpoint} - HTTP {$httpCode}", __METHOD__);
 
-        $decodedResponse = json_decode($response, true);
+        $decoded = json_decode($response, true);
 
         if ($httpCode >= 400) {
-            $errorMessage = $decodedResponse['error'] ?? $decodedResponse['message'] ?? 'HTTP Error ' . $httpCode;
+            $errorDetail = $decoded['detail'] ?? $decoded['error'] ?? $decoded['message'] ?? null;
+            $errorMessage = $errorDetail
+                ? "HTTP {$httpCode}: {$errorDetail}"
+                : "HTTP {$httpCode}: " . substr($response, 0, 500);
+            Yii::error("MyID API error on {$endpoint}: {$errorMessage}", __METHOD__);
             throw new \Exception($errorMessage);
         }
 
-        return $decodedResponse ?: [];
+        return $decoded ?: [];
     }
 }
