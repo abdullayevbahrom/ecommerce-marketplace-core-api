@@ -40,7 +40,7 @@ class News extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['name_ru', 'description_ru', 'description_mini_ru'], 'required', 'message'=>'Заполните поле'],
+            [['name_ru', 'description_ru', 'description_mini_ru'], 'required', 'message' => 'Заполните поле'],
             [['description_ru', 'description_uz', 'description_en', 'description_mini_ru', 'description_mini_uz', 'description_mini_en'], 'string'],
             [['status', 'views', 'shop_id'], 'integer'],
             [['date'], 'safe'],
@@ -67,11 +67,12 @@ class News extends \yii\db\ActiveRecord
         ];
     }
 
-    public function saveObject() {
+    public function saveObject()
+    {
         $this->status = 1;
 
         if (Yii::$app->user->identity->role == User::ROLE_SHOP) {
-            $shop = Shop::findOne(['user_id'=>Yii::$app->user->identity->id]);
+            $shop = Shop::findOne(['user_id' => Yii::$app->user->identity->id]);
             $this->shop_id = $shop->id;
         }
 
@@ -90,26 +91,26 @@ class News extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function removeObject(){
-        if ($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image) {
-            $path = Images::PHOTO_NEWS_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('news', $s);
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
@@ -118,32 +119,43 @@ class News extends \yii\db\ActiveRecord
 
         $data = [
             'id',
-            'name' => function() use($language) { return $this->{'name_'.$language} ? $this->{'name_'.$language} : $this->name_ru;},
-            'description_mini' => function() use($language) { return $this->{'description_mini_'.$language} ? $this->{'description_mini_'.$language} : $this->description_mini_ru;},
+            'name' => function () use ($language) {
+                return $this->{'name_' . $language} ? $this->{'name_' . $language} : $this->name_ru;
+            },
+            'description_mini' => function () use ($language) {
+                return $this->{'description_mini_' . $language} ? $this->{'description_mini_' . $language} : $this->description_mini_ru;
+            },
             'views',
-            'photo',
+            'photo' => function () {
+                return $this->getPhoto();
+            },
             'status',
             'date'
         ];
 
         if (($controller == 'news') && ($action == 'detail')) {
             unset($data['description_mini']);
-            $data['description'] = function() use($language) { return $this->{'description_'.$language} ? $this->{'description_'.$language} : $this->description_ru;};
+            $data['description'] = function () use ($language) {
+                return $this->{'description_' . $language} ? $this->{'description_' . $language} : $this->description_ru;
+            };
         }
 
         return $data;
     }
 
-    public function generateFileName() {
-        return time()+uniqid();
+    public function generateFileName()
+    {
+        return time() + uniqid();
     }
 
     // relations
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'news']);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'news']);
     }
 
-    public function getShop() {
-        return $this->hasOne(Shop::className(), ['id'=>'shop_id']);
+    public function getShop()
+    {
+        return $this->hasOne(Shop::className(), ['id' => 'shop_id']);
     }
 }

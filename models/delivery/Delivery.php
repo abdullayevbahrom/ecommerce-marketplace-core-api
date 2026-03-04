@@ -42,7 +42,7 @@ class Delivery extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['name_ru'], 'required', 'message'=>'Заполните поле'],
+            [['name_ru'], 'required', 'message' => 'Заполните поле'],
             [['description_ru', 'description_uz', 'description_en'], 'string'],
             [['price'], 'number'],
             [['status', 'sort'], 'integer'],
@@ -72,7 +72,8 @@ class Delivery extends \yii\db\ActiveRecord
         ];
     }
 
-    public function saveObject() {
+    public function saveObject()
+    {
         $this->status = 1;
 
         if ($this->save()) {
@@ -90,34 +91,40 @@ class Delivery extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function removeObject(){
-        if ($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image) {
-            $path = Images::PHOTO_DELIVERY_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('delivery', $s);
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
         return [
             'id',
-            'name' => function() use($language) { return $this->{'name_'.$language} ? $this->{'name_'.$language} : $this->name_ru;},
-            'description' => function() use($language) { return $this->{'description_'.$language} ? $this->{'description_'.$language} : $this->description_ru;},
-            'photo',
+            'name' => function () use ($language) {
+                return $this->{'name_' . $language} ? $this->{'name_' . $language} : $this->name_ru;
+            },
+            'description' => function () use ($language) {
+                return $this->{'description_' . $language} ? $this->{'description_' . $language} : $this->description_ru;
+            },
+            'photo' => function () {
+                return $this->getPhoto();
+            },
             'price',
             'date'
         ];
@@ -133,7 +140,8 @@ class Delivery extends \yii\db\ActiveRecord
         return $this->hasMany(Order::className(), ['delivery_id' => 'id']);
     }
 
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'delivery']);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'delivery']);
     }
 }

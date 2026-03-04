@@ -1782,24 +1782,34 @@ class ProductController extends Controller
     {
         if ($image = UploadedFile::getInstanceByName('photo')) {
             $rnd = mt_rand(0, 1000000);
-            $name = time() + $rnd . '.' . $image->extension;
-            $original = 'uploads/search/' . $name;
-            $image->saveAs($original);
+            $name = time() . '_' . $rnd . '.' . $image->extension;
+            $tmp = Yii::getAlias('@runtime') . '/search_' . $name;
 
-            $hasher = new ImageHash(new DifferenceHash());
-            $hash = $hasher->hash(Yii::getAlias('@webroot') . '/' . $original); // Use Yii alias for webroot
+            if (!$image->saveAs($tmp)) {
+                throw new \RuntimeException('Failed to save uploaded file to runtime temp');
+            }
 
-            unlink($original);
+            try {
+                $hasher = new ImageHash(new DifferenceHash());
+                $hashHex = $hasher->hash($tmp)->toHex();
+            } finally {
+                @unlink($tmp);
+            }
 
-            $images = Images::find()->where(['type' => 'product', 'main' => 1])->andWhere(['!=', 'hash', ''])->all();
+            $images = Images::find()
+                ->where(['type' => 'product', 'main' => 1])
+                ->andWhere(['!=', 'hash', ''])
+                ->all();
 
             $ids = [];
-            foreach ($images as $image) {
-                if ($image->hash) {
-                    $distance = $hasher->distance(Hash::fromHex($hash), Hash::fromHex($image->hash));
-                    if ($distance < 15) { // Threshold for image similarity
-                        $ids[] = $image->object_id;
-                    }
+            $needle = Hash::fromHex($hashHex);
+
+            foreach ($images as $img) {
+                if (!$img->hash) continue;
+
+                $distance = $hasher->distance($needle, Hash::fromHex($img->hash));
+                if ($distance < 15) {
+                    $ids[] = $img->object_id;
                 }
             }
 

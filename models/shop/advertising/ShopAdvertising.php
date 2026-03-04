@@ -47,8 +47,8 @@ class ShopAdvertising extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['shop_id', 'name_ru'], 'required', 'message' => 'Заполните поле', 'on'=>self::ADMIN],
-            [['name_ru'], 'required', 'message' => 'Заполните поле', 'on'=>self::SHOP],
+            [['shop_id', 'name_ru'], 'required', 'message' => 'Заполните поле', 'on' => self::ADMIN],
+            [['name_ru'], 'required', 'message' => 'Заполните поле', 'on' => self::SHOP],
             [['shop_id', 'status', 'sort'], 'integer'],
             [['content_ru', 'content_uz', 'content_en'], 'string'],
             [['date'], 'safe'],
@@ -79,11 +79,12 @@ class ShopAdvertising extends \yii\db\ActiveRecord
         ];
     }
 
-    public function saveObject() {
+    public function saveObject()
+    {
         $this->status = 1;
 
         if (Yii::$app->user->identity->role == User::ROLE_SHOP) {
-            $shop = Shop::findOne(['user_id'=>Yii::$app->user->identity->id]);
+            $shop = Shop::findOne(['user_id' => Yii::$app->user->identity->id]);
             $this->shop_id = $shop->id;
         }
 
@@ -102,44 +103,51 @@ class ShopAdvertising extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function removeObject(){
-        if ($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image) {
-            $path = Images::PHOTO_SHOP_ADVERTISING_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('shop_advertising', $s);
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
         return [
             'id',
             'shop',
-            'name' => function() use($language) { return $this->{'name_'.$language} ? $this->{'name_'.$language} : $this->name_ru;},
-            'content' => function() use($language) { return $this->{'content_'.$language} ? $this->{'content_'.$language} : $this->content_ru;},
+            'name' => function () use ($language) {
+                return $this->{'name_' . $language} ? $this->{'name_' . $language} : $this->name_ru;
+            },
+            'content' => function () use ($language) {
+                return $this->{'content_' . $language} ? $this->{'content_' . $language} : $this->content_ru;
+            },
             'link',
-            'photo',
+            'photo' => function () {
+                return $this->getPhoto();
+            },
             'status',
             'date'
         ];
     }
 
     // relations
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'shop_advertising']);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'shop_advertising']);
     }
 
     /**

@@ -55,7 +55,8 @@ class Settings extends \yii\db\ActiveRecord
         ];
     }
 
-    public function saveLogo() {
+    public function saveLogo()
+    {
         $current_image = $this->image ? $this->image : null;
         $this->type = 'logo';
         if ($this->save()) {
@@ -71,10 +72,11 @@ class Settings extends \yii\db\ActiveRecord
         return true;
     }
 
-    public function saveContacts() {
+    public function saveContacts()
+    {
         // save phones
         if ($this->phone) {
-            Settings::deleteAll(['type'=>'phone']);
+            Settings::deleteAll(['type' => 'phone']);
 
             $keys = array('type', 'content');
             $vals = array();
@@ -91,12 +93,12 @@ class Settings extends \yii\db\ActiveRecord
 
         // save emails
         if ($this->email) {
-            Settings::deleteAll(['type'=>'email']);
+            Settings::deleteAll(['type' => 'email']);
 
             $keys = array('type', 'content');
             $vals = array();
             foreach ($this->email as $email) {
-                if ($email) { 
+                if ($email) {
                     $vals[] = [
                         'type' => 'email',
                         'content' => $email
@@ -109,34 +111,37 @@ class Settings extends \yii\db\ActiveRecord
         return true;
     }
 
-    public function removeObject(){
+    public function removeObject()
+    {
         if ($this->image) {
             $this->image->removeImageSize();
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image && $this->image->photo) {
-            $path = Images::PHOTO_LOGO_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('logo', $s);
         }
         return Images::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         return [
             'id',
             'content',
-            'photo'
+            'photo' => function () {
+                return $this->getPhoto();
+            },
         ];
     }
 
     // relations
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'logo']);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'logo']);
     }
 }

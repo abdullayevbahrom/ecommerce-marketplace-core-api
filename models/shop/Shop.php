@@ -66,10 +66,10 @@ class Shop extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['password', 'login', 'name', 'phone'], 'required', 'message'=>'Заполните поле', 'on'=>self::SHOP_CREATE],
-            [['name_ru'], 'required', 'message'=>'Заполните поле', 'on'=>self::SHOP_UPDATE],
+            [['password', 'login', 'name', 'phone'], 'required', 'message' => 'Заполните поле', 'on' => self::SHOP_CREATE],
+            [['name_ru'], 'required', 'message' => 'Заполните поле', 'on' => self::SHOP_UPDATE],
 
-            [['name_ru'], 'required', 'message'=>'Заполните поле'],
+            [['name_ru'], 'required', 'message' => 'Заполните поле'],
             ['login', 'checkLogin'],
             [['description_ru', 'description_uz', 'description_en', 'contact_user', 'contact_phone'], 'string'],
             [['status', 'user_id'], 'integer'],
@@ -104,7 +104,8 @@ class Shop extends \yii\db\ActiveRecord
         ];
     }
 
-    public function checkLogin($attribute, $params) {
+    public function checkLogin($attribute, $params)
+    {
         $user = new User;
 
         if (!$user->hasErrors()) {
@@ -117,7 +118,8 @@ class Shop extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function saveUser() {
+    public function saveUser()
+    {
         $user = new User;
         if ($this->user_id) {
             $user = User::findOne($this->user_id);
@@ -140,8 +142,9 @@ class Shop extends \yii\db\ActiveRecord
         return $user;
     }
 
-    public function saveSeller() {
-        $seller = ShopSeller::findOne(['shop_id'=>$this->id]);
+    public function saveSeller()
+    {
+        $seller = ShopSeller::findOne(['shop_id' => $this->id]);
         if (!$seller) {
             $seller = new ShopSeller;
         }
@@ -159,7 +162,7 @@ class Shop extends \yii\db\ActiveRecord
         return $seller->save();
     }
 
-    public function saveObject() 
+    public function saveObject()
     {
         $db = Yii::$app->db;
         $transaction = $db->beginTransaction();
@@ -208,7 +211,6 @@ class Shop extends \yii\db\ActiveRecord
             $transaction->commit();
 
             return true;
-
         } catch (\Throwable $e) {
             $transaction->rollBack();
             Yii::error(['message' => $e->getMessage(), 'shop_id' => $this->id ?? null, 'trace'   => $e->getTraceAsString()], 'warehouse_sync');
@@ -256,15 +258,13 @@ class Shop extends \yii\db\ActiveRecord
             }
 
             Yii::info("Shop {$this->id} synced to warehouse", 'warehouse_sync');
-
         } catch (RequestException $e) {
             Yii::error(
                 'Shop sync error: ' . $e->getMessage(),
                 'warehouse_sync'
             );
-            throw $e; 
+            throw $e;
         }
-
     }
 
     private function syncStockToWarehouse(Stock $stock, User $user)
@@ -305,7 +305,6 @@ class Shop extends \yii\db\ActiveRecord
             }
 
             Yii::info("Stock {$stock->id} synced to warehouse", 'warehouse_sync');
-
         } catch (RequestException $e) {
             Yii::error(
                 'Stock sync error: ' . $e->getMessage(),
@@ -361,7 +360,7 @@ class Shop extends \yii\db\ActiveRecord
         if (!$secretKey) {
             return;
         }
-        
+
         $token = md5($this->id . $secretKey);
 
         try {
@@ -376,8 +375,9 @@ class Shop extends \yii\db\ActiveRecord
         }
     }
 
-    public function removeObject(){
-        if ($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
 
@@ -390,59 +390,56 @@ class Shop extends \yii\db\ActiveRecord
         if ($this->user) {
             $this->user->delete();
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image) {
-            $path = Images::PHOTO_SHOP_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('shop', $s);
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function getPhotoBanner($s = 'original') {
+    public function getPhotoBanner($s = 'original')
+    {
         if ($this->banner) {
-            $path = Images::PHOTO_SHOP_PATH.$this->banner->object_id.'/'.$s.'/'.$this->banner->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->banner->getPhoto('shop', $s);
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function getPhotos($s = 'original') {
+    public function getPhotos($s = 'original')
+    {
         $data = [];
 
         if ($this->gallery) {
             foreach ($this->gallery as $photo) {
-                $path = Images::PHOTO_SHOP_PATH.$photo->object_id.'/'.$s.'/'.$photo->photo;
-                if (is_file($path)) {
-                    $data[] = '/'.$path;
-                }
+                $data[] = $photo->getPhoto('shop', $s);
             }
         }
 
         return $data;
     }
 
-    public function getCountReviews() {
-        $products = ArrayHelper::map(Product::find()->where(['shop_id'=>$this->id])->all(), 'id', 'id');
+    public function getCountReviews()
+    {
+        $products = ArrayHelper::map(Product::find()->where(['shop_id' => $this->id])->all(), 'id', 'id');
 
         return (int)ProductReview::find()->where(['in', 'product_id', $products])->count();
     }
 
-    public function isFavorite() {
-        $favorite = UserShopFavorite::findOne(['shop_id'=>$this->id, 'user_id'=>Yii::$app->user->identity?->id]);
+    public function isFavorite()
+    {
+        $favorite = UserShopFavorite::findOne(['shop_id' => $this->id, 'user_id' => Yii::$app->user->identity?->id]);
         return $favorite ? true : false;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $controller = Yii::$app->controller->id;
         $action = Yii::$app->controller->action->id;
 
@@ -451,13 +448,23 @@ class Shop extends \yii\db\ActiveRecord
 
         $data = [
             'id',
-            'name' => function(){return $this->name_ru;},
-            'photo',
-            'photoBanner',
-            'gallery' => function() {return $this->getPhotos();},
+            'name' => function () {
+                return $this->name_ru;
+            },
+            'photo' => function () {
+                return $this->getPhoto();
+            },
+            'photoBanner' => function () {
+                return $this->getPhotoBanner();
+            },
+            'gallery' => function () {
+                return $this->getPhotos();
+            },
             'contact_user',
             'contact_phone',
-            'isFavorite' => function(){return $this->isFavorite();},
+            'isFavorite' => function () {
+                return $this->isFavorite();
+            },
             'date'
         ];
 
@@ -465,10 +472,14 @@ class Shop extends \yii\db\ActiveRecord
 
         if (($controller == 'shop') && in_array($action, $exception) || (Yii::$app->user->identity?->role == User::ROLE_SHOP)) {
             $detail = [
-                'description' => function() use($language) { return $this->{'description_'.$language} ? $this->{'description_'.$language} : $this->description_ru;},
+                'description' => function () use ($language) {
+                    return $this->{'description_' . $language} ? $this->{'description_' . $language} : $this->description_ru;
+                },
                 'user',
                 'shopSeller',
-                'review_count' => function() { return $this->getCountReviews(); },
+                'review_count' => function () {
+                    return $this->getCountReviews();
+                },
             ];
 
             $data = array_merge($data, $detail);
@@ -476,10 +487,18 @@ class Shop extends \yii\db\ActiveRecord
 
         if (Yii::$app->user->identity?->role == User::ROLE_SHOP) {
             $detail = [
-                'product_count' => function() { return count($this->products); },
-                'advertisment_count' => function() { return count($this->shopAdvertisings); },
-                'news_count' => function() { return count($this->news); },
-                'review_count' => function() { return $this->getCountReviews(); },
+                'product_count' => function () {
+                    return count($this->products);
+                },
+                'advertisment_count' => function () {
+                    return count($this->shopAdvertisings);
+                },
+                'news_count' => function () {
+                    return count($this->news);
+                },
+                'review_count' => function () {
+                    return $this->getCountReviews();
+                },
             ];
 
             $data = array_merge($data, $detail);
@@ -521,20 +540,24 @@ class Shop extends \yii\db\ActiveRecord
         return $this->hasMany(Product::className(), ['shop_id' => 'id']);
     }
 
-    public function getUser() {
+    public function getUser()
+    {
         return $this->hasOne(User::className(), ['id' => 'user_id']);
     }
 
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'shop', 'main'=>1]);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'shop', 'main' => 1]);
     }
 
-    public function getBanner() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'shop', 'main'=>3]);
+    public function getBanner()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'shop', 'main' => 3]);
     }
 
-    public function getGallery() {
-        return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type'=>'shop', 'main'=>2]);
+    public function getGallery()
+    {
+        return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'shop', 'main' => 2]);
     }
 
     public function getNews()

@@ -59,16 +59,15 @@ class Messages extends \yii\db\ActiveRecord
         ];
     }
 
-    public function getFilePath($s = 'original') {
+    public function getFilePath($s = 'original')
+    {
         if ($this->chatFile && $this->chatFile->photo) {
-            $path = Images::PHOTO_CHAT_PATH.$this->chatFile->object_id.'/'.$s.'/'.$this->chatFile->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->chatFile->getPhoto('chat', $s);
         }
     }
 
-    public function getSender() {
+    public function getSender()
+    {
         $data = [];
 
         $data['name'] = $this->user->name;
@@ -77,7 +76,8 @@ class Messages extends \yii\db\ActiveRecord
         return $data;
     }
 
-    public function getGetter() {
+    public function getGetter()
+    {
         $data = [];
 
         $data['name'] = ($this->user_id == $this->messageRoom->sender_id) ? $this->messageRoom->getter->name : $this->messageRoom->sender->name;
@@ -87,8 +87,13 @@ class Messages extends \yii\db\ActiveRecord
     }
 
     // fields
-    public function fields() {
-        return ['id', 'type_user'=>function(){return $this->messageRoom->type;}, 'sender', 'getter', 'message', 'messageRoom', 'filePath', 'product'=>function(){return $this->messageRoom->getProductObject();}, 'status', 'date'];
+    public function fields()
+    {
+        return ['id', 'type_user' => function () {
+            return $this->messageRoom->type;
+        }, 'sender', 'getter', 'message', 'messageRoom', 'filePath', 'product' => function () {
+            return $this->messageRoom->getProductObject();
+        }, 'status', 'date'];
     }
 
     /**
@@ -111,7 +116,8 @@ class Messages extends \yii\db\ActiveRecord
         return $this->hasOne(User::className(), ['id' => 'user_id']);
     }
 
-    public function getChatFile() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'chat']);
+    public function getChatFile()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'chat']);
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 namespace app\modules\admin\controllers;
 
 use Yii;
@@ -10,15 +11,17 @@ use app\models\user\User;
 use app\models\partners\Partners;
 use app\models\partners\PartnersSearch;
 
-class PartnerController extends Controller{
-	public $user;
-    
-    public function beforeAction($action) {
+class PartnerController extends Controller
+{
+    public $user;
+
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
         if (Yii::$app->user->isGuest) {
             return $this->redirect(['/admin/default']);
         }
-        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
+        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id' => Yii::$app->user->identity->id])->one();
 
         if (($this->user->role == User::ROLE_MODERATOR)) {
             $accesses = array();
@@ -43,7 +46,8 @@ class PartnerController extends Controller{
         return parent::beforeAction($action);
     }
 
-    public function actionIndex(){
+    public function actionIndex()
+    {
         $searchModel = new PartnersSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
         $dataProvider->query->with('image');
@@ -54,11 +58,12 @@ class PartnerController extends Controller{
         ]);
     }
 
-    public function actionCreate($id = null) {
+    public function actionCreate($id = null)
+    {
         $model = new Partners;
 
         if ($id) {
-            $model = Partners::find()->with('image')->where(['id'=>$id])->one();
+            $model = Partners::find()->with('image')->where(['id' => $id])->one();
             if (!$model) {
                 throw new HttpException(404, 'Page not found');
             }
@@ -67,7 +72,7 @@ class PartnerController extends Controller{
         if ($model->load(Yii::$app->request->post()) && $model->validate()) {
             if ($model->saveObject()) {
                 Yii::$app->session->setFlash('partners_saved', 'Saved');
-                return $this->redirect(['/admin/partner/view', 'id'=>$model->id]);
+                return $this->redirect(['/admin/partner/view', 'id' => $model->id]);
             }
         }
 
@@ -76,8 +81,9 @@ class PartnerController extends Controller{
         ]);
     }
 
-    public function actionView($id) {
-        $model = Partners::find()->with('image')->where(['id'=>$id])->one();
+    public function actionView($id)
+    {
+        $model = Partners::find()->with('image')->where(['id' => $id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
@@ -87,12 +93,13 @@ class PartnerController extends Controller{
         ]);
     }
 
-    public function actionRemove($id) {
-        $model = Partners::find()->with('image')->where(['id'=>$id])->one();
+    public function actionRemove($id)
+    {
+        $model = Partners::find()->with('image')->where(['id' => $id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
-        
+
         if ($this->user && ($this->user->role != User::ROLE_USER) && $model && $model->removeObject()) {
             Yii::$app->session->setFlash('partner_removed', 'Deleted');
         }
@@ -100,7 +107,8 @@ class PartnerController extends Controller{
         return $this->redirect(['/admin/partner']);
     }
 
-    public function actionLock($id) {
+    public function actionLock($id)
+    {
         $model = Partners::findOne($id);
 
         if (!$model) {
@@ -122,22 +130,37 @@ class PartnerController extends Controller{
         return $this->redirect(Yii::$app->request->referrer);
     }
 
-    public function actionUpload($CKEditorFuncNum) {
+    public function actionUpload($CKEditorFuncNum)
+    {
         $file = UploadedFile::getInstanceByName('upload');
-        if ($file) {
-            $path = 'uploads/partners/gallery/';
-
-            $model = new Partners;
-
-            $partners = $model->generateFileName().'.'.$file->extension;
-
-            if ($file->saveAs($path.$partners)) {
-                return '<script type="text/javascript">window.parent.CKEDITOR.tools.callFunction("'.$CKEditorFuncNum.'", "/'.$path.$partners.'", "");</script>';
-            } else {
-                return "Error in upload\n";
-            }
-        } else {
+        if (!$file) {
             return "File not uploaded\n";
+        }
+
+        $model = new Partners();
+        $name = $model->generateFileName() . '.' . $file->extension;
+
+        $tmp = Yii::getAlias('@runtime') . '/ck_' . uniqid() . '_' . $name;
+        if (!$file->saveAs($tmp)) {
+            return "Error in upload file\n";
+        }
+
+        try {
+            $key = "uploads/partners/gallery/{$name}";
+            $contentType = @mime_content_type($tmp) ?: 'application/octet-stream';
+
+            Yii::$app->s3->putFile($key, $tmp, $contentType);
+
+            $url = Yii::$app->s3->url($key);
+
+            return '<script type="text/javascript">window.parent.CKEDITOR.tools.callFunction("'
+                . $CKEditorFuncNum . '", "'
+                . $url . '", "");</script>';
+        } catch (\Throwable $e) {
+            Yii::error("CKEditor upload error: " . $e->getMessage(), __METHOD__);
+            return "Upload failed\n";
+        } finally {
+            @unlink($tmp);
         }
     }
 }

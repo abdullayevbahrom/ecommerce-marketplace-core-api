@@ -69,6 +69,9 @@ $config = [
             'ttr' => 60,
         ],
         'db' => $db,
+        's3' => [
+            'class' => 'app\components\S3Component',
+        ],
     ],
     'params' => $params,
 

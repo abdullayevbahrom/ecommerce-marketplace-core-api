@@ -576,9 +576,8 @@ class Product extends \yii\db\ActiveRecord
                 if ($product->image) {
                     $product->image->removeImageSize();
                 }
-                // $image->uploadPhoto($product->id, 'product');
 
-                $image->uploadPhoto($product->token_key, 'product');
+                $image->uploadPhoto($product->id, 'product');
 
                 $hasUploadedImages = true;
             }
@@ -770,8 +769,7 @@ class Product extends \yii\db\ActiveRecord
                 if ($this->image) {
                     $this->image->removeImageSize();
                 }
-                // $image->uploadPhoto($this->id, 'product');
-                $image->uploadPhoto($this->token_key, 'product');
+                $image->uploadPhoto($this->id, 'product');
             }
 
             if ($image->imageFiles = UploadedFile::getInstances($this, 'imageGallery')) {
@@ -805,66 +803,22 @@ class Product extends \yii\db\ActiveRecord
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original')
+    public function getPhoto($size = 'original')
     {
-        if ($this->image) {
-            // if ($this->image->web == 1) {
-            //     return $this->image->photo;
-            // }
-            // if (!$this->token_key) {
-            //     return Images::PHOTO_DEFAULT;
-            // }
-
-            // $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
-
-            // return $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
-            $path = Images::PHOTO_PRODUCT_PATH . $this->image->object_id . '/' . $s . '/' . $this->image->photo;
-
-            // $path = Images::PHOTO_PRODUCT_PATH.$this->token_key.'/'.$s.'/'.$this->image->photo;
-
-            if (is_file($path)) {
-                return '/' . $path;
-                // $imageManager = new ImageManager();
-                // $image = $imageManager->make($path);
-                // $image->encode('webp');
-                // $image->save(Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp');
-                //     return '/'.Images::PHOTO_PRODUCT_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->object_id.'.webp';
-            }
-        }
-
-        return Images::PHOTO_DEFAULT;
+        return $this->image?->getPhoto('product', $size) ?? Images::PHOTO_DEFAULT;
     }
 
     public function getPhotos($s = 'original')
     {
         $data = [];
-        $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
 
         if ($this->image) {
-            // if ($this->image->web == 1) {
-            //     $data[] = $this->image->photo;
-            // } elseif ($this->token_key) {
-            //     $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $this->image->photo;
-            // } else {
-            $path = Images::PHOTO_PRODUCT_PATH . $this->image->object_id . '/' . $s . '/' . $this->image->photo;
-            if (is_file($path)) {
-                $data[] = '/' . $path;
-            }
-            // }
+            $data[] = $this->image->getPhoto('product', $s);
         }
 
         if ($this->gallery) {
             foreach ($this->gallery as $photo) {
-                // if ($photo->web == 1) {
-                // $data[] = $photo->photo;
-                // } elseif ($this->token_key) {
-                // $data[] = $baseUrl . '/uploads/product/' . $this->token_key . '/' . $s . '/' . $photo->photo;
-                // } else {
-                $path = Images::PHOTO_PRODUCT_PATH . $photo->object_id . '/' . $s . '/' . $photo->photo;
-                if (is_file($path)) {
-                    $data[] = '/' . $path;
-                }
-                // }
+                $data[] = $photo->getPhoto('product', $s);
             }
         }
 
@@ -1258,8 +1212,12 @@ class Product extends \yii\db\ActiveRecord
             'height',
             'width',
             'length',
-            'image',
-            'gallery',
+            'image' => function () {
+                return $this->getPhoto();
+            },
+            'gallery' => function () {
+                return $this->getPhotos();
+            },
             'views',
             'rating' => function () {
                 // Calculate average rating from accepted or processed reviews
@@ -1286,7 +1244,9 @@ class Product extends \yii\db\ActiveRecord
                     ->where(['status' => [ProductReview::STATUS_ACCEPTED, ProductReview::STATUS_PROCESSED]])
                     ->count();
             },
-            'photo',
+            'photo' => function () {
+                return $this->getPhoto();
+            },
             'isFavorite' => function () {
                 return $this->isFavorite();
             },
@@ -1510,25 +1470,12 @@ class Product extends \yii\db\ActiveRecord
         return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 1]);
     }
 
-    // public function getImage()
-    // {
-    //     return $this->hasOne(Images::className(), ['token_key' => 'token_key'])
-    //         ->andOnCondition(['type' => 'product', 'main' => 1]);
-    // }
-
 
     public function getGallery()
     {
         return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 2]);
     }
 
-    // public function getGallery()
-    // {
-    //     return $this->hasMany(Images::className(), ['token_key' => 'token_key'])
-    //         ->andOnCondition(['type' => 'product', 'main' => 2]);
-    // }
-
-    // brand
     public function getBrand()
     {
         return $this->hasOne(CategoryBrand::className(), ['id' => 'brand_id']);

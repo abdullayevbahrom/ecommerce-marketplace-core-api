@@ -76,7 +76,8 @@ class CategoryBrand extends \yii\db\ActiveRecord
         ];
     }
 
-    public function saveObject() {
+    public function saveObject()
+    {
         $this->status = 1;
 
         $tree = [$this->category_id];
@@ -107,26 +108,26 @@ class CategoryBrand extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function removeObject(){
-        if ($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image) {
-            $path = Images::PHOTO_BRAND_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('brand', $s);
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
@@ -135,22 +136,30 @@ class CategoryBrand extends \yii\db\ActiveRecord
 
         $data = [
             'id',
-            'name' => function() use($language) { return $this->{'name_'.$language} ? $this->{'name_'.$language} : $this->name_ru;},
-            'description' => function() use($language) { return $this->{'description_'.$language} ? $this->{'description_'.$language} : $this->description_ru;},
-            'photo',
+            'name' => function () use ($language) {
+                return $this->{'name_' . $language} ? $this->{'name_' . $language} : $this->name_ru;
+            },
+            'description' => function () use ($language) {
+                return $this->{'description_' . $language} ? $this->{'description_' . $language} : $this->description_ru;
+            },
+            'photo' => function () {
+                return $this->getPhoto();
+            },
             'category'
         ];
 
         return $data;
     }
 
-    public function generateFileName() {
-        return time()+uniqid();
+    public function generateFileName()
+    {
+        return time() + uniqid();
     }
 
     // relations
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'brand']);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'brand']);
     }
 
     /**
@@ -165,7 +174,8 @@ class CategoryBrand extends \yii\db\ActiveRecord
 
     public function getModerationComments()
     {
-        return $this->hasMany(\app\models\moderator\ModerationComment::class,
+        return $this->hasMany(
+            \app\models\moderator\ModerationComment::class,
             ['entity_id' => 'id']
         )->andWhere(['entity_type' => 'brand']);
     }
