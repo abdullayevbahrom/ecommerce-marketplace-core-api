@@ -42,7 +42,7 @@ class Partners extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['name_ru'], 'required', 'message'=>'Заполните поле'],
+            [['name_ru'], 'required', 'message' => 'Заполните поле'],
             [['description_mini_ru', 'description_mini_uz', 'description_mini_en', 'description_ru', 'description_uz', 'description_en'], 'string'],
             [['status', 'sort'], 'integer'],
             [['date'], 'safe'],
@@ -73,7 +73,8 @@ class Partners extends \yii\db\ActiveRecord
         ];
     }
 
-    public function saveObject() {
+    public function saveObject()
+    {
         $this->status = 1;
 
         if ($this->save()) {
@@ -91,26 +92,26 @@ class Partners extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function removeObject(){
-        if ($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image) {
-            $path = Images::PHOTO_PARTNER_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('partner', $s);
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
@@ -119,10 +120,18 @@ class Partners extends \yii\db\ActiveRecord
 
         $data = [
             'id',
-            'name' => function() use($language) { return $this->{'name_'.$language} ? $this->{'name_'.$language} : $this->name_ru;},
-            'description_mini' => function() use($language) { return $this->{'description_mini_'.$language} ? $this->{'description_mini_'.$language} : $this->description_mini_ru;},
-            'description' => function() use($language) { return $this->{'description_'.$language} ? $this->{'description_'.$language} : $this->description_ru;},
-            'photo',
+            'name' => function () use ($language) {
+                return $this->{'name_' . $language} ? $this->{'name_' . $language} : $this->name_ru;
+            },
+            'description_mini' => function () use ($language) {
+                return $this->{'description_mini_' . $language} ? $this->{'description_mini_' . $language} : $this->description_mini_ru;
+            },
+            'description' => function () use ($language) {
+                return $this->{'description_' . $language} ? $this->{'description_' . $language} : $this->description_ru;
+            },
+            'photo' => function () {
+                return $this->getPhoto();
+            },
             'status',
             'date'
         ];
@@ -130,12 +139,14 @@ class Partners extends \yii\db\ActiveRecord
         return $data;
     }
 
-    public function generateFileName() {
-        return time()+uniqid();
+    public function generateFileName()
+    {
+        return time() + uniqid();
     }
 
     // relations
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'partner']);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'partner']);
     }
 }

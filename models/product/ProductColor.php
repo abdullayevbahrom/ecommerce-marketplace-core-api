@@ -55,25 +55,31 @@ class ProductColor extends \yii\db\ActiveRecord
         ];
     }
 
-    public function getPhoto() {
+    public function getPhoto()
+    {
         if ($this->image && $this->image->photo) {
-            $path = Images::PHOTO_COLOR_PATH.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('color');
         }
+
         return Images::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
         return [
             'id',
-            'name' => function() use($language) { return $this->color && $this->color->{'name_'.$language} ? $this->color->{'name_'.$language} : $this->color->name_ru;},
-            'color' => function() {return $this->color ? $this->color->color : '';},
-            'photo',
+            'name' => function () use ($language) {
+                return $this->color && $this->color->{'name_' . $language} ? $this->color->{'name_' . $language} : $this->color->name_ru;
+            },
+            'color' => function () {
+                return $this->color ? $this->color->color : '';
+            },
+            'photo' => function () {
+                return $this->getPhoto();
+            },
             'status',
             'date'
         ];
@@ -101,6 +107,6 @@ class ProductColor extends \yii\db\ActiveRecord
 
     public function getImage()
     {
-        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type'=>'color']);
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'color']);
     }
 }

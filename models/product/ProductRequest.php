@@ -3,8 +3,6 @@
 namespace app\models\product;
 
 use Yii;
-use yii\web\UploadedFile;
-use app\models\Images;
 
 /**
  * This is the model class for table "product_request".
@@ -36,17 +34,11 @@ class ProductRequest extends \yii\db\ActiveRecord
 
     public $product_photo_file;
 
-    /**
-     * {@inheritdoc}
-     */
     public static function tableName()
     {
         return 'product_request';
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function rules()
     {
         return [
@@ -68,29 +60,23 @@ class ProductRequest extends \yii\db\ActiveRecord
         ];
     }
 
-    /**
-     * Custom phone validation
-     */
     public function validatePhone($attribute, $params)
     {
         if (!$this->hasErrors()) {
             // Clean phone number (remove all non-digits)
             $cleanPhone = preg_replace('/\D/', '', $this->phone);
-            
+
             // Check if exactly 12 digits
             if (strlen($cleanPhone) != 12) {
                 $this->addError($attribute, 'Номер телефона должен содержать ровно 12 цифр');
                 return;
             }
-            
+
             // Update phone with cleaned version
             $this->phone = $cleanPhone;
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function attributeLabels()
     {
         return [
@@ -110,9 +96,6 @@ class ProductRequest extends \yii\db\ActiveRecord
         ];
     }
 
-    /**
-     * Get status label
-     */
     public function getStatusLabel()
     {
         $statuses = [
@@ -124,9 +107,6 @@ class ProductRequest extends \yii\db\ActiveRecord
         return isset($statuses[$this->status]) ? $statuses[$this->status] : 'Неизвестно';
     }
 
-    /**
-     * Get all status options
-     */
     public static function getStatusOptions()
     {
         return [
@@ -136,80 +116,76 @@ class ProductRequest extends \yii\db\ActiveRecord
         ];
     }
 
-    /**
-     * Save request from API
-     */
     public function saveRequest()
     {
         $this->status = self::STATUS_PENDING;
-        
+
         if ($this->validate()) {
             if ($this->save(false)) {
-                // Handle photo upload
                 if ($this->product_photo_file) {
                     $this->uploadPhoto();
                 }
                 return true;
             }
         }
-        
+
         return false;
     }
 
-    /**
-     * Upload product photo
-     */
-    public function uploadPhoto()
+    public function uploadPhoto(): bool
     {
-        if ($this->product_photo_file) {
-            $uploadPath = self::PHOTO_PATH . $this->id . '/';
-            
-            // Create directory if it doesn't exist
-            if (!is_dir($uploadPath)) {
-                mkdir($uploadPath, 0777, true);
-            }
-            
-            $file = $this->product_photo_file;
-            $filename = time() . '_' . $file->baseName . '.' . $file->extension;
-            $filePath = $uploadPath . $filename;
-            
-            if ($file->saveAs($filePath)) {
-                // Remove old photo if exists
-                if ($this->product_photo && file_exists(self::PHOTO_PATH . $this->id . '/' . $this->product_photo)) {
-                    unlink(self::PHOTO_PATH . $this->id . '/' . $this->product_photo);
-                }
-                
-                $this->product_photo = $filename;
-                $this->save(false);
-                return true;
-            }
+        if (!$this->product_photo_file) {
+            return false;
         }
-        return false;
+
+        /** @var \app\components\S3Component $s3 */
+        $s3 = Yii::$app->s3;
+
+        $file = $this->product_photo_file;
+        $rnd = mt_rand(0, 1000000);
+
+        $ext = strtolower($file->extension);
+        $filename = time() . '-' . $rnd . '.' . $ext;
+
+        $tmp = Yii::getAlias('@runtime') . '/product_request_' . uniqid() . '_' . $filename;
+        if (!$file->saveAs($tmp)) {
+            return false;
+        }
+
+        try {
+            $contentType = @mime_content_type($tmp) ?: 'application/octet-stream';
+
+            $key = self::PHOTO_PATH . $this->id . '/' . $filename;
+            $s3->putFile($key, $tmp, $contentType);
+
+            if (!empty($this->product_photo)) {
+                $old = (string)$this->product_photo;
+                $s3->delete($old);
+            }
+
+            $this->product_photo = $filename;
+            $this->save(false);
+
+            return true;
+        } finally {
+            @unlink($tmp);
+        }
     }
 
-    /**
-     * Get photo URL
-     */
     public function getPhotoUrl()
     {
-        if ($this->product_photo && file_exists(self::PHOTO_PATH . $this->id . '/' . $this->product_photo)) {
-            return '/' . self::PHOTO_PATH . $this->id . '/' . $this->product_photo;
+        if (!$this->product_photo) {
+            return self::PHOTO_DEFAULT;
         }
-        
-        return self::PHOTO_DEFAULT;
+
+        return Yii::$app->s3->url(self::PHOTO_PATH . $this->id . '/' . $this->product_photo);
     }
 
-    /**
-     * Check if photo exists
-     */
     public function existPhoto()
     {
         return $this->product_photo && file_exists(self::PHOTO_PATH . $this->id . '/' . $this->product_photo);
     }
 
-    /**
-     * Remove photo
-     */
     public function removePhoto()
     {
         if ($this->product_photo) {
@@ -222,26 +198,20 @@ class ProductRequest extends \yii\db\ActiveRecord
         }
     }
 
-    /**
-     * Remove entire request with photo
-     */
     public function removeRequest()
     {
         // Remove photo first
         $this->removePhoto();
-        
+
         // Remove directory if empty
         $uploadPath = self::PHOTO_PATH . $this->id . '/';
         if (is_dir($uploadPath) && count(scandir($uploadPath)) == 2) { // only . and ..
             rmdir($uploadPath);
         }
-        
+
         return $this->delete();
     }
 
-    /**
-     * Fields for API response
-     */
     public function fields()
     {
         return [
@@ -252,29 +222,23 @@ class ProductRequest extends \yii\db\ActiveRecord
             'phone',
             'email',
             'status',
-            'statusLabel' => function() {
+            'statusLabel' => function () {
                 return $this->getStatusLabel();
             },
-            'photo_url' => function() {
+            'photo_url' => function () {
                 return $this->getPhotoUrl();
             },
             'date',
         ];
     }
 
-    /**
-     * Get the user who sent this request
-     */
     public function getUser()
     {
         return $this->hasOne(\app\models\user\User::class, ['id' => 'user_id']);
     }
 
-    /**
-     * Get the admin who responded to this request
-     */
     public function getAdmin()
     {
         return $this->hasOne(\app\models\user\User::class, ['id' => 'admin_id']);
     }
-} 
+}

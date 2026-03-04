@@ -1,4 +1,5 @@
 <?php
+
 namespace app\modules\shop\controllers;
 
 use Yii;
@@ -10,17 +11,19 @@ use app\models\news\News;
 use app\models\news\NewsSearch;
 use app\models\shop\Shop;
 
-class NewsController extends Controller{
-	public $user;
+class NewsController extends Controller
+{
+    public $user;
     public $shop;
-    
-    public function beforeAction($action) {
+
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
         if (Yii::$app->user->isGuest) {
             return $this->redirect(['/admin/default']);
         }
-        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
-        $this->shop = Shop::findOne(['user_id'=>$this->user->id]);
+        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id' => Yii::$app->user->identity->id])->one();
+        $this->shop = Shop::findOne(['user_id' => $this->user->id]);
 
         if (($this->user->role == User::ROLE_MODERATOR)) {
             $accesses = array();
@@ -45,10 +48,11 @@ class NewsController extends Controller{
         return parent::beforeAction($action);
     }
 
-    public function actionIndex(){
+    public function actionIndex()
+    {
         $searchModel = new NewsSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
-        $dataProvider->query->with('image')->andWhere(['shop_id'=>$this->shop->id]);
+        $dataProvider->query->with('image')->andWhere(['shop_id' => $this->shop->id]);
 
         return $this->render('index', [
             'searchModel' => $searchModel,
@@ -57,11 +61,12 @@ class NewsController extends Controller{
         ]);
     }
 
-    public function actionCreate($id = null) {
+    public function actionCreate($id = null)
+    {
         $model = new News;
 
         if ($id) {
-            $model = News::find()->with('image')->where(['id'=>$id, 'shop_id'=>$this->shop->id])->one();
+            $model = News::find()->with('image')->where(['id' => $id, 'shop_id' => $this->shop->id])->one();
             if (!$model) {
                 throw new HttpException(404, 'Page not found');
             }
@@ -70,7 +75,7 @@ class NewsController extends Controller{
         if ($model->load(Yii::$app->request->post()) && $model->validate()) {
             if ($model->saveObject()) {
                 Yii::$app->session->setFlash('news_saved', 'Новость успешно сохранена');
-                return $this->redirect(['/shop/news/view', 'id'=>$model->id]);
+                return $this->redirect(['/shop/news/view', 'id' => $model->id]);
             }
         }
 
@@ -80,8 +85,9 @@ class NewsController extends Controller{
         ]);
     }
 
-    public function actionView($id) {
-        $model = News::find()->with('image')->where(['id'=>$id, 'shop_id'=>$this->shop->id])->one();
+    public function actionView($id)
+    {
+        $model = News::find()->with('image')->where(['id' => $id, 'shop_id' => $this->shop->id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
@@ -91,12 +97,13 @@ class NewsController extends Controller{
         ]);
     }
 
-    public function actionRemove($id) {
-        $model = News::find()->with('image')->where(['id'=>$id, 'shop_id'=>$this->shop->id])->one();
+    public function actionRemove($id)
+    {
+        $model = News::find()->with('image')->where(['id' => $id, 'shop_id' => $this->shop->id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
-        
+
         if ($this->user && ($this->user->role != User::ROLE_USER) && $model && $model->removeObject()) {
             Yii::$app->session->setFlash('news_removed', 'Новость успешно удалена');
         }
@@ -104,7 +111,8 @@ class NewsController extends Controller{
         return $this->redirect(['/shop/news']);
     }
 
-    public function actionLock($id) {
+    public function actionLock($id)
+    {
         $model = News::findOne($id);
 
         if (!$model) {
@@ -126,22 +134,37 @@ class NewsController extends Controller{
         return $this->redirect(Yii::$app->request->referrer);
     }
 
-    public function actionUpload($CKEditorFuncNum) {
+    public function actionUpload($CKEditorFuncNum)
+    {
         $file = UploadedFile::getInstanceByName('upload');
-        if ($file) {
-            $path = 'uploads/news/gallery/';
+        if (!$file) {
+            return "File not uploaded\n";
+        }
 
-            $model = new News;
+        $model = new News();
+        $name = $model->generateFileName() . '.' . $file->extension;
 
-            $news = $model->generateFileName().'.'.$file->extension;
+        $tmp = Yii::getAlias('@runtime') . '/ck_' . uniqid() . '_' . $name;
+        if (!$file->saveAs($tmp)) {
+            return "Error in upload file\n";
+        }
 
-            if ($file->saveAs($path.$news)) {
-                return '<script type="text/javascript">window.parent.CKEDITOR.tools.callFunction("'.$CKEditorFuncNum.'", "/'.$path.$news.'", "");</script>';
-            } else {
-                return "Возникла ошибка при загрузке файла\n";
-            }
-        } else {
-            return "Файл не загружен\n";
+        try {
+            $key = "uploads/news/gallery/{$name}";
+            $contentType = @mime_content_type($tmp) ?: 'application/octet-stream';
+
+            Yii::$app->s3->putFile($key, $tmp, $contentType);
+
+            $url = Yii::$app->s3->url($key);
+
+            return '<script type="text/javascript">window.parent.CKEDITOR.tools.callFunction("'
+                . $CKEditorFuncNum . '", "'
+                . $url . '", "");</script>';
+        } catch (\Throwable $e) {
+            Yii::error("CKEditor upload error: " . $e->getMessage(), __METHOD__);
+            return "Upload failed\n";
+        } finally {
+            @unlink($tmp);
         }
     }
 }

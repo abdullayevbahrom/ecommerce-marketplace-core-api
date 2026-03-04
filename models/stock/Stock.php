@@ -13,6 +13,7 @@ use app\models\Region;
 use app\models\City;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
+
 /**
  * This is the model class for table "stock".
  *
@@ -89,13 +90,14 @@ class Stock extends \yii\db\ActiveRecord
         ];
     }
 
-    public function saveObject() {
+    public function saveObject()
+    {
         $this->status = 1;
 
         /** @var User|null $user */
         $user = Yii::$app->user->identity;
         if ($user && $user->role == User::ROLE_SHOP) {
-            $shop = Shop::findOne(['user_id'=>$user->id]);
+            $shop = Shop::findOne(['user_id' => $user->id]);
             $this->shop_id = $shop->id;
         }
 
@@ -114,26 +116,26 @@ class Stock extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function removeObject(){
-        if ($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image) {
-            $path = Images::PHOTO_STOCK_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('stock', $s);
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
@@ -142,15 +144,29 @@ class Stock extends \yii\db\ActiveRecord
 
         $data = [
             'id',
-            'name' => function() use($language) { return $this->{'name_'.$language} ? $this->{'name_'.$language} : $this->name_ru;},
-            'description' => function() use($language) { return $this->{'description_'.$language} ? $this->{'description_'.$language} : $this->description_ru;},
-            'photo',
-            'product_count' => function() {return count($this->products);},
+            'name' => function () use ($language) {
+                return $this->{'name_' . $language} ? $this->{'name_' . $language} : $this->name_ru;
+            },
+            'description' => function () use ($language) {
+                return $this->{'description_' . $language} ? $this->{'description_' . $language} : $this->description_ru;
+            },
+            'photo' => function () {
+                return $this->getPhoto();
+            },
+            'product_count' => function () {
+                return count($this->products);
+            },
             'status',
             'date',
-            'region_name' => function() use($language) { return $this->getRegionName($language); },
-            'city_name' => function() use($language) { return $this->getCityName($language); },
-            'full_address' => function() use($language) { return $this->getFullAddress($language); },
+            'region_name' => function () use ($language) {
+                return $this->getRegionName($language);
+            },
+            'city_name' => function () use ($language) {
+                return $this->getCityName($language);
+            },
+            'full_address' => function () use ($language) {
+                return $this->getFullAddress($language);
+            },
             'bts_region_id',
             'bts_city_id'
         ];
@@ -226,19 +242,19 @@ class Stock extends \yii\db\ActiveRecord
     public function getFullAddress($language = 'ru')
     {
         $parts = [];
-        
+
         if ($regionName = $this->getRegionName($language)) {
             $parts[] = $regionName;
         }
-        
+
         if ($cityName = $this->getCityName($language)) {
             $parts[] = $cityName;
         }
-        
+
         if ($this->address) {
             $parts[] = $this->address;
         }
-        
+
         return implode(', ', $parts);
     }
 
@@ -291,10 +307,11 @@ class Stock extends \yii\db\ActiveRecord
     }
 
     // images
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'stock', 'main'=>1]);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'stock', 'main' => 1]);
     }
-    
+
     // public function afterSave($insert, $changedAttributes)
     // {
     //     parent::afterSave($insert, $changedAttributes);

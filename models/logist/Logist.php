@@ -31,7 +31,7 @@ class Logist extends \yii\db\ActiveRecord
 {
     const LOGIST_CREATE = 'create';
     const LOGIST_UPDATE = 'update';
-    
+
     public $imageFiles = [];
     public $login, $password;
 
@@ -49,8 +49,8 @@ class Logist extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['password', 'login', 'name_ru'], 'required', 'message'=>'Заполните поле', 'on'=>self::LOGIST_CREATE],
-            [['name_ru'], 'required', 'message'=>'Заполните поле', 'on'=>self::LOGIST_UPDATE],
+            [['password', 'login', 'name_ru'], 'required', 'message' => 'Заполните поле', 'on' => self::LOGIST_CREATE],
+            [['name_ru'], 'required', 'message' => 'Заполните поле', 'on' => self::LOGIST_UPDATE],
 
             ['login', 'checkLogin'],
             [['user_id', 'sort', 'status'], 'integer'],
@@ -81,7 +81,8 @@ class Logist extends \yii\db\ActiveRecord
         ];
     }
 
-    public function checkLogin($attribute, $params) {
+    public function checkLogin($attribute, $params)
+    {
         $user = new User;
 
         if (!$user->hasErrors()) {
@@ -94,7 +95,8 @@ class Logist extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function saveUser() {
+    public function saveUser()
+    {
         $user = new User;
         if ($this->user_id) {
             $user = User::findOne($this->user_id);
@@ -113,7 +115,8 @@ class Logist extends \yii\db\ActiveRecord
         return $user;
     }
 
-    public function saveObject() {
+    public function saveObject()
+    {
         if ($this->save()) {
             $user = $this->saveUser();
             $this->user_id = $user->id;
@@ -133,29 +136,29 @@ class Logist extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function removeObject(){
-        if ($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
-        
+
         return $this->delete();
     }
 
-    public function getPhoto($s = 'original') {
+    public function getPhoto($s = 'original')
+    {
         if ($this->image) {
-            $path = Images::PHOTO_LOGIST_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
+            return $this->image->getPhoto('logist', $s);
         }
 
         return Images::PHOTO_DEFAULT;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
-        
+
         $controller = Yii::$app->controller->id;
         $action = Yii::$app->controller->action->id;
 
@@ -163,9 +166,15 @@ class Logist extends \yii\db\ActiveRecord
 
         $data = [
             'id',
-            'name'=>function(){return $this->name_ru;},
-            'description'=>function(){return $this->description_ru;},
-            'photo',
+            'name' => function () {
+                return $this->name_ru;
+            },
+            'description' => function () {
+                return $this->description_ru;
+            },
+            'photo' => function () {
+                return $this->getPhoto();
+            },
             'status',
             'logistRegions'
         ];
@@ -183,11 +192,13 @@ class Logist extends \yii\db\ActiveRecord
         return $this->hasMany(LogistRegion::className(), ['logist_id' => 'id']);
     }
 
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'logist', 'main'=>1]);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'logist', 'main' => 1]);
     }
 
-    public function getUser() {
+    public function getUser()
+    {
         return $this->hasOne(User::className(), ['id' => 'user_id']);
     }
 }

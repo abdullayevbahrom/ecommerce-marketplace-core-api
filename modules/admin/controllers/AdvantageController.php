@@ -1,24 +1,26 @@
 <?php
+
 namespace app\modules\admin\controllers;
 
 use Yii;
 use yii\web\Controller;
 use yii\web\UploadedFile;
-use yii\helpers\ArrayHelper;
-
+use yii\web\HttpException;
 use app\models\user\User;
 use app\models\advantages\Advantages;
 use app\models\advantages\AdvantagesSearch;
 
-class AdvantageController extends Controller{
-	public $user;
-    
-    public function beforeAction($action) {
+class AdvantageController extends Controller
+{
+    public $user;
+
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
         if (Yii::$app->user->isGuest) {
             return $this->redirect(['/admin/default']);
         }
-        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
+        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id' => Yii::$app->user->identity->id])->one();
 
         if (($this->user->role == User::ROLE_MODERATOR)) {
             $accesses = array();
@@ -43,7 +45,8 @@ class AdvantageController extends Controller{
         return parent::beforeAction($action);
     }
 
-    public function actionIndex(){
+    public function actionIndex()
+    {
         $searchModel = new AdvantagesSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
         $dataProvider->query->with('image');
@@ -54,11 +57,12 @@ class AdvantageController extends Controller{
         ]);
     }
 
-    public function actionCreate($id = null) {
+    public function actionCreate($id = null)
+    {
         $model = new Advantages;
 
         if ($id) {
-            $model = Advantages::find()->with('image')->where(['id'=>$id])->one();
+            $model = Advantages::find()->with('image')->where(['id' => $id])->one();
             if (!$model) {
                 throw new HttpException(404, 'Page not found');
             }
@@ -67,7 +71,7 @@ class AdvantageController extends Controller{
         if ($model->load(Yii::$app->request->post()) && $model->validate()) {
             if ($model->saveObject()) {
                 Yii::$app->session->setFlash('advantage_saved', 'Saved');
-                return $this->redirect(['/admin/advantage/view', 'id'=>$model->id]);
+                return $this->redirect(['/admin/advantage/view', 'id' => $model->id]);
             }
         }
 
@@ -76,8 +80,9 @@ class AdvantageController extends Controller{
         ]);
     }
 
-    public function actionView($id) {
-        $model = Advantages::find()->with('image')->where(['id'=>$id])->one();
+    public function actionView($id)
+    {
+        $model = Advantages::find()->with('image')->where(['id' => $id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
@@ -87,12 +92,13 @@ class AdvantageController extends Controller{
         ]);
     }
 
-    public function actionRemove($id) {
-        $model = Advantages::find()->with('image')->where(['id'=>$id])->one();
+    public function actionRemove($id)
+    {
+        $model = Advantages::find()->with('image')->where(['id' => $id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
-        
+
         if ($this->user && ($this->user->role != User::ROLE_USER) && $model && $model->removeObject()) {
             Yii::$app->session->setFlash('advantage_removed', 'Deleted');
         }
@@ -100,7 +106,8 @@ class AdvantageController extends Controller{
         return $this->redirect(['/admin/advantage']);
     }
 
-    public function actionLock($id) {
+    public function actionLock($id)
+    {
         $model = Advantages::findOne($id);
 
         if (!$model) {
@@ -122,22 +129,38 @@ class AdvantageController extends Controller{
         return $this->redirect(Yii::$app->request->referrer);
     }
 
-    public function actionUpload($CKEditorFuncNum) {
+    public function actionUpload($CKEditorFuncNum)
+    {
         $file = UploadedFile::getInstanceByName('upload');
-        if ($file) {
-            $path = 'uploads/advantages/gallery/';
-
-            $model = new Advantages;
-
-            $advantages = $model->generateFileName().'.'.$file->extension;
-
-            if ($file->saveAs($path.$advantages)) {
-                return '<script type="text/javascript">window.parent.CKEDITOR.tools.callFunction("'.$CKEditorFuncNum.'", "/'.$path.$advantages.'", "");</script>';
-            } else {
-                return "Error in upload file\n";
-            }
-        } else {
+        if (!$file) {
             return "File not uploaded\n";
+        }
+
+        $model = new Advantages();
+        $name = $model->generateFileName() . '.' . $file->extension;
+
+        $tmp = Yii::getAlias('@runtime') . '/ck_' . uniqid() . '_' . $name;
+        if (!$file->saveAs($tmp)) {
+            return "Error in upload file\n";
+        }
+
+        try {
+            // key: advantages/gallery/{name}
+            $key = "advantages/gallery/{$name}";
+            $contentType = @mime_content_type($tmp) ?: 'application/octet-stream';
+
+            Yii::$app->s3->putFile($key, $tmp, $contentType);
+
+            $url = Yii::$app->s3->url($key);
+
+            return '<script type="text/javascript">window.parent.CKEDITOR.tools.callFunction("'
+                . $CKEditorFuncNum . '", "'
+                . $url . '", "");</script>';
+        } catch (\Throwable $e) {
+            Yii::error("CKEditor upload error: " . $e->getMessage(), __METHOD__);
+            return "Upload failed\n";
+        } finally {
+            @unlink($tmp);
         }
     }
 }

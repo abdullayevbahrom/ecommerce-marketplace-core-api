@@ -1,4 +1,5 @@
 <?php
+
 namespace app\models\user;
 
 use Yii;
@@ -16,7 +17,8 @@ use app\models\shop\Shop;
 use app\models\moderator\ModeratorAccess;
 use app\models\user\address\UserAddress;
 
-class User extends ActiveRecord implements IdentityInterface {
+class User extends ActiveRecord implements IdentityInterface
+{
     // user
     const USER_SIGNUP = 'signup';
     const USER_SIGNIN = 'signin';
@@ -62,63 +64,65 @@ class User extends ActiveRecord implements IdentityInterface {
     public $password_repeat;
     public $address = [];
 
-    public static function tableName(){
+    public static function tableName()
+    {
         return 'user';
     }
 
-    public function rules(){
+    public function rules()
+    {
         return [
             // user reg
-            [['phone'], 'required', 'message'=>'Заполните поле', 'on'=>self::USER_SIGNUP],
-            ['phone', 'checkPhone', 'on'=>self::USER_SIGNUP],
+            [['phone'], 'required', 'message' => 'Заполните поле', 'on' => self::USER_SIGNUP],
+            ['phone', 'checkPhone', 'on' => self::USER_SIGNUP],
 
             // user auth
             // ['password', 'checkPassword', 'on'=>self::USER_SIGNIN],
-            [['phone'], 'required', 'message'=>'Заполните поле', 'on'=>self::USER_SIGNIN],
+            [['phone'], 'required', 'message' => 'Заполните поле', 'on' => self::USER_SIGNIN],
 
             // user update
-            [['name', 'lastname', 'middlename', 'phone', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'device_id', 'last_address', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on'=>self::USER_UPDATE],
-            ['phone', 'checkPhone', 'on'=>self::USER_UPDATE],
-            ['email', 'email', 'message'=>'Не верный формат e-mail', 'on'=>self::USER_UPDATE],
-            [['gender'], 'integer', 'min'=>1, 'max'=>2, 'on'=>self::USER_UPDATE],
-            ['type', 'in', 'range'=>['yur', 'fiz'], 'message'=>'Тип должен быть yur или fiz', 'on'=>self::USER_UPDATE],
+            [['name', 'lastname', 'middlename', 'phone', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'device_id', 'last_address', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on' => self::USER_UPDATE],
+            ['phone', 'checkPhone', 'on' => self::USER_UPDATE],
+            ['email', 'email', 'message' => 'Не верный формат e-mail', 'on' => self::USER_UPDATE],
+            [['gender'], 'integer', 'min' => 1, 'max' => 2, 'on' => self::USER_UPDATE],
+            ['type', 'in', 'range' => ['yur', 'fiz'], 'message' => 'Тип должен быть yur или fiz', 'on' => self::USER_UPDATE],
 
             // save user by admin
-            [['password', 'name', 'phone'], 'required', 'message'=>'Заполните поле', 'on'=>self::SIGNUP_ADMIN_USER],
-            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on'=>self::SIGNUP_ADMIN_USER],
-            [['name', 'phone'], 'required', 'message'=>'Заполните поле', 'on'=>self::UPDATE_ADMIN_USER],
-            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on'=>self::UPDATE_ADMIN_USER],
-            ['phone', 'checkPhone', 'on'=>self::SIGNUP_ADMIN_USER],
-            ['email', 'checkEmail', 'on'=>self::SIGNUP_ADMIN_USER],
-            ['phone', 'checkPhoneAdmin', 'on'=>self::UPDATE_ADMIN_USER],
-            ['email', 'checkEmailAdmin', 'on'=>self::UPDATE_ADMIN_USER],
+            [['password', 'name', 'phone'], 'required', 'message' => 'Заполните поле', 'on' => self::SIGNUP_ADMIN_USER],
+            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on' => self::SIGNUP_ADMIN_USER],
+            [['name', 'phone'], 'required', 'message' => 'Заполните поле', 'on' => self::UPDATE_ADMIN_USER],
+            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on' => self::UPDATE_ADMIN_USER],
+            ['phone', 'checkPhone', 'on' => self::SIGNUP_ADMIN_USER],
+            ['email', 'checkEmail', 'on' => self::SIGNUP_ADMIN_USER],
+            ['phone', 'checkPhoneAdmin', 'on' => self::UPDATE_ADMIN_USER],
+            ['email', 'checkEmailAdmin', 'on' => self::UPDATE_ADMIN_USER],
 
             // moderator
             // sign-up
-            [['name', 'login', 'password'], 'required', 'message'=>'Заполните поле', 'on'=>self::SIGNUP_MODERATOR],
-            ['login', 'checkLogin', 'on'=>self::SIGNUP_MODERATOR],
+            [['name', 'login', 'password'], 'required', 'message' => 'Заполните поле', 'on' => self::SIGNUP_MODERATOR],
+            ['login', 'checkLogin', 'on' => self::SIGNUP_MODERATOR],
 
             // update
-            [['name', 'login'], 'required', 'message'=>'Заполните поле', 'on'=>self::UPDATE_MODERATOR],
-            ['login', 'checkLogin', 'on'=>self::UPDATE_MODERATOR],
-            ['phone', 'checkPhoneModerator', 'on'=>self::UPDATE_MODERATOR],
+            [['name', 'login'], 'required', 'message' => 'Заполните поле', 'on' => self::UPDATE_MODERATOR],
+            ['login', 'checkLogin', 'on' => self::UPDATE_MODERATOR],
+            ['phone', 'checkPhoneModerator', 'on' => self::UPDATE_MODERATOR],
 
             // admin auth
-            [['login', 'password'], 'required', 'message'=>'Заполните поле', 'on'=>self::SIGNIN_ADMIN],
-            ['password', 'checkPassword', 'on'=>self::SIGNIN_ADMIN],
+            [['login', 'password'], 'required', 'message' => 'Заполните поле', 'on' => self::SIGNIN_ADMIN],
+            ['password', 'checkPassword', 'on' => self::SIGNIN_ADMIN],
 
             // admin update profile
-            [['name', 'login'], 'required', 'message'=>'Заполните поле', 'on'=>self::UPDATE_ADMIN],
-            ['phone', 'checkPhoneAdmin', 'on'=>self::UPDATE_ADMIN],
-            ['email', 'checkEmail', 'on'=>self::UPDATE_ADMIN],
-            ['login', 'checkLogin', 'on'=>self::UPDATE_ADMIN],
+            [['name', 'login'], 'required', 'message' => 'Заполните поле', 'on' => self::UPDATE_ADMIN],
+            ['phone', 'checkPhoneAdmin', 'on' => self::UPDATE_ADMIN],
+            ['email', 'checkEmail', 'on' => self::UPDATE_ADMIN],
+            ['login', 'checkLogin', 'on' => self::UPDATE_ADMIN],
 
             // admin password
-            [['password'], 'required', 'message'=>'Введите пароль', 'on'=>self::ADMIN_CHANGE_PASSWORD],
+            [['password'], 'required', 'message' => 'Введите пароль', 'on' => self::ADMIN_CHANGE_PASSWORD],
 
             // user shop
-            [['name', 'login', 'password'], 'required', 'message'=>'Заполните поле', 'on'=>self::USER_SHOP_SIGNIN],
-            ['login', 'checkLogin', 'on'=>self::USER_SHOP_SIGNIN],
+            [['name', 'login', 'password'], 'required', 'message' => 'Заполните поле', 'on' => self::USER_SHOP_SIGNIN],
+            ['login', 'checkLogin', 'on' => self::USER_SHOP_SIGNIN],
 
             // default validation
             // [['password', 'password_repeat'], 'required', 'message'=>'Заполните поле', 'on'=>self::RECOVER_PASSWORD],
@@ -134,23 +138,24 @@ class User extends ActiveRecord implements IdentityInterface {
             // [['moderator_access', 'remember', 'address'], 'safe'],
             // [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg', 'maxSize' => 3072000]
             [['phone', 'phone_code', 'status', 'token', 'role', 'sms_live'], 'safe'],
-            
+
             [['bts_region_id', 'bts_city_id'], 'string', 'max' => 10],
-            
+
             // BTS region and city validation
             // ['bts_city_id', 'validateCityRegion'],
 
             ['source', 'in', 'range' => [self::SOURCE_YII, self::SOURCE_SKLAD]],
         ];
     }
-    
+
     public function getOrderReviews()
     {
         return $this->hasMany(OrderReview::className(), ['user_id' => 'id']);
     }
 
     // validate check password
-    public function checkPassword($attribute, $params) {
+    public function checkPassword($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             if ($this->login) {
                 $user = $this->findByUsername($this->login);
@@ -172,7 +177,8 @@ class User extends ActiveRecord implements IdentityInterface {
     }
 
     // check exist login
-    public function checkLogin($attribute, $params) {
+    public function checkLogin($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             $user = $this->findByUsername($this->login);
             if ($user && ($user->id != $this->id)) {
@@ -184,7 +190,8 @@ class User extends ActiveRecord implements IdentityInterface {
     }
 
     // check exist email
-    public function checkEmail($attribute, $params) {
+    public function checkEmail($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             if ($this->email) {
                 $user = $this->findByUsername($this->email);
@@ -198,15 +205,16 @@ class User extends ActiveRecord implements IdentityInterface {
     }
 
     // check exist phone
-    public function checkPhone($attribute, $params) {
+    public function checkPhone($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             if (!preg_match("/^[\d+]+$/", $this->phone)) {
                 return $this->addError($attribute, 'Вводите только цифры');
             }
-            
+
             // Extract only digits from phone number (remove + and any other non-digit characters)
             $digitsOnly = preg_replace('/\D/', '', $this->phone);
-            
+
             if (strlen($digitsOnly) != 12) {
                 return $this->addError($attribute, 'Количество цифр должно быть 12');
             }
@@ -221,7 +229,8 @@ class User extends ActiveRecord implements IdentityInterface {
         return false;
     }
 
-    public function checkPhoneAdmin($attribute, $params) {
+    public function checkPhoneAdmin($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             if (!preg_match("/^[\d+]+$/", $this->phone)) {
                 return $this->addError($attribute, 'Вводите только цифры');
@@ -230,7 +239,7 @@ class User extends ActiveRecord implements IdentityInterface {
             //     return $this->addError($attribute, 'Количество цифр должно быть 12');
             // }
 
-            $user = self::findOne(['phone'=>$this->phone, 'role'=>Yii::$app->user->identity->role]);
+            $user = self::findOne(['phone' => $this->phone, 'role' => Yii::$app->user->identity->role]);
 
             if ($user && ($user->id != $this->id) && ($user->status == 1)) {
                 return $this->addError($attribute, 'Номер телефона уже занят');
@@ -240,7 +249,8 @@ class User extends ActiveRecord implements IdentityInterface {
         return false;
     }
 
-    public function checkEmailAdmin($attribute, $params) {
+    public function checkEmailAdmin($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             if ($this->email) {
                 $user = $this->findByUsername($this->email);
@@ -253,7 +263,8 @@ class User extends ActiveRecord implements IdentityInterface {
         return false;
     }
 
-    public function checkPhoneModerator($attribute, $params) {
+    public function checkPhoneModerator($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             if (!preg_match("/^[\d+]+$/", $this->phone)) {
                 return $this->addError($attribute, 'Вводите только цифры');
@@ -262,7 +273,7 @@ class User extends ActiveRecord implements IdentityInterface {
             //     return $this->addError($attribute, 'Количество цифр должно быть 12');
             // }
 
-            $user = self::findOne(['phone'=>$this->phone, 'role'=>User::ROLE_MODERATOR]);
+            $user = self::findOne(['phone' => $this->phone, 'role' => User::ROLE_MODERATOR]);
 
             if ($user && ($user->id != $this->id) && ($user->status == 1)) {
                 return $this->addError($attribute, 'Номер телефона уже занят');
@@ -272,9 +283,10 @@ class User extends ActiveRecord implements IdentityInterface {
         return false;
     }
 
-    public function checkPhoneCode($attribute, $params) {
+    public function checkPhoneCode($attribute, $params)
+    {
         if (!$this->hasErrors()) {
-            $user = SmsCode::findOne(['sms_code'=>$this->phone_code]);
+            $user = SmsCode::findOne(['sms_code' => $this->phone_code]);
 
             if (!$user) {
                 return $this->addError($attribute, 'Неверный код подтверждения');
@@ -289,13 +301,14 @@ class User extends ActiveRecord implements IdentityInterface {
      * Ensures that if both bts_region_id and bts_city_id are set,
      * the city belongs to the specified region
      */
-    public function validateCityRegion($attribute, $params) {
+    public function validateCityRegion($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             // Only validate if both region and city are set
             if (!empty($this->bts_region_id) && !empty($this->bts_city_id)) {
                 // Import BTS service to access city data
                 $cityData = \yii\services\BTS::getCitiesDetailed($this->bts_region_id);
-                
+
                 // Check if the city exists in the specified region
                 if (!isset($cityData[$this->bts_city_id])) {
                     return $this->addError($attribute, 'Выбранный город не принадлежит указанному региону');
@@ -306,73 +319,85 @@ class User extends ActiveRecord implements IdentityInterface {
         return false;
     }
 
-    public static function findIdentity($id){
+    public static function findIdentity($id)
+    {
         return static::findOne($id);
     }
 
-    public static function findIdentityByAccessToken($token, $type = null){
-        return static::findOne(['token'=>$token]);
+    public static function findIdentityByAccessToken($token, $type = null)
+    {
+        return static::findOne(['token' => $token]);
     }
 
-    public static function findByUsername($username){
-        $user = static::findOne(['login'=>$username]);
+    public static function findByUsername($username)
+    {
+        $user = static::findOne(['login' => $username]);
         if (!$user) {
-            $user = static::findOne(['email'=>$username]);
+            $user = static::findOne(['email' => $username]);
         }
         if (!$user) {
-            $user = static::findOne(['phone'=>$username]);
-        }
-
-        if (!$user) {
-            $user = static::findOne(['facebook_id'=>$username]);
+            $user = static::findOne(['phone' => $username]);
         }
 
         if (!$user) {
-            $user = static::findOne(['vk_id'=>$username]);
+            $user = static::findOne(['facebook_id' => $username]);
         }
 
         if (!$user) {
-            $user = static::findOne(['google_id'=>$username]);
+            $user = static::findOne(['vk_id' => $username]);
+        }
+
+        if (!$user) {
+            $user = static::findOne(['google_id' => $username]);
         }
 
         return $user;
     }
 
-    public function getId() {
+    public function getId()
+    {
         return $this->id;
     }
 
-    public function getAuthKey(){
+    public function getAuthKey()
+    {
         return $this->authKey;
     }
 
-    public function validateAuthKey($authKey){
+    public function validateAuthKey($authKey)
+    {
         return $this->authKey === $authKey;
     }
 
     //helpers
-    public function setPassword($password){
+    public function setPassword($password)
+    {
         $this->password = Yii::$app->security->generatePasswordHash($password);
     }
 
-    public function generatePassword($password) {
+    public function generatePassword($password)
+    {
         return Yii::$app->security->generatePasswordHash($password);
     }
 
-    public function generatePasswordResetToken(){
-        $this->password_reset_token = Yii::$app->security->generateRandomString() . '_' . time();    
+    public function generatePasswordResetToken()
+    {
+        $this->password_reset_token = Yii::$app->security->generateRandomString() . '_' . time();
     }
 
-    public function generateAuthKey(){
+    public function generateAuthKey()
+    {
         $this->auth_key = Yii::$app->security->generateRandomString();
     }
 
-    public function changePassword() {
+    public function changePassword()
+    {
         $this->password ? $this->setPassword(Html::encode($this->password)) : $this->password = $this->getOldAttributes()['password'];
         return $this->save(false) ? true : false;
     }
 
-    public function validatePassword($password){
+    public function validatePassword($password)
+    {
         try {
             return Yii::$app->security->validatePassword($password, $this->password);
         } catch (\yii\base\InvalidArgumentException $e) {
@@ -380,7 +405,8 @@ class User extends ActiveRecord implements IdentityInterface {
         }
     }
 
-    public function checkOldPassword($attribute, $params) {
+    public function checkOldPassword($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             if (!$this->validatePassword($this->current_password)) {
                 return $this->addError($attribute, 'Не верный текущий пароль');
@@ -390,28 +416,31 @@ class User extends ActiveRecord implements IdentityInterface {
         return false;
     }
 
-    public function sendEmail() {
-        $body = "Для восстановления пароля, пожалуйста перейдите по ссылке: https://birmakon.qwertyuz.ru/main/reset-new-password?reset_key=".$this->reset_key."&email=".$this->email;
-        
+    public function sendEmail()
+    {
+        $body = "Для восстановления пароля, пожалуйста перейдите по ссылке: https://birmakon.qwertyuz.ru/main/reset-new-password?reset_key=" . $this->reset_key . "&email=" . $this->email;
+
         Yii::$app->mailer->compose()
             ->setFrom(Yii::$app->params['supportEmail'])
             ->setTo($this->email)
             ->setSubject('Восстановление пароля')
             ->setTextBody($body)
             ->send();
-        
+
         return true;
     }
 
-    public function generateCode($phone = false) {
-        if(isset($phone) && $phone=='+71112223344'){
+    public function generateCode($phone = false)
+    {
+        if (isset($phone) && $phone == '+71112223344') {
             return 1234567;
         }
         return 1234567;
         // return mt_rand(100000, 999999);
     }
 
-    public function saveObject($type = self::ROLE_USER) {
+    public function saveObject($type = self::ROLE_USER)
+    {
         $this->ip = $_SERVER['REMOTE_ADDR'];
         $this->role = $type;
 
@@ -422,10 +451,10 @@ class User extends ActiveRecord implements IdentityInterface {
         $this->status = 1;
 
         $this->date = date('Y-m-d H:i:s');
-        
+
         if ($this->save(false)) {
             if ($this->moderator_access) {
-                ModeratorAccess::deleteAll('user_id = :user_id', ['user_id'=>$this->id]);
+                ModeratorAccess::deleteAll('user_id = :user_id', ['user_id' => $this->id]);
 
                 $keys = ['user_id', 'moderator_id'];
                 $vals = [];
@@ -437,7 +466,7 @@ class User extends ActiveRecord implements IdentityInterface {
             }
 
             if ($this->address) {
-                UserAddress::deleteAll('user_id = :user_id', ['user_id'=>$this->id]);
+                UserAddress::deleteAll('user_id = :user_id', ['user_id' => $this->id]);
 
                 $keys = ['user_id', 'address'];
                 $vals = [];
@@ -461,14 +490,15 @@ class User extends ActiveRecord implements IdentityInterface {
         return false;
     }
 
-    public function saveCode($phone = null) {
+    public function saveCode($phone = null)
+    {
         $code = new SmsCode;
-        
+
         $current_phone = $phone ? $phone : $this->phone;
-        $model = SmsCode::find()->where(['phone'=>$current_phone]);
+        $model = SmsCode::find()->where(['phone' => $current_phone]);
 
         if ($this->id) {
-            $model->andWhere(['user_id'=>$this->id]);
+            $model->andWhere(['user_id' => $this->id]);
             $code->user_id = $this->id;
         }
 
@@ -477,7 +507,7 @@ class User extends ActiveRecord implements IdentityInterface {
         if ($model) {
             $model->delete();
         }
-        
+
         $code->phone = $current_phone;
         $code->code = (string)$this->generateCode($current_phone);
         // $code->code = '000000';
@@ -488,33 +518,37 @@ class User extends ActiveRecord implements IdentityInterface {
             $phone = mb_substr($code->phone, 1);
 
             $service = new SMSCService();
-            $service->send($phone, "Ваш код: ".$code->code."\nНе передавайте ваш код другим лицам!");
+            $service->send($phone, "Ваш код: " . $code->code . "\nНе передавайте ваш код другим лицам!");
 
-           // $service = new SmsService;
-          //  $service->request($phone, "Miss Lighting\nВаш код: ".$code->code."\nНе передавайте ваш код другим лицам!");
+            // $service = new SmsService;
+            //  $service->request($phone, "Miss Lighting\nВаш код: ".$code->code."\nНе передавайте ваш код другим лицам!");
             return $code;
         }
 
         return false;
     }
 
-    public function generateFileName() {
-        return time()+mt_rand(0, 1000000);
+    public function generateFileName()
+    {
+        return time() + mt_rand(0, 1000000);
     }
 
-    public function removeObject(){
-        if($this->image && $this->image->delete()){
+    public function removeObject()
+    {
+        if ($this->image && $this->image->delete()) {
             $this->image->removeImageSize();
         }
-        
+
         return $this->delete();
     }
 
-    public function generateToken() {
+    public function generateToken()
+    {
         return Yii::$app->security->generateRandomString();
     }
 
-    public function login() {
+    public function login()
+    {
         if ($this->email) {
             $user = $this->findByUsername($this->email);
         }
@@ -538,29 +572,25 @@ class User extends ActiveRecord implements IdentityInterface {
         if ($this->google_id) {
             $user = $this->findByUsername($this->google_id);
         }
-        
-        if ($user && Yii::$app->user->login($user, $this->remember ? 3600*24*30 : 0)) {
+
+        if ($user && Yii::$app->user->login($user, $this->remember ? 3600 * 24 * 30 : 0)) {
             return $user;
         }
         return false;
     }
 
-    public function getPhoto($s = 'original') {
-        if ($this->image) {
-            $path = self::PHOTO_PATH.$this->image->object_id.'/'.$s.'/'.$this->image->photo;
-            if (is_file($path)) {
-                return '/'.$path;
-            }
-        }
-
-        return self::PHOTO_DEFAULT;
+    public function getPhoto($size = 'original')
+    {
+        return $this->image?->getPhoto('user', $size) ?? self::PHOTO_DEFAULT;
     }
 
-    public function existPhoto() {
+    public function existPhoto()
+    {
         return $this->image ? $this->image : false;
     }
 
-    public function fields() {
+    public function fields()
+    {
         $controller = Yii::$app->controller->id;
         $action = Yii::$app->controller->action->id;
 
@@ -568,19 +598,23 @@ class User extends ActiveRecord implements IdentityInterface {
     }
 
     // relations
-    public function getImage() {
-        return $this->hasOne(Images::className(), ['object_id'=>'id'])->andOnCondition(['type'=>'user', 'main'=>1]);
+    public function getImage()
+    {
+        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'user', 'main' => 1]);
     }
 
-    public function getModeratorAccess() {
-        return $this->hasMany(ModeratorAccess::className(), ['user_id'=>'id']);
-    }
-    
-    public function getAddresses() {
-        return $this->hasMany(UserAddress::className(), ['user_id'=>'id']);
+    public function getModeratorAccess()
+    {
+        return $this->hasMany(ModeratorAccess::className(), ['user_id' => 'id']);
     }
 
-    public function getShop() {
-        return $this->hasOne(Shop::className(), ['user_id'=>'id']);
+    public function getAddresses()
+    {
+        return $this->hasMany(UserAddress::className(), ['user_id' => 'id']);
+    }
+
+    public function getShop()
+    {
+        return $this->hasOne(Shop::className(), ['user_id' => 'id']);
     }
 }

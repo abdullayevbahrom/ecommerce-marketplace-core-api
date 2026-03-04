@@ -3,15 +3,10 @@
 namespace app\models;
 
 use Yii;
-use yii\imagine\Image;
-use app\models\user\User;
+use app\components\S3Component;
 use app\models\product\ProductColor;
-use yii\helpers\FileHelper;
 
 
-// use yii\services\ImageHash;
-use Jenssegers\ImageHash\ImageHash;
-use Jenssegers\ImageHash\Implementations\DifferenceHash;
 
 /**
  * @property int $id
@@ -29,11 +24,7 @@ class Images extends \yii\db\ActiveRecord
 {
     const PHOTO_USER_PATH = 'uploads/user/';
     const PHOTO_CATEGORY_PATH = 'uploads/category/';
-
     const PHOTO_PRODUCT_PATH = 'uploads/product/';
-
-    //const PHOTO_PRODUCT_PATH = '/var/www/shared_storage/uploads/product/';
-
     const PHOTO_NEWS_PATH = 'uploads/news/';
     const PHOTO_DELIVERY_PATH = 'uploads/delivery/';
     const PHOTO_SLIDER_PATH = 'uploads/slider/';
@@ -98,9 +89,6 @@ class Images extends \yii\db\ActiveRecord
         ];
     }
 
-    /**
-     * @inheritdoc
-     */
     public function attributeLabels()
     {
         return [
@@ -113,150 +101,64 @@ class Images extends \yii\db\ActiveRecord
         ];
     }
 
-    // public function uploadPhoto($object_id, $type, $main = 1, $type_image = null, $check = true) 
-    // {
-    //     if (!array_key_exists($type, $this->object)) {
-    //         return false;
-    //     }
-
-    //     $path = $this->object[$type];
-
-    //     // Функция для создания директории, если она не существует
-    //     $createDir = function($dir) {
-    //         if (!is_dir($dir)) {
-    //             if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
-    //                 throw new \RuntimeException(sprintf('Directory "%s" was not created', $dir));
-    //             }
-    //         }
-    //     };
-
-
-    //     if (is_array($object_id)) {
-    //         foreach ($object_id as $v) {
-    //             $createDir($path.$v);
-    //             $createDir($path.$v.'/original');
-    //         }
-    //     } else {
-    //         $createDir($path.$object_id);
-    //         $createDir($path.$object_id.'/original');
-    //     }
-
-    //     foreach ($this->imageFiles as $key => $file) {
-    //         // Если $file это массив, то берём файл по ключу
-    //         $file = is_array($file) ? $file[$key] : $file;
-
-    //         if (is_array($object_id)) {
-    //             $id = $object_id[$key];
-    //         } else {
-    //             $id = $object_id;
-    //         }
-
-    //         $rnd = mt_rand(0, 1000000);
-    //         $name = time() + $rnd.'.'.$file->extension;
-    //         $original = $path.$id.'/original/'.$name;
-
-    //         if ($file->saveAs($original)) {
-    //             $hasher = new ImageHash(new DifferenceHash());
-    //             // $hash = $hasher->hash(Yii::$app->params['baseUrl'].'/'.$original);
-
-    //             $absolutePath = Yii::getAlias('@webroot') . '/' . $original;
-    //             if (!file_exists($absolutePath)) {
-    //                 throw new \Exception('File not found: ' . $absolutePath);
-    //             }
-    //             $hash = $hasher->hash($absolutePath);
-
-    //             // Если файл не является видео или SVG, создаем миниатюры
-    //             if ($file->extension != 'mp4' && $file->extension != 'svg') {
-    //                 foreach ($this->image_sizes as $sizeKey => $img) {
-    //                     $sizePath = $path.$id.'/'.$sizeKey.'x'.$img;
-    //                     $createDir($sizePath); // Создаем директорию для миниатюр, если её нет
-    //                     Image::thumbnail($original, $sizeKey, $img)->save(Yii::getAlias($sizePath.'/'.$name), ['quality' => 80]);
-    //                 }
-    //             }
-
-    //             $status = (Yii::$app->user->identity->role == User::ROLE_ADMIN) ? 1 : 0;
-
-    //             if ($this->photo && $check) {
-    //                 $original = $path.$id.'/original/'.$this->photo;
-    //                 if (is_file($original)) {
-    //                     unlink($original);
-    //                 }
-    //                 if ($file->extension != 'mp4' && $file->extension != 'svg') {
-    //                     foreach ($this->image_sizes as $sizeKey => $img) {
-    //                         $photo = $path.$id.'/'.$sizeKey.'x'.$img.'/'.$this->photo;
-    //                         if (is_file($photo)) {
-    //                             unlink($photo);
-    //                         }
-    //                     }
-    //                 }
-
-    //                 Yii::$app->db->createCommand()->update('image', ['photo' => $name], ['id' => $this->id, 'hash' => $hash])->execute();
-    //             } else {
-    //                 Yii::$app->db->createCommand()->insert('image', [
-    //                     'type' => $type_image ? $type_image : $type,
-    //                     'object_id' => $id,
-    //                     'photo' => $name,
-    //                     'main' => $main,
-    //                     'sort' => 0,
-    //                     'web' => 0,
-    //                     'status' => $status,
-    //                     'hash' => $hash
-    //                 ])->execute();
-    //             }
-    //         } else {
-    //             // Обработка ошибки сохранения файла
-    //             return false;
-    //         }
-    //     }
-
-    //     return true;
-    // }
-
-    public function uploadPhoto($tokenKey, $type, $main = 1, $type_image = null, $check = true)
+    public function uploadPhoto($objectId, $type, $main = 1, $type_image = null, $check = true): bool
     {
         if (!array_key_exists($type, $this->object)) {
             return false;
         }
-
-        $basePath = $this->object[$type];
+        /** @var S3Component $s3 */
+        $s3 = \Yii::$app->s3;
 
         foreach ($this->imageFiles as $file) {
-
             $rnd = mt_rand(0, 1000000);
             $name = time() . '_' . $rnd . '.' . $file->extension;
 
             $localTemp = Yii::getAlias('@runtime') . '/' . $name;
             $file->saveAs($localTemp);
 
-            $originalKey = $basePath . $tokenKey . '/original/' . $name;
-            Yii::$app->s3->upload($originalKey, $localTemp);
+            $ext = strtolower($file->extension);
+            $contentType = @mime_content_type($localTemp) ?: 'application/octet-stream';
 
-            // Миниатюры
-            foreach ($this->image_sizes as $sizeKey => $img) {
+            // original
+            $s3->putVariant($type, (string)$objectId, 'original', $name, $localTemp, $contentType);
 
-                $thumbPath = Yii::getAlias('@runtime') . "/{$sizeKey}_{$name}";
+            // thumbnails (svg/mp4 skip)
+            $makeThumbs = !in_array($ext, ['svg', 'mp4'], true);
+            if ($makeThumbs) {
+                foreach ($this->image_sizes as $w => $h) {
+                    $thumbPath = Yii::getAlias('@runtime') . "/{$w}_{$name}";
 
-                \yii\imagine\Image::thumbnail($localTemp, $sizeKey, $img)->save($thumbPath, ['quality' => 80]);
+                    \yii\imagine\Image::thumbnail($localTemp, (int)$w, (int)$h)
+                        ->save($thumbPath, ['quality' => 80]);
 
-                $thumbKey = $basePath . $tokenKey . "/{$sizeKey}x{$img}/" . $name;
+                    $s3->putVariant($type, (string)$objectId, "{$w}x{$h}", $name, $thumbPath);
 
-                Yii::$app->s3->upload($thumbKey, $thumbPath);
-
-                unlink($thumbPath);
+                    @unlink($thumbPath);
+                }
             }
 
-            unlink($localTemp);
+            @unlink($localTemp);
 
-            Yii::$app->db->createCommand()->insert('image', [
-                'type' => $type_image ?: $type,
-                'token_key' => $tokenKey,
-                'photo' => $name,
-                'main' => $main,
-                'sort' => 0,
-                'web' => 0,
-                'status' => 1,
-                // 'hash' => (string)$hash
-            ])->execute();
+            if ($this->photo && $check) {
+                $sizes = ['original'];
+                foreach ($this->image_sizes as $w => $h) $sizes[] = "{$w}x{$h}";
+                $s3->deleteVariants($this->type, (string)$objectId, $this->photo, $sizes);
+
+                Yii::$app->db->createCommand()->update('image', [
+                    'photo' => $name,
+                    'web' => 1,
+                ], ['id' => $this->id])->execute();
+            } else {
+                Yii::$app->db->createCommand()->insert('image', [
+                    'type' => $type_image ?: $type,
+                    'object_id' => (int)$objectId,
+                    'photo' => $name,
+                    'main' => $main,
+                    'sort' => 0,
+                    'web' => 1,
+                    'status' => 1,
+                ])->execute();
+            }
         }
 
         return true;
@@ -264,109 +166,125 @@ class Images extends \yii\db\ActiveRecord
 
     public function removeImage()
     {
-        $path = $this->object[$this->type];
-
-        $image = $path . $this->object_id . '/' . $this->photo;
-
-        if (is_file($image)) {
-            unlink($image);
-        }
-
-        return $this->delete();
+        return (bool) $this->delete();
     }
 
-    // color
     public function uploadPhotoColor($object_id)
     {
-        if ($this->colors) {
-            foreach ($this->colors as $k => $color) {
-                $c = ProductColor::findOne(['product_id' => $object_id, 'color_id' => $color]);
-                if (!$c) {
-                    $c = new ProductColor;
-                }
-                $c->product_id = $object_id;
-                $c->color_id = (int)$color;
-                $c->status = 1;
-                if ($c->save(false)) {
-                    $image = $this->imageFiles[$k];
+        if (!$this->colors) return true;
 
-                    $img = self::findOne(['object_id' => $c->id, 'type' => 'color']);
-                    if ($img) {
-                        $img->removeImageSize('color');
-                    }
-                    $path = 'uploads/color/';
-                    $rnd = mt_rand(0, 1000000);
-                    $name = time() + $rnd . '.' . $image->extension;
-                    $original = $path . $name;
+        /** @var S3Component $s3 */
+        $s3 = Yii::$app->s3;
 
-                    $image->saveAs($original);
+        foreach ($this->colors as $k => $color) {
+            $c = ProductColor::findOne(['product_id' => $object_id, 'color_id' => $color]) ?: new ProductColor();
+            $c->product_id = $object_id;
+            $c->color_id = (int)$color;
+            $c->status = 1;
 
-                    $image = new self;
-                    $image->object_id = $c->id;
-                    $image->type = 'color';
-                    $image->photo = $name;
-                    $image->main = 1;
-                    $image->sort = 0;
-                    $image->save();
+            if (!$c->save(false)) {
+                continue;
+            }
+
+            $file = $this->imageFiles[$k] ?? null;
+            if (!$file) continue;
+
+            $old = self::findOne(['object_id' => $c->id, 'type' => 'color']);
+            if ($old) {
+                $old->removeImageSize();
+            }
+
+            $rnd  = mt_rand(0, 1000000);
+            $name = time() . '_' . $rnd . '.' . $file->extension;
+
+            $localTemp = Yii::getAlias('@runtime') . '/' . $name;
+            if (!$file->saveAs($localTemp)) continue;
+
+            $ext = strtolower($file->extension);
+            $contentType = @mime_content_type($localTemp) ?: 'application/octet-stream';
+
+            $s3->putVariant('color', (string)$c->id, 'original', $name, $localTemp, $contentType);
+
+            if (!in_array($ext, ['svg', 'mp4'], true)) {
+                foreach ($this->image_sizes as $w => $h) {
+                    $thumbPath = Yii::getAlias('@runtime') . "/{$w}_{$name}";
+                    \yii\imagine\Image::thumbnail($localTemp, (int)$w, (int)$h)->save($thumbPath, ['quality' => 80]);
+                    $s3->putVariant('color', (string)$c->id, "{$w}x{$h}", $name, $thumbPath);
+                    @unlink($thumbPath);
                 }
             }
+
+            @unlink($localTemp);
+
+            $img = new self();
+            $img->object_id = (int)$c->id;
+            $img->type = 'color';
+            $img->photo = $name;
+            $img->main = 1;
+            $img->sort = 0;
+            $img->web = 1;
+            $img->status = 1;
+            $img->save(false);
         }
 
         return true;
     }
-    // end color
 
     public function removeImageSize()
     {
-        $path = $this->object[$this->type];
+        if ((int)$this->web === 1) {
+            if (!$this->object_id || !$this->type || !$this->photo) {
+                return (bool)$this->delete();
+            }
 
-        $original = $path . $this->object_id . '/original/' . $this->photo;
+            /** @var S3Component $s3 */
+            $s3 = Yii::$app->s3;
 
-        if (is_file($original)) {
-            unlink($original);
+            $sizes = ['original'];
+            foreach ($this->image_sizes as $w => $h) {
+                $sizes[] = "{$w}x{$h}";
+            }
+
+            $s3->deleteVariants($this->type, (string)$this->object_id, $this->photo, $sizes);
+
+            return (bool)$this->delete();
         }
 
-        $dir_empty = false;
+        $path = $this->object[$this->type] ?? null;
+        if (!$path) {
+            return (bool)$this->delete();
+        }
+
+        $original = $path . $this->object_id . '/original/' . $this->photo;
+        if (is_file($original)) unlink($original);
 
         foreach ($this->image_sizes as $k => $v) {
             $image = $path . $this->object_id . '/' . $k . 'x' . $v . '/' . $this->photo;
-            if (is_file($image)) {
-                unlink($image);
-            }
-
-            $dir_empty = (glob($image . '*')) ? false : true;
+            if (is_file($image)) unlink($image);
         }
 
-        $dir_empty = false;
-
-        if ($dir_empty === true) {
-            if (!is_file($path . $this->object_id . '/original/' . $this->photo)) {
-                foreach ($this->image_sizes as $k => $v) {
-                    rmdir($path . $this->object_id . '/' . $k . 'x' . $v);
-                }
-                rmdir($path . $this->object_id . '/original');
-                rmdir($path . $this->object_id);
-            }
-        }
-
-        return $this->delete() ? true : false;
+        return (bool)$this->delete();
     }
 
-    public function getPhoto($type, $size = 'original')
+    public function getPhoto(string $type, string $size = 'original'): string
     {
-        if ($this->web == 1) {
-            return $this->photo;
-            // $baseUrl = Yii::$app->params['minio']['publicEndpoint'];
-
-            // return $baseUrl . "/uploads/$type/" . $this->token_key . '/' . $size . '/' . $this->photo;
+        if (!$this->photo) {
+            return self::PHOTO_DEFAULT;
         }
+
+        if ((int)$this->web === 1) {
+            /** @var S3Component $s3 */
+            $s3 = Yii::$app->s3;
+            $realType = $this->type ?: $type;
+
+            return $s3->urlVariant($realType, (string)$this->object_id, $size, $this->photo);
+        }
+
         $path = 'uploads/' . $type . '/' . $this->object_id . '/' . $size . '/' . $this->photo;
 
         if (is_file($path)) {
             return '/' . $path;
         }
-
-
 
         return self::PHOTO_DEFAULT;
     }
@@ -380,17 +298,18 @@ class Images extends \yii\db\ActiveRecord
     {
         parent::afterDelete();
 
-        if (!$this->token_key || !$this->photo) {
+        if ((int)$this->web !== 1) {
             return;
         }
 
-        $sizes = ['original', '50x50', '100x100', '200x200', '300x300'];
-
-        foreach ($sizes as $size) {
-
-            $key = "{$this->type}/{$this->token_key}/{$size}/{$this->photo}";
-
-            Yii::$app->s3->deleteObject($key);
+        if (!$this->object_id || !$this->type || !$this->photo) {
+            return;
         }
+
+        /** @var S3Component $s3 */
+        $s3 = Yii::$app->s3;
+
+        $sizes = ['original', '50x50', '100x100', '150x150', '200x200', '250x250', '300x300'];
+        $s3->deleteVariants($this->type, (string)$this->object_id, $this->photo, $sizes);
     }
 }
