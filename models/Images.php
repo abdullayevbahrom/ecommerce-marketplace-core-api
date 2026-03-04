@@ -39,7 +39,7 @@ class Images extends \yii\db\ActiveRecord
     const PHOTO_PARTNER_PATH = 'uploads/partners/';
     const PHOTO_ADVANTAGE_PATH = 'uploads/advantages/';
     const PHOTO_BANNER_PATH = 'uploads/banner/';
-    const PHOTO_DEFAULT = '/assets_files/images/no-photo.png';
+    const PHOTO_DEFAULT = 'https://files.example.com/public/no-photo.png';
 
     public $imageFiles = [];
     public $colors = [];

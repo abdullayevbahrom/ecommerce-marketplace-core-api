@@ -18,7 +18,7 @@ class File extends \yii\db\ActiveRecord
 {
     public $files = [];
 
-    const FILE_DEFAULT = '/assets_files/images/file.png';
+    const FILE_DEFAULT = 'https://files.example.com/public/file.png';
     const FILE_OFERTA = 'uploads/shop_oferta/';
     const FILE_DOCUMENT = 'uploads/shop_document/';
 
