@@ -72,6 +72,13 @@ class MyidService
      */
     public function getSdkAccessToken()
     {
+        // Check cache first (token valid for ~7 days, cache with 5-min margin)
+        $cacheKey = 'myid_sdk_access_token';
+        $cached = Yii::$app->cache ? Yii::$app->cache->get($cacheKey) : false;
+        if ($cached !== false) {
+            return $cached;
+        }
+
         try {
             $response = $this->makeRequest('POST', self::SDK_ACCESS_TOKEN_ENDPOINT, [
                 'client_id' => $this->clientId,
@@ -79,12 +86,20 @@ class MyidService
             ]);
 
             if (isset($response['access_token'])) {
-                return [
+                $result = [
                     'success' => true,
                     'access_token' => $response['access_token'],
                     'expires_in' => $response['expires_in'] ?? null,
                     'token_type' => $response['token_type'] ?? 'Bearer',
                 ];
+
+                // Cache token with 5-minute safety margin
+                $ttl = ($response['expires_in'] ?? 604800) - 300;
+                if ($ttl > 0 && Yii::$app->cache) {
+                    Yii::$app->cache->set($cacheKey, $result, $ttl);
+                }
+
+                return $result;
             }
 
             return [
@@ -238,6 +253,11 @@ class MyidService
      * @param int|null $userId User ID to link verification to
      * @return array
      */
+    /**
+     * Minimum face comparison threshold for verification to pass.
+     */
+    const MIN_COMPARISON_THRESHOLD = 0.5;
+
     public function verifyAndSaveSdk($code, $userId = null)
     {
         $result = $this->getSdkUserData($code);
@@ -251,6 +271,19 @@ class MyidService
 
         $myidData = $result['data'];
         $reuid = $result['reuid'];
+
+        // Check comparison_value threshold
+        $comparisonValue = $myidData['comparison_value'] ?? 0;
+        if ($comparisonValue < self::MIN_COMPARISON_THRESHOLD) {
+            Yii::warning("MyID comparison_value {$comparisonValue} below threshold " . self::MIN_COMPARISON_THRESHOLD, __METHOD__);
+            return [
+                'success' => false,
+                'error' => 'Face comparison score too low (' . round($comparisonValue, 3) . '). Minimum required: ' . self::MIN_COMPARISON_THRESHOLD,
+                'step' => 'comparison_check',
+                'comparison_value' => $comparisonValue,
+            ];
+        }
+
         $profile = $myidData['profile'] ?? null;
         $commonData = $profile['common_data'] ?? [];
         $pinfl = $commonData['pinfl'] ?? null;
