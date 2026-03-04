@@ -1,339 +1,214 @@
 # MyID Integration Guide
 
-Backend API for identity verification via [MyID](https://identity.example.com). This document describes how **web frontend** and **mobile apps** should integrate with our backend API to verify users.
+Backend API for identity verification via [MyID](https://identity.example.com).
 
 **Official MyID docs:**
-- WebSDK: https://docs.identity.example.com/#/en/websdk
-- Mobile SDK: https://docs.identity.example.com/#/en/sdk
+- SDK New Flow (recommended): https://docs.identity.example.com/#/en/sdknew
+- WebSDK (browser): https://docs.identity.example.com/#/en/websdk
 
 ---
 
 ## Table of Contents
 
-1. [API Endpoints Overview](#api-endpoints-overview)
-2. [Web Integration (WebSDK)](#web-integration-websdk)
-3. [Mobile Integration (Android & iOS SDK)](#mobile-integration-android--ios-sdk)
-4. [Response Format](#response-format)
-5. [Error Codes](#error-codes)
-6. [Configuration](#configuration)
+1. [Architecture Overview](#architecture-overview)
+2. [API Endpoints](#api-endpoints)
+3. [Mobile SDK New Flow (Primary)](#mobile-sdk-new-flow-primary)
+4. [Secondary Flow (Re-verification with reuid)](#secondary-flow-re-verification-with-reuid)
+5. [Web Integration (WebSDK)](#web-integration-websdk)
+6. [Legacy Mobile SDK Flow](#legacy-mobile-sdk-flow)
+7. [Response Format](#response-format)
+8. [Error Codes](#error-codes)
+9. [MyID SDK Error Codes](#myid-sdk-error-codes)
+10. [Configuration](#configuration)
 
 ---
 
-## API Endpoints Overview
+## Architecture Overview
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/myid/init-web` | Optional | Create WebSDK session, returns web URL |
-| `POST` | `/api/myid/callback` | Optional | Submit auth_code after WebSDK verification |
-| `GET` | `/api/myid/session-result` | Optional | Poll WebSDK session status |
-| `POST` | `/api/myid/verify` | Optional | Submit auth code from Mobile SDK |
-| `POST` | `/api/myid/register` | No | Register new user via MyID |
-| `GET` | `/api/myid/status` | Required | Get current user's verification status |
-| `GET` | `/api/myid/sdk-config` | No | Get SDK config for mobile apps |
+All sensitive operations (access tokens, user data retrieval) happen **backend-to-backend**. The mobile app never touches `client_secret`.
 
-**Authentication:** Pass `Authorization: Bearer {user_token}` header when available. This links the verification to the authenticated user.
+```
+┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
+│  Mobile App  │     │  app Backend   │     │   MyID API   │
+│              │     │                  │     │              │
+│ 1. Request   │────>│ 2. Get token     │────>│              │
+│    session   │     │ 3. Create session│────>│              │
+│              │<────│ 4. Return        │<────│ session_id   │
+│              │     │    session_id    │     │              │
+│ 5. Init SDK  │─────────────────────────────>│              │
+│    with      │     │                  │     │ 6. Biometric │
+│    session_id│     │                  │     │    check     │
+│              │<─────────────────────────────│ 7. Return    │
+│ 8. Send code │────>│ 9. Get user data │────>│    code      │
+│    to backend│     │    with code     │     │              │
+│              │<────│10. Save & return │<────│ user profile │
+│              │     │    verification  │     │              │
+└──────────────┘     └──────────────────┘     └──────────────┘
+```
+
+**Key security rules:**
+- `client_secret` is NEVER sent to mobile — stored only on backend
+- The `code` returned by SDK is **one-time use** and expires in **5 minutes**
+- Sessions expire after **10 minutes**
+- Mobile app MUST implement root/emulator detection (MyID SDK does not)
 
 ---
 
-## Web Integration (WebSDK)
+## API Endpoints
 
-### Flow Overview
+| Method | Endpoint | Auth | Flow | Description |
+|--------|----------|------|------|-------------|
+| `POST` | `/api/myid/create-session` | Optional | SDK New | Create session for mobile SDK |
+| `POST` | `/api/myid/verify` | Optional | SDK New + Legacy | Submit code after SDK verification |
+| `GET` | `/api/myid/session-status` | No | SDK New | Session recovery (if code lost) |
+| `POST` | `/api/myid/register` | No | Any | Register new user via MyID |
+| `GET` | `/api/myid/status` | Required | Any | Get user's verification status |
+| `GET` | `/api/myid/sdk-config` | No | Legacy | Get SDK config (legacy flow only) |
+| `POST` | `/api/myid/init-web` | Optional | WebSDK | Create WebSDK session |
+| `POST` | `/api/myid/callback` | Optional | WebSDK | Submit WebSDK auth_code |
+| `GET` | `/api/myid/session-result` | No | WebSDK | Poll WebSDK session status |
 
-```
-Frontend                    Backend API                  MyID
-   |                            |                          |
-   |-- POST /api/myid/init-web --->                        |
-   |                            |-- client_credentials --->|
-   |                            |<-- access_token ---------|
-   |                            |-- POST /web/sessions --->|
-   |                            |<-- session_id -----------|
-   |<-- { session_id, web_url } |                          |
-   |                            |                          |
-   |-- Redirect/iframe to web_url ----------------------->|
-   |                            |                          |
-   |<-- redirect with auth_code --------------------------|
-   |                            |                          |
-   |-- POST /api/myid/callback -->                         |
-   |                            |-- exchange auth_code --->|
-   |                            |<-- access_token ---------|
-   |                            |-- GET /users/me -------->|
-   |                            |<-- user profile ---------|
-   |<-- { user, verification }  |                          |
-```
+**Authentication:** Pass `Authorization: Bearer {user_token}` header when available. This links the verification to the authenticated user and enables auto-population of passport data.
 
-### Step 1: Initialize Session
+---
+
+## Mobile SDK New Flow (Primary)
+
+This is the **recommended** flow for mobile apps. Uses session-based verification.
+
+### Two Variants
+
+| Variant | When to Use | What Happens |
+|---------|-------------|--------------|
+| **With passport data** | Initial KYC, bank-level verification | Backend sends PINFL/passport to MyID. SDK skips passport entry, goes straight to face capture. Returns full profile data. |
+| **Empty session** | User without existing data, guest verification | SDK shows passport scanning page first, then face capture. Returns full profile data. |
+
+### Step 1: Create Session
 
 ```http
-POST /api/myid/init-web
+POST /api/myid/create-session
 Content-Type: application/json
-Authorization: Bearer {user_token}  (optional)
+Authorization: Bearer {user_token}  (optional but recommended)
+```
 
+**For authenticated users** — backend auto-populates passport data from DB:
+```json
 {
-  "redirect_uri": "https://yoursite.com/myid/callback",
-  "pinfl": "12345678901234",       // optional - pre-fill if known
-  "birth_date": "2000-12-31",      // optional - pre-fill if known
-  "lang": "en"                     // optional - en|ru|uz
+  "threshold": 0.7
+}
+```
+> The backend will automatically use the user's PINFL, passport, birth_date from their existing `user_myid` record. Mobile only needs to send optional `threshold`.
+
+**For authenticated users with reuid (secondary/re-verification):**
+```json
+{
+  "use_reuid": true
 }
 ```
 
-**Response:**
+**For unauthenticated users (with passport data):**
+```json
+{
+  "pinfl": "12345678901234",
+  "pass_data": "AA1234567",
+  "phone_number": "998901234567",
+  "birth_date": "1990-01-15",
+  "is_resident": true,
+  "threshold": 0.7
+}
+```
+
+**For unauthenticated users (empty session):**
+```json
+{}
+```
+
+**All fields are optional.** The more data you provide, the faster the SDK flow (skips passport entry).
+
+**Success Response:**
 ```json
 {
   "message": "Success",
   "error_code": 0,
   "data": {
-    "session_id": "abc-123-def",
-    "external_id": "550e8400-e29b-41d4-a716-446655440000",
-    "web_url": "https://web.identity.example.com/?session_id=abc-123-def&redirect_uri=https://yoursite.com/myid/callback&lang=en"
+    "session_id": "550e8400-e29b-41d4-a716-446655440000"
   }
 }
 ```
 
-### Step 2: Redirect User to MyID
-
-**Option A: Full Redirect**
-```javascript
-// Redirect user to the verification page
-window.location.href = response.data.web_url;
-```
-
-**Option B: Iframe Embed**
-```html
-<iframe
-  id="myid-iframe"
-  src="https://web.identity.example.com/?session_id=SESSION_ID&redirect_uri=YOUR_URI&iframe=true"
-  allow="camera"
-  style="width:100%; height:100%; border:none;">
-</iframe>
-
-<script>
-// Listen for verification events from iframe
-window.addEventListener("message", function(e) {
-  if (e.data.source !== "MyIDWebSDK") return;
-
-  switch (e.data.status) {
-    case "LIVENESS_PASSED":
-      console.log("Verification successful");
-      break;
-    case "LIVENESS_FAILED":
-      console.log("Verification failed");
-      break;
-  }
-});
-
-// Required: sync screen dimensions with iframe
-function screenChangeListener() {
-  var iframe = document.getElementById("myid-iframe");
-  iframe.contentWindow.postMessage({
-    cmd: "screen",
-    screen: window.screen,
-    height: window.innerHeight,
-    width: window.innerWidth
-  }, "*");
-}
-window.addEventListener("resize", screenChangeListener);
-window.addEventListener("orientationchange", screenChangeListener);
-</script>
-```
-
-### Step 3: Handle Callback
-
-After verification, MyID redirects to your `redirect_uri` with query params:
-```
-https://yoursite.com/myid/callback?auth_code=XXXX&session_id=YYYY
-```
-
-Send the `auth_code` to the backend:
-
-```http
-POST /api/myid/callback
-Content-Type: application/json
-Authorization: Bearer {user_token}  (optional)
-
-{
-  "code": "auth_code_from_redirect",
-  "session_id": "session_id"
-}
-```
-
-**Response:**
+**Error Response (MyID unavailable):**
 ```json
 {
-  "message": "Verification successful",
-  "error_code": 0,
-  "data": {
-    "user": {
-      "id": 123,
-      "token": "auth_token_here",
-      "name": "John",
-      "lastname": "Doe",
-      "middlename": "Smith",
-      "phone": "998901234567",
-      "myid_verified": 1
-    },
-    "verification": {
-      "id": 1,
-      "pinfl": "12345678901234",
-      "full_name": "Doe John Smith",
-      "first_name": "John",
-      "last_name": "Doe",
-      "middle_name": "Smith",
-      "birth_date": "2000-12-31",
-      "gender": 1,
-      "gender_label": "Male",
-      "passport": "AA1234567",
-      "verification_status": 1,
-      "verification_status_label": "Verified",
-      "verified_at": "2025-01-15 10:30:00"
-    }
-  }
+  "message": "MyID access_token failed: HTTP 401: Invalid credentials",
+  "error_code": -36
 }
 ```
 
-### Optional: Poll Session Status
-
-If using iframe, you can poll session status instead of waiting for redirect:
-
-```http
-GET /api/myid/session-result?session_id=abc-123-def
-```
-
-**Response (pending):**
-```json
-{
-  "error_code": 0,
-  "data": {
-    "status": "pending",
-    "auth_code": null,
-    "attempts": []
-  }
-}
-```
-
-**Response (completed):**
-```json
-{
-  "error_code": 0,
-  "data": {
-    "status": "completed",
-    "auth_code": "AUTHORIZATION_CODE_HERE",
-    "attempts": [...]
-  }
-}
-```
-
-When `status` is `"completed"`, take the `auth_code` and call `POST /api/myid/callback`.
-
----
-
-## Mobile Integration (Android & iOS SDK)
-
-### Flow Overview
-
-```
-Mobile App                 Backend API                  MyID
-   |                            |                          |
-   |-- GET /api/myid/sdk-config ->                         |
-   |<-- { client_id, ... }      |                          |
-   |                            |                          |
-   |-- Initialize MyID SDK (with client_id) -------------->|
-   |-- User completes biometric check -------------------->|
-   |<-- SDK returns code (authorization code) -------------|
-   |                            |                          |
-   |-- POST /api/myid/verify --->                          |
-   |                            |-- exchange code -------->|
-   |                            |<-- access_token ---------|
-   |                            |-- GET /users/me -------->|
-   |                            |<-- user profile ---------|
-   |<-- { user, verification }  |                          |
-```
-
-### Step 1: Get SDK Config
-
-```http
-GET /api/myid/sdk-config
-```
-
-**Response:**
-```json
-{
-  "error_code": 0,
-  "data": {
-    "client_id": "your_client_id",
-    "base_url": "https://identity.example.com",
-    "scope": "common_data",
-    "sdk_hash": "sha256_hash_value",
-    "timestamp": 1705312800000
-  }
-}
-```
-
-### Step 2: Initialize SDK
+### Step 2: Initialize MyID SDK with session_id
 
 #### Android (Kotlin)
 
 ```kotlin
-// Add dependency in build.gradle
-// implementation 'uz.myid.sdk:myid-sdk:latest'
+// build.gradle
+implementation("uz.myid.sdk.v2:myid-sdk-v2:latest")
 
-val myIdConfig = MyIdConfig.builder(clientId = sdkConfig.clientId)
-    .withPassportData(passportData)         // Optional: "AA1234567" or PINFL
-    .withBirthDate("31.12.2000")            // Optional: "dd.MM.yyyy"
-    .withExternalId(UUID.randomUUID().toString())
-    .withThreshold(0.55f)                   // Face match confidence (0.50-0.99)
-    .withBuildMode(MyIdBuildMode.PRODUCTION) // or DEBUG for testing
-    .withEntryType(MyIdEntryType.AUTH)       // AUTH for identity verification
-    .withLocale(Locale("en"))               // en, ru, or uz
+// Initialize with session_id from Step 1
+val myIdConfig = MyIdConfig.builder(sessionId = response.data.session_id)
+    .withLocale(Locale("en"))               // en, ru, uz
     .withCameraShape(MyIdCameraShape.CIRCLE)
+    .withBuildMode(MyIdBuildMode.PRODUCTION) // or DEBUG for sandbox
     .build()
 
-// Start SDK
+// Launch SDK
 MyIdSdk.start(activity, myIdConfig, object : MyIdResultListener {
     override fun onSuccess(result: MyIdResult) {
-        val code = result.code  // Authorization code to send to backend
-        sendToBackend(code)
+        // result.code — authorization code to send to backend
+        verifyWithBackend(result.code)
     }
 
     override fun onError(e: MyIdException) {
-        Log.e("MyID", "Error ${e.code}: ${e.message}")
+        // e.code — error code (see SDK Error Codes section)
+        // e.message — human-readable error description
+        handleError(e.code, e.message)
     }
 
     override fun onUserExited() {
-        // User cancelled verification
+        // User pressed back / cancelled
     }
 })
 ```
 
 **Android Requirements:**
-- minSdkVersion 21, targetSdkVersion 33+
-- Kotlin 1.5+
+- minSdkVersion 21, targetSdkVersion 34+
+- Kotlin 1.8+
 - Permissions: `INTERNET`, `CAMERA`
+- Add root/emulator detection in your app
 
 #### iOS (Swift)
 
 ```swift
-// Add via CocoaPods or SPM
+// Podfile: pod 'MyIdSDK', '~> 2.0'
+// or SPM: https://github.com/anthropics/myid-sdk-ios
 
-MyIdSdk.start(withConfigureOptions: { options in
-    options?.clientId = sdkConfig.clientId
-    options?.passportData = "AA1234567"     // Optional
-    options?.dateOfBirth = "31.12.2000"     // Optional: "dd.MM.yyyy"
-    options?.externalId = UUID().uuidString
-    options?.threshold = 0.55
-    options?.buildMode = .production        // or .debug
-    options?.entryType = .auth
-    options?.locale = .en
-}, withDelegate: self)
+import MyIdSDK
 
-// Delegate methods
+let config = MyIdConfig(sessionId: response.data.sessionId)
+config.locale = .en          // .en, .ru, .uz
+config.buildMode = .production // or .debug for sandbox
+
+MyIdSdk.start(with: config, from: self, delegate: self)
+
+// MARK: - MyIdSdkDelegate
 extension ViewController: MyIdSdkDelegate {
     func myidOnSuccess(result: MyIdResult) {
-        let code = result.code  // Authorization code to send to backend
-        sendToBackend(code)
+        // result.code — authorization code to send to backend
+        verifyWithBackend(result.code)
     }
 
     func myidOnError(exception: MyIdException) {
-        print("Error \(exception.code): \(exception.message)")
+        // exception.code — error code
+        // exception.message — human-readable description
+        handleError(exception.code, exception.message)
     }
 
     func myidOnUserExited() {
@@ -343,21 +218,26 @@ extension ViewController: MyIdSdkDelegate {
 ```
 
 **iOS Requirements:**
-- iOS 11+, Xcode 14.1+, Swift 5.7.1+
-- Camera permission in Info.plist
+- iOS 13+, Xcode 15+, Swift 5.9+
+- Camera permission in Info.plist:
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Camera is required for identity verification</string>
+```
 
 ### Step 3: Send Code to Backend
 
-After receiving the `code` from SDK, send it to the backend:
+After SDK returns `code`, send it to the backend **within 5 minutes**:
 
-**For existing users (link verification to account):**
+**For existing authenticated users (link verification to account):**
 ```http
 POST /api/myid/verify
 Content-Type: application/json
 Authorization: Bearer {user_token}
 
 {
-  "code": "authorization_code_from_sdk"
+  "code": "authorization_code_from_sdk",
+  "flow": "sdk_new"
 }
 ```
 
@@ -379,13 +259,14 @@ Content-Type: application/json
 
 {
   "code": "authorization_code_from_sdk",
+  "flow": "sdk_new",
   "register": true
 }
 ```
 
 ### Step 4: Handle Response
 
-All endpoints return the same structure:
+**Success:**
 ```json
 {
   "message": "Verification successful",
@@ -400,26 +281,259 @@ All endpoints return the same structure:
       "phone": "998901234567",
       "myid_verified": 1
     },
-    "verification": { ... },
+    "verification": {
+      "id": 1,
+      "user_id": 123,
+      "pinfl": "12345678901234",
+      "full_name": "Doe John Smith",
+      "full_name_en": "Doe John",
+      "first_name": "John",
+      "last_name": "Doe",
+      "middle_name": "Smith",
+      "birth_date": "1990-01-15",
+      "gender": 1,
+      "gender_label": "Male",
+      "nationality": "UZBEK",
+      "passport": "AA1234567",
+      "comparison_value": 0.92,
+      "verification_status": 1,
+      "verification_status_label": "Verified",
+      "verified_at": "2026-03-04 10:30:00",
+      "has_reuid": true
+    },
     "is_new_user": false
   }
 }
 ```
 
-Store the `user.token` for subsequent API requests.
+**Error (face comparison too low):**
+```json
+{
+  "message": "Face comparison score too low (0.421). Minimum required: 0.5",
+  "error_code": -37
+}
+```
 
-### Check Verification Status
+**Error (PINFL already linked):**
+```json
+{
+  "message": "This PINFL is already linked to another account",
+  "error_code": -35
+}
+```
+
+### Session Recovery (if code was lost)
+
+If the mobile app loses communication before receiving the code, wait up to 10 minutes and then check:
+
+```http
+GET /api/myid/session-status?session_id=550e8400-e29b-41d4-a716-446655440000
+```
+
+**Response:**
+```json
+{
+  "error_code": 0,
+  "data": {
+    "code": "recovered_authorization_code",
+    "status": "closed",
+    "attempts": [
+      {
+        "job_id": "uuid4",
+        "timestamp": "2026-03-04T12:34:56Z",
+        "reason": null,
+        "reason_code": null
+      }
+    ]
+  }
+}
+```
+
+**Status values:**
+- `in_progress` — session still active, user hasn't completed verification
+- `closed` — verification completed or 10 minutes elapsed. Check `code` field.
+- `expired` — session expired (after 1 hour)
+
+---
+
+## Secondary Flow (Re-verification with reuid)
+
+Use the secondary flow for:
+- Password recovery
+- Access from a different device
+- Periodic liveness checks (without re-entering passport data)
+
+**Prerequisites:** User must have a previous successful primary verification with a valid `reuid`.
+
+### Flow
+
+1. **Create session with reuid:**
+```http
+POST /api/myid/create-session
+Content-Type: application/json
+Authorization: Bearer {user_token}
+
+{
+  "use_reuid": true
+}
+```
+
+2. **Initialize SDK** with `session_id` (same as primary flow)
+
+3. **Send code to backend** (same as primary flow)
+
+**Key difference:** The secondary flow response does NOT include full profile data — only `comparison_value`, `pass_data`, and `job_id`. The `profile` field is `null`.
+
+**reuid validity:** Expires at end of month or year depending on your MyID contract. Check `has_reuid` in verification status response.
+
+---
+
+## Web Integration (WebSDK)
+
+### Flow Overview
+
+```
+Frontend                    Backend API                  MyID
+   |                            |                          |
+   |-- POST /api/myid/init-web --->                        |
+   |                            |-- client_credentials --->|
+   |                            |<-- access_token ---------|
+   |                            |-- POST /web/sessions --->|
+   |                            |<-- session_id -----------|
+   |<-- { session_id, web_url } |                          |
+   |                            |                          |
+   |-- Redirect/iframe to web_url ----------------------->|
+   |<-- redirect with auth_code --------------------------|
+   |                            |                          |
+   |-- POST /api/myid/callback -->                         |
+   |                            |-- exchange auth_code --->|
+   |                            |<-- user profile ---------|
+   |<-- { user, verification }  |                          |
+```
+
+### Step 1: Initialize Session
+
+```http
+POST /api/myid/init-web
+Content-Type: application/json
+Authorization: Bearer {user_token}  (optional)
+
+{
+  "redirect_uri": "https://yoursite.com/myid/callback",
+  "pinfl": "12345678901234",
+  "birth_date": "2000-12-31",
+  "lang": "en"
+}
+```
+
+**Response:**
+```json
+{
+  "error_code": 0,
+  "data": {
+    "session_id": "abc-123-def",
+    "external_id": "550e8400-e29b-41d4-a716-446655440000",
+    "web_url": "https://web.identity.example.com/?session_id=abc-123-def&redirect_uri=..."
+  }
+}
+```
+
+### Step 2: Redirect User
+
+```javascript
+window.location.href = response.data.web_url;
+```
+
+### Step 3: Handle Callback
+
+After redirect to `redirect_uri?auth_code=XXXX&session_id=YYYY`:
+
+```http
+POST /api/myid/callback
+Content-Type: application/json
+Authorization: Bearer {user_token}  (optional)
+
+{
+  "code": "auth_code_from_redirect",
+  "session_id": "session_id"
+}
+```
+
+### Poll Session Status (for iframe)
+
+```http
+GET /api/myid/session-result?session_id=abc-123-def
+```
+
+---
+
+## Legacy Mobile SDK Flow
+
+For apps still using the legacy SDK (OAuth code exchange):
+
+1. `GET /api/myid/sdk-config` — get `client_id`, `sdk_hash`, `timestamp`
+2. Initialize SDK with `client_id` and `sdk_hash`
+3. SDK returns authorization `code`
+4. `POST /api/myid/verify` with `{"code": "xxx"}` (no `flow` field = legacy)
+
+---
+
+## Check Verification Status
 
 ```http
 GET /api/myid/status
 Authorization: Bearer {user_token}
 ```
 
+**Verified user:**
+```json
+{
+  "error_code": 0,
+  "data": {
+    "verified": true,
+    "verified_at": "2026-03-04 10:30:00",
+    "pinfl": "12345678901234",
+    "full_name": "Doe John Smith",
+    "verification": {
+      "id": 1,
+      "user_id": 123,
+      "pinfl": "12345678901234",
+      "full_name": "Doe John Smith",
+      "full_name_en": "Doe John",
+      "first_name": "John",
+      "last_name": "Doe",
+      "middle_name": "Smith",
+      "birth_date": "1990-01-15",
+      "gender": 1,
+      "gender_label": "Male",
+      "nationality": "UZBEK",
+      "passport": "AA1234567",
+      "comparison_value": 0.92,
+      "verification_status": 1,
+      "verification_status_label": "Verified",
+      "verified_at": "2026-03-04 10:30:00",
+      "has_reuid": true
+    }
+  }
+}
+```
+
+**Unverified user:**
+```json
+{
+  "error_code": 0,
+  "data": {
+    "verified": false
+  },
+  "message": "User not verified with MyID"
+}
+```
+
 ---
 
 ## Response Format
 
-All responses follow the standard API format:
+All responses follow:
 
 **Success:**
 ```json
@@ -442,6 +556,8 @@ All responses follow the standard API format:
 
 ## Error Codes
 
+### Backend Error Codes
+
 | Code | Constant | HTTP | Description |
 |------|----------|------|-------------|
 | 0 | SUCCESS | 200 | Success |
@@ -452,9 +568,52 @@ All responses follow the standard API format:
 | -34 | ERROR_MYID_PINFL_MISSING | 502 | MyID response missing PINFL |
 | -35 | ERROR_MYID_PINFL_LINKED | 409 | PINFL already linked to another user |
 | -36 | ERROR_MYID_SESSION_FAILED | 502 | Failed to create/query MyID session |
-| -37 | ERROR_MYID_VERIFICATION_FAILED | 500 | General verification failure |
+| -37 | ERROR_MYID_VERIFICATION_FAILED | 500 | Verification failed (face score too low, save error) |
 | -13 | ERROR_USER_NOT_FOUND | 404 | No user linked to PINFL |
 | -12 | ERROR_USER_EXISTS | 422 | Phone number already registered |
+
+---
+
+## MyID SDK Error Codes
+
+These codes come from the MyID SDK on the mobile side. Handle them in `onError`:
+
+| Code | Description | Recommended Action |
+|------|-------------|-------------------|
+| 2 | Passport data entered incorrectly | Ask user to re-enter |
+| 3 | Failed to confirm liveness | Ask user to retry face scan |
+| 4 | Failed to recognize | Ask user to retry with better lighting |
+| 5 | External service unavailable | Show "try again later" message |
+| 6 | The requested user has passed away | Contact support |
+| 7 | Photo from resources not received | Retry |
+| 8 | MyID internal error | Retry or contact support |
+| 9 | Task expired | Create new session and retry |
+| 10 | Queue task timed out | Retry |
+| 11-13 | MyID service cannot process | Retry later |
+| 14 | Failed liveness — incorrect photo | Ask for proper selfie |
+| 15-16 | MyID service cannot process | Retry later |
+| 17 | Failed to recognize — incorrect photo | Better lighting/angle |
+| 18 | Liveness check service unavailable | Retry later |
+| 19 | Recognition service unavailable | Retry later |
+| 20 | Blurry photo | Ask for steady camera |
+| 21 | Face not fully shown | Ask to center face |
+| 22 | Multiple faces found | Only one person in frame |
+| 23 | Grayscale image, color required | Check camera settings |
+| 24 | Darkened glasses detected | Remove glasses |
+| 25 | Photo type not supported | Use standard camera |
+| 26 | Eyes closed or not visible | Open eyes, remove glasses |
+| 27 | Head rotation detected | Face camera directly |
+| 28 | Could not detect face | Center face in frame |
+| 29 | Light artifact/finger/reflection detected | Avoid glare |
+| 30 | Occlusion detected | Remove face coverings |
+| 31 | Central face is not biggest face | Move closer |
+| 32 | Nose/mouth not detected | Show full face |
+| 33 | Infrared image not sent | Device issue |
+| 34 | Expired passport data | Update passport |
+| 101 | Error in MyID SDK | Retry or update SDK |
+| 102 | Camera access denied | Request camera permission |
+| 103 | Universal error — check message | See error message for details |
+| 122 | User banned | Contact support |
 
 ---
 
@@ -464,27 +623,29 @@ Backend configuration in `config/params.php`:
 
 ```php
 'myid' => [
-    'client_id' => 'YOUR_CLIENT_ID',         // From MyID dashboard
-    'client_secret' => 'YOUR_CLIENT_SECRET',  // From MyID dashboard (never expose to frontend!)
+    'client_id' => 'YOUR_CLIENT_ID',
+    'client_secret' => 'YOUR_CLIENT_SECRET',  // NEVER expose to frontend/mobile!
+    'client_hash_id' => 'YOUR_HASH_ID',       // For legacy SDK only
     'redirect_uri' => 'https://yoursite.com/api/myid/callback',
-    'sandbox' => false,                        // true for testing
-    'base_url' => 'https://identity.example.com',          // API URL
-    'web_url' => 'https://web.identity.example.com',       // WebSDK URL
+    'sandbox' => false,
+    'base_url' => 'https://identity.example.com',
+    'web_url' => 'https://web.identity.example.com',
 ],
 ```
 
-**Sandbox/Development URLs:**
-- API: `https://devidentity.example.com`
-- WebSDK: `https://web.devid.example.com`
+**Environment URLs:**
 
-**Production URLs:**
-- API: `https://identity.example.com`
-- WebSDK: `https://web.identity.example.com`
+| Environment | API URL | WebSDK URL |
+|-------------|---------|------------|
+| Sandbox | `https://api.devid.example.com` | `https://web.devid.example.com` |
+| Production | `https://identity.example.com` | `https://web.identity.example.com` |
 
-### Important Security Notes
+### Security Checklist
 
-- **Never expose `client_secret`** to frontend or mobile apps
-- Authorization codes have a **5-minute lifetime** and are **single-use**
-- All token exchange must happen on the **backend only**
-- The mobile SDK does not check for root/emulator - implement your own checks if needed
-- MyID implements rate limiting: 5 failed attempts within 1 hour triggers a progressive block
+- [ ] `client_secret` stored only on backend (never in mobile app)
+- [ ] Root/emulator detection implemented in mobile app
+- [ ] Authorization codes used within 5-minute window
+- [ ] Sessions not reused after 10-minute expiry
+- [ ] `comparison_value >= 0.5` enforced (backend does this automatically)
+- [ ] PINFL uniqueness validated (backend does this automatically)
+- [ ] Bearer token passed for authenticated users to enable auto-population
