@@ -48,12 +48,13 @@ $config = [
 
     // MyID Integration Settings
     'myid' => [
-        'client_id' => '', // Set your MyID Client ID
-        'client_secret' => '', // Set your MyID Client Secret
-        'redirect_uri' => 'http://shop.test/api/myid/callback', // Your callback URL
-        'sandbox' => true, // Set to false for production
-        'base_url' => 'https://identity.example.com', // API base URL (sandbox: https://devidentity.example.com)
-        'web_url' => 'https://web.identity.example.com', // WebSDK URL for user verification page
+        'client_id' => 'sample_client_id',
+        'client_secret' => 'X5wRGK18FguxdCqUlvDrVEljezRUU5KkDJgBRKMjVDhMU1bXXk3wiiU9bQwSFTo9BHZzwcnnjWolBGVSQQ6rRSmr7ebhBg6i04ri',
+        'client_hash_id' => '26854a43-bb59-43fb-a454-79492a745f96',
+        'redirect_uri' => 'http://shop.test/api/myid/callback',
+        'sandbox' => true,
+        'base_url' => 'https://api.devid.example.com',
+        'web_url' => 'https://web.devid.example.com',
     ],
 
     // Wallet Configuration

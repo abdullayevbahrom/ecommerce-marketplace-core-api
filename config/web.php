@@ -214,6 +214,8 @@ $config = [
                 'GET api/myid/status' => 'api/myid/status',
                 'GET api/myid/sdk-config' => 'api/myid/sdk-config',
                 'GET api/myid/session-result' => 'api/myid/session-result',
+                'POST api/myid/create-session' => 'api/myid/create-session',
+                'GET api/myid/session-status' => 'api/myid/session-status',
 
                 // Wallet API
                 'GET api/wallet/balance' => 'api/wallet/balance',
