@@ -620,6 +620,35 @@ class CartController extends Controller {
         return ['data'=>$cart];
     }
 
+    public function actionRemoves() {
+        $user = Yii::$app->user->identity;
+        $post = Yii::$app->request->post();
+
+        $productIds = isset($post['product_ids']) ? $post['product_ids'] : null;
+        if (!is_array($productIds) || empty($productIds)) {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['product_ids' => 'product_ids must be a non-empty array']];
+        }
+
+        // Sanitize: ensure all IDs are integers
+        $productIds = array_map('intval', $productIds);
+
+        $deleted = UserCart::deleteAll([
+            'user_id' => $user->id,
+            'product_id' => $productIds,
+        ]);
+
+        $cart = UserCart::find()
+            ->with('product', 'product.image')
+            ->where(['user_id' => $user->id])
+            ->all();
+
+        return [
+            'data' => $cart,
+            'deleted_count' => $deleted,
+        ];
+    }
+
     public function actionClear() {
         $user = Yii::$app->user->identity;
 
