@@ -105,7 +105,7 @@ class UserController extends Controller {
             $model->phone_code = '123456';
             $model->phone = $post['phone'];
             $model->token = '';
-            $model->role = User::ROLE_USER;
+            // $model->role = User::ROLE_USER;
             $model->type = 'fiz'; // Default user type for phone login
             $model->sms_live = strtotime('+3 minute');
             
