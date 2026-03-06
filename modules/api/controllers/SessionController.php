@@ -89,6 +89,13 @@ class SessionController extends Controller
 
     public function actionWarehouse()
     {
+        return [
+            'auth_header' => Yii::$app->request->headers->get('Authorization'),
+            'http_auth' => $_SERVER['HTTP_AUTHORIZATION'] ?? null,
+            'redirect_http_auth' => $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null,
+            'identity' => Yii::$app->user->identity ? Yii::$app->user->identity->id : null,
+        ];
+        
         $user = Yii::$app->user->identity;
 
         if (!$user) {
