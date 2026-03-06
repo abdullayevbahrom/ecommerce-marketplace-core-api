@@ -5,11 +5,12 @@ namespace app\modules\api\controllers;
 use app\models\session\WebSession;
 use app\models\user\User;
 use Yii;
+use yii\filters\auth\HttpBearerAuth;
+use yii\filters\Cors;
 use yii\filters\VerbFilter;
 use yii\rest\Controller;
-use yii\web\Response;
 use yii\web\HttpException;
-use yii\filters\Cors;
+use yii\web\Response;
 
 class SessionController extends Controller
 {
