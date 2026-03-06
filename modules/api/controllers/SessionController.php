@@ -25,7 +25,7 @@ class SessionController extends Controller
     {
         $behaviors = parent::behaviors();
 
-        $auth = $behaviors['authenticator'] ?? null;
+        $auth = $behaviors['authenticator'];
         unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
@@ -33,10 +33,15 @@ class SessionController extends Controller
             'cors' => [
                 'Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-                'Access-Control-Request-Headers' => ['*'],
+                'Access-Control-Request-Headers' => ['Authorization', 'Content-Type'],
                 'Access-Control-Allow-Credentials' => false,
                 'Access-Control-Max-Age' => 86400,
             ],
+        ];
+
+        $behaviors['authenticator'] = [
+            'class' => HttpBearerAuth::class,
+            'except' => ['options'],
         ];
 
         $behaviors['verbs'] = [
@@ -47,15 +52,6 @@ class SessionController extends Controller
                 'options' => ['OPTIONS'],
             ],
         ];
-
-        if ($auth) {
-            $behaviors['authenticator'] = $auth;
-        } else {
-            $behaviors['authenticator'] = [
-                'class' => HttpBearerAuth::class,
-            ];
-        }
-        $behaviors['authenticator']['except'] = ['options'];
 
         return $behaviors;
     }
@@ -95,7 +91,7 @@ class SessionController extends Controller
             'redirect_http_auth' => $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null,
             'identity' => Yii::$app->user->identity ? Yii::$app->user->identity->id : null,
         ];
-        
+
         $user = Yii::$app->user->identity;
 
         if (!$user) {
