@@ -334,12 +334,13 @@ $this->params['breadcrumbs'][] = $this->title;
                                     <?php if ($value->type == 'select') {?>
                                         <?php $filter_childs = ArrayHelper::map(Filter::find()->where(['parent_id'=>$value->id])->all(), 'value_ru', 'value_ru');?>
                                         <?php if ($filter_childs) {?>
+                                            <?php $selectedValue = $value->categoryFilter?->value_ru; ?>
                                             <?=$form->field($model, 'filters['.$value->id.']', ['options'=>['class'=>'category-group form-group']])->dropDownList(
                                                 $filter_childs,
                                                 [
                                                     'class'=>'form-control select2',
                                                     'prompt'=>'Select subcategory',
-                                                    'options' => [$value->categoryFilter->value_ru => ['selected'=>'selected']]
+                                                    'options' => $selectedValue ? [$selectedValue => ['selected'=>'selected']] : []
                                                 ]
                                             )->label($value->name_ru);?>
                                         <?php }?>
