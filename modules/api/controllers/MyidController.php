@@ -258,21 +258,46 @@ class MyidController extends Controller
         }
 
         $post = Yii::$app->request->post();
+        $currentUser = Yii::$app->user->identity;
 
         $params = [];
-        $allowedFields = ['pinfl', 'pass_data', 'phone_number', 'birth_date', 'is_resident', 'threshold'];
-        foreach ($allowedFields as $field) {
-            if (isset($post[$field]) && $post[$field] !== '') {
-                $params[$field] = $post[$field];
-            }
-        }
 
-        // If authenticated user has a reuid, support secondary flow
-        $currentUser = Yii::$app->user->identity;
-        if ($currentUser && isset($post['use_reuid']) && $post['use_reuid']) {
+        // For authenticated users: auto-populate passport data from DB (backend-to-backend)
+        // Mobile only needs to send {use_reuid: bool} or {threshold: float}
+        if ($currentUser) {
             $existingMyid = UserMyid::findByUserId($currentUser->id);
-            if ($existingMyid && $existingMyid->hasValidReuid()) {
+
+            // Secondary flow: use reuid if available and requested
+            if (isset($post['use_reuid']) && $post['use_reuid'] && $existingMyid && $existingMyid->hasValidReuid()) {
                 $params['reuid'] = $existingMyid->reuid;
+            } elseif ($existingMyid) {
+                // Primary flow: auto-populate from existing verification data
+                if ($existingMyid->pinfl) {
+                    $params['pinfl'] = $existingMyid->pinfl;
+                }
+                $passData = $existingMyid->getPassportFull();
+                if ($passData) {
+                    $params['pass_data'] = $passData;
+                }
+                if ($existingMyid->birth_date) {
+                    $params['birth_date'] = $existingMyid->birth_date;
+                }
+                if ($existingMyid->phone) {
+                    $params['phone_number'] = $existingMyid->phone;
+                }
+            }
+
+            // Allow threshold override from request
+            if (isset($post['threshold']) && $post['threshold'] !== '') {
+                $params['threshold'] = (float)$post['threshold'];
+            }
+        } else {
+            // Unauthenticated: accept passport data from request (empty session or with data)
+            $allowedFields = ['pinfl', 'pass_data', 'phone_number', 'birth_date', 'is_resident', 'threshold'];
+            foreach ($allowedFields as $field) {
+                if (isset($post[$field]) && $post[$field] !== '') {
+                    $params[$field] = $post[$field];
+                }
             }
         }
 
@@ -599,6 +624,7 @@ class MyidController extends Controller
             'user_data' => ErrorCodes::ERROR_MYID_USER_DATA_FAILED,
             'get_user_data' => ErrorCodes::ERROR_MYID_USER_DATA_FAILED,
             'pinfl_check' => ErrorCodes::ERROR_MYID_PINFL_LINKED,
+            'comparison_check' => ErrorCodes::ERROR_MYID_VERIFICATION_FAILED,
             'save' => ErrorCodes::ERROR_MYID_VERIFICATION_FAILED,
             'registration' => ErrorCodes::ERROR_MYID_VERIFICATION_FAILED,
             'client_token' => ErrorCodes::ERROR_MYID_SESSION_FAILED,
