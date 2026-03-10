@@ -460,7 +460,7 @@ $location = $model->map_location ? explode(', ', $model->map_location) : [];
                     <?php }?>
                     Общее количество товаров: <?=$model->amount;?>
                     <br/>
-                    Итоговая сума123: <?=number_format($model->price);?>
+                    Итоговая сума123: <?=number_format($model->price ?? 0);?>
                     <?php if ($model->delivery && $model->delivery->price) {?>
                         <br/>
                         Итоговая сума с доставкой: <?=number_format($model->price + $model->delivery->price);?>
