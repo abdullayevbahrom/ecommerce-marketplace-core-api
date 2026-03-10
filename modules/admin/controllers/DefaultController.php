@@ -57,7 +57,7 @@ class DefaultController extends Controller
                 if ($user->role == User::ROLE_MODERATOR) {
                     return $this->redirect("/admin/default/profile");
                 }
-                return $this->redirect("/account");
+                return $this->redirect(['/']);
             } else {
                 // Login method returned false - authentication failed
                 Yii::$app->session->setFlash('error', 'Неверный логин или пароль. Проверьте правильность введенных данных.');

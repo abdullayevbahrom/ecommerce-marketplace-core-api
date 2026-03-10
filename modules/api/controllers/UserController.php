@@ -1,4 +1,5 @@
 <?php
+
 namespace app\modules\api\controllers;
 
 use Yii;
@@ -20,10 +21,12 @@ use app\services\DidoxService;
 use app\modules\api\components\ErrorCodes;
 use app\modules\api\components\ApiResponseTrait;
 
-class UserController extends Controller {
+class UserController extends Controller
+{
     use ApiResponseTrait;
 
-    public function beforeAction($action) {
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
 
         Yii::$app->response->getHeaders()->add('Access-Control-Allow-Origin', '*');
@@ -37,12 +40,24 @@ class UserController extends Controller {
         return parent::beforeAction($action);
     }
 
-    public function behaviors() {
+    public function behaviors()
+    {
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
-            'optional' => ['sign-up', 'sign-in', 'log-out', 'send-code', 'send-sms', 'recover-password', 'accept-recover-code', 'send-phone',
-                          'eimzo-auth', 'eimzo-register', 'eimzo-login']
+            'optional' => [
+                'sign-up',
+                'sign-in',
+                'log-out',
+                'send-code',
+                'send-sms',
+                'recover-password',
+                'accept-recover-code',
+                'send-phone',
+                'eimzo-auth',
+                'eimzo-register',
+                'eimzo-login'
+            ]
         ];
 
         $auth = $behaviors['authenticator'];
@@ -70,36 +85,37 @@ class UserController extends Controller {
         'class' => 'yii\rest\Serializer',
         'collectionEnvelope' => 'data',
     ];
-    
-    public function actionSendPhone() {
+
+    public function actionSendPhone()
+    {
         try {
             $post = Yii::$app->request->post();
             // Add logging for debugging
             Yii::info('POST data: ' . json_encode($post), 'app');
-            
+
             // Check if phone is provided
             if (empty($post['phone'])) {
                 return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Заполните поле', ['phone' => ['Заполните поле']]);
             }
-            
+
             // Trim whitespace and keep only numeric characters
             $post['phone'] = preg_replace('/[^\d]/', '', trim($post['phone']));
-            
+
             // Check if phone is empty after cleaning
             if (empty($post['phone'])) {
                 return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Заполните поле', ['phone' => ['Заполните поле']]);
             }
-            
+
             // Try to find existing user
             $model = User::find()->where(['phone' => $post['phone']])->one();
-            
+
             if (!$model) {
                 $model = new User();
                 Yii::info('Creating new user for phone: ' . $post['phone'], 'app');
             } else {
                 Yii::info('Found existing user: ' . $model->id, 'app');
             }
-            
+
             // Set model attributes
             $model->status = 1;
             $model->phone_code = '123456';
@@ -108,23 +124,23 @@ class UserController extends Controller {
             // $model->role = User::ROLE_USER;
             $model->type = 'fiz'; // Default user type for phone login
             $model->sms_live = strtotime('+3 minute');
-            
+
             // Add validation check before saving
             if (!$model->validate()) {
                 Yii::error('Validation errors: ' . json_encode($model->errors), 'app');
                 return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Validation failed', $model->errors);
             }
-            
+
             // Try to save
             if ($model->save()) {
                 Yii::info('User saved successfully: ' . $model->id, 'app');
-                
+
                 // SMS service (commented out for now)
                 // $service = new Sms;
                 // $service->send($post['phone'], $model->phone_code);
-                
+
                 return $this->sendSuccess([
-                    'user_id' => $model->id, 
+                    'user_id' => $model->id,
                     'message' => 'Код подтверждения отправлен на указанный номер.'
                 ], 'Код подтверждения отправлен на указанный номер.');
             } else {
@@ -132,7 +148,6 @@ class UserController extends Controller {
                 Yii::error('Save failed: ' . json_encode($model->errors), 'app');
                 return $this->sendError(ErrorCodes::ERROR_USER_SAVE_FAILED, 'Не удалось сохранить пользователя: ' . json_encode($model->errors), $model->errors);
             }
-            
         } catch (HttpException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -141,19 +156,20 @@ class UserController extends Controller {
             return $this->sendError(ErrorCodes::ERROR_SERVER, 'Внутренняя ошибка сервера');
         }
     }
-    
-    public function actionCheckCard(){
+
+    public function actionCheckCard()
+    {
         $post = Yii::$app->request->post();
         $cardNumber = Yii::$app->request->post('card_number');
-        
-        if(empty($cardNumber)){
+
+        if (empty($cardNumber)) {
             return ['errors' => ['Number empty']];
         }
-        
+
         $cache = new FileCache();
         $cardBIN = substr($cardNumber, 0, 6);
         $bankDetails = $cache->get($cardBIN);
-        
+
         if ($bankDetails === false) {
             try {
                 $bankDetails = json_decode(file_get_contents("https://lookup.binlist.net/" . trim($cardBIN)), true);
@@ -167,7 +183,8 @@ class UserController extends Controller {
         return $bankDetails;
     }
 
-    public function actionSendCode() {
+    public function actionSendCode()
+    {
         $post = Yii::$app->request->post();
 
         if (empty($post['code'])) {
@@ -181,13 +198,13 @@ class UserController extends Controller {
         $user = User::findOne($post['user_id']);
 
         if (!$user) {
-            return $this->sendError(ErrorCodes::ERROR_USER_NOT_FOUND, 'Пользователь не найден', ['user'=>['Пользователь не найден']]);
+            return $this->sendError(ErrorCodes::ERROR_USER_NOT_FOUND, 'Пользователь не найден', ['user' => ['Пользователь не найден']]);
         }
-        
+
         if ($user->phone_code !== $post['code'] || time() > $user->sms_live) {
-             return $this->sendError(ErrorCodes::ERROR_INVALID_CODE, 'Неверный или просроченный код подтверждения', ['code'=>['Неверный или просроченный код подтверждения']]);
+            return $this->sendError(ErrorCodes::ERROR_INVALID_CODE, 'Неверный или просроченный код подтверждения', ['code' => ['Неверный или просроченный код подтверждения']]);
         }
-        
+
         $user->token = $user->generateToken();
         $user->status = 1;
         $user->type = 'fiz';
@@ -205,7 +222,7 @@ class UserController extends Controller {
 
         $webSession = WebSession::createSession($user);
 
-        $user = User::find()->with('image')->where(['id'=>$user->id])->one();
+        $user = User::find()->with('image')->where(['id' => $user->id])->one();
         $userData = $user->toArray();
         $userData['bts_region_id'] = $user->bts_region_id;
         $userData['bts_city_id'] = $user->bts_city_id;
@@ -217,51 +234,53 @@ class UserController extends Controller {
         return $this->sendSuccess($userData);
     }
 
-    public function actionRecoverPassword() {
+    public function actionRecoverPassword()
+    {
         $post = Yii::$app->request->post();
 
         if (!array_key_exists('phone', $post)) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['phone'=>['Заполните поле']]];
+            return ['errors' => ['phone' => ['Заполните поле']]];
         }
 
-        $check_phone = User::findOne(['phone'=>$post['phone']]);
+        $check_phone = User::findOne(['phone' => $post['phone']]);
 
         if (!$check_phone) {
             Yii::$app->response->statusCode = 404;
-            return ['errors'=>['phone'=>['Номер телефона не найден']]];
+            return ['errors' => ['phone' => ['Номер телефона не найден']]];
         }
 
         $check_phone->saveCode($post['phone']);
 
-        return ['data'=>['message' => 'Код для восстановления пароля отправлен на ваш номер.']];
+        return ['data' => ['message' => 'Код для восстановления пароля отправлен на ваш номер.']];
     }
 
-    public function actionAcceptRecoverCode() {
+    public function actionAcceptRecoverCode()
+    {
         $post = Yii::$app->request->post();
 
         if (!array_key_exists('phone', $post)) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['phone'=>['Заполните поле']]];
-        }
-        
-        if (!array_key_exists('code', $post)) {
-            Yii::$app->response->statusCode = 422;
-            return ['errors'=>['code'=>['Заполните поле']]];
+            return ['errors' => ['phone' => ['Заполните поле']]];
         }
 
-        $sms_code = SmsCode::findOne(['phone'=>$post['phone'], 'code'=>$post['code']]);
+        if (!array_key_exists('code', $post)) {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['code' => ['Заполните поле']]];
+        }
+
+        $sms_code = SmsCode::findOne(['phone' => $post['phone'], 'code' => $post['code']]);
 
         if (!$sms_code) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['code'=>['Неверный код подтверждения']]];
+            return ['errors' => ['code' => ['Неверный код подтверждения']]];
         }
 
-        $user = User::findOne(['phone'=>$post['phone']]);
+        $user = User::findOne(['phone' => $post['phone']]);
 
         if (!$user) {
             Yii::$app->response->statusCode = 404;
-            return ['errors'=>['phone'=>['Пользователь не найден']]];
+            return ['errors' => ['phone' => ['Пользователь не найден']]];
         }
 
         // $code = $user->generateCode();
@@ -269,14 +288,15 @@ class UserController extends Controller {
         $user->password = 1;
         $user->status = 1;
         $user->save(false);
-        
-        return ['data' => ['phone'=>$post['phone']]];
+
+        return ['data' => ['phone' => $post['phone']]];
     }
 
-    public function actionSignUp() {
+    public function actionSignUp()
+    {
         $post = Yii::$app->request->post();
 
-        $model = User::findOne(['phone'=>$post['phone']]);
+        $model = User::findOne(['phone' => $post['phone']]);
         if (!$model) {
             $model = new User;
         }
@@ -286,7 +306,7 @@ class UserController extends Controller {
 
         if (!$model->validate()) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>$model->errors];
+            return ['errors' => $model->errors];
         }
 
         // $model->password = 1;
@@ -295,16 +315,17 @@ class UserController extends Controller {
 
         if ($model->save(false)) {
             $code = $model->saveCode();
-            return ['data'=>['token'=>$code->token]];
+            return ['data' => ['token' => $code->token]];
         } else {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>$model->errors];
+            return ['errors' => $model->errors];
         }
 
         return false;
     }
 
-    public function actionSignIn() {
+    public function actionSignIn()
+    {
         $post = Yii::$app->request->post();
         $data = [];
         $user = new User;
@@ -313,26 +334,27 @@ class UserController extends Controller {
 
         if (!$user->validate()) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>$user->errors];
+            return ['errors' => $user->errors];
         }
 
-        $model = User::findOne(['phone'=>$post['phone']]);
+        $model = User::findOne(['phone' => $post['phone']]);
 
         if ($model->save(false)) {
             $code = $model->saveCode();
-            return ['data'=>['token'=>$code->token]];
+            return ['data' => ['token' => $code->token]];
         } else {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>$model->errors];
+            return ['errors' => $model->errors];
         }
     }
 
-    public function actionLogOut() {
+    public function actionLogOut()
+    {
         $model = Yii::$app->user->identity;
 
         if (!$model) {
             Yii::$app->response->statusCode = 404;
-            return ['errors'=>['code'=>['Пользователь не найден']]];
+            return ['errors' => ['code' => ['Пользователь не найден']]];
         }
         $model->token = '';
         if ($model->save()) {
@@ -340,52 +362,55 @@ class UserController extends Controller {
             Yii::$app->response->statusCode = 200;
             return; // Return nothing for 200 OK as per documentation
         }
-        
+
         Yii::$app->response->statusCode = 500;
-        return ['errors' => ['server' => ['Не удалось сохранить изменения']]]; 
+        return ['errors' => ['server' => ['Не удалось сохранить изменения']]];
     }
 
-    public function actionIndex() {
-        $query = User::find()->with('image', 'addresses')->where(['role'=>User::ROLE_USER]);
+    public function actionIndex()
+    {
+        $query = User::find()->with('image', 'addresses')->where(['role' => User::ROLE_USER]);
 
         return new ActiveDataProvider([
             'query' => $query,
-            'sort' => ['defaultOrder' => ['id'=>'desc']]
+            'sort' => ['defaultOrder' => ['id' => 'desc']]
         ]);
     }
 
-    public function actionProfile() {
-        $user = User::find()->with('image', 'addresses')->where(['id'=>Yii::$app->user->identity->id])->one();
-        
+    public function actionProfile()
+    {
+        $user = User::find()->with('image', 'addresses')->where(['id' => Yii::$app->user->identity->id])->one();
+
         // Get base user data
         $userData = $user->toArray();
-        
+
         // Ensure BTS ID fields are included
         $userData['bts_region_id'] = $user->bts_region_id;
         $userData['bts_city_id'] = $user->bts_city_id;
-        
+
         // Add BTS region and city names for convenience
         if ($user->bts_region_id) {
             $userData['bts_region_name'] = \yii\services\BTS::getRegionName($user->bts_region_id, 'ru');
         } else {
             $userData['bts_region_name'] = null;
         }
-        
+
         if ($user->bts_city_id) {
             $userData['bts_city_name'] = \yii\services\BTS::getCityName($user->bts_city_id, 'ru');
         } else {
             $userData['bts_city_name'] = null;
         }
-        
+
         return ['data' => $userData];
     }
 
-    public function actionUpdate() {
+    public function actionUpdate()
+    {
         $post = Yii::$app->request->post();
         $user = Yii::$app->user->identity;
         $language = Yii::$app->request->get('language') ?? 'ru';
 
-        $model = User::findOne(['id'=>$user->id]);
+        $model = User::findOne(['id' => $user->id]);
         $password = $model->password;
         $model->scenario = User::USER_UPDATE;
 
@@ -405,7 +430,7 @@ class UserController extends Controller {
             }
 
             if ($model->address) {
-                UserAddress::deleteAll('user_id = :user_id', ['user_id'=>$model->id]);
+                UserAddress::deleteAll('user_id = :user_id', ['user_id' => $model->id]);
 
                 $keys = ['user_id', 'address'];
                 $vals = [];
@@ -421,63 +446,64 @@ class UserController extends Controller {
                 Yii::$app->db->createCommand()->batchInsert('user_address', $keys, $vals)->execute();
             }
 
-            $user = User::find()->with('image', 'addresses')->where(['id'=>Yii::$app->user->identity->id])->one();
-            
+            $user = User::find()->with('image', 'addresses')->where(['id' => Yii::$app->user->identity->id])->one();
+
             // Get base user data
             $userData = $user->toArray();
-            
+
             // Ensure BTS ID fields are included
             $userData['bts_region_id'] = $user->bts_region_id;
             $userData['bts_city_id'] = $user->bts_city_id;
-            
+
             // Add BTS region and city names for convenience
             if ($user->bts_region_id) {
                 $userData['bts_region_name'] = \yii\services\BTS::getRegionName($user->bts_region_id, $language);
             } else {
                 $userData['bts_region_name'] = null;
             }
-            
+
             if ($user->bts_city_id) {
                 $userData['bts_city_name'] = \yii\services\BTS::getCityName($user->bts_city_id, $language);
             } else {
                 $userData['bts_city_name'] = null;
             }
-            
+
             return $this->sendSuccess($userData);
         } else {
             return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Validation error', $model->errors);
         }
     }
 
-    public function actionChangePassword() {
+    public function actionChangePassword()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
         if (!$post['password_current']) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['password_current'=>'Введите текущий пароль']];
+            return ['errors' => ['password_current' => 'Введите текущий пароль']];
         }
 
         if (!$post['password_new']) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['password_new'=>'Введите новый пароль']];
+            return ['errors' => ['password_new' => 'Введите новый пароль']];
         }
 
         if (!$post['password_compare']) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['password_compare'=>'Подтвердите новый пароль']];
+            return ['errors' => ['password_compare' => 'Подтвердите новый пароль']];
         }
 
         $user = User::findOne(Yii::$app->user->identity->id);
 
         if (!Yii::$app->security->validatePassword($post['password_current'], $user->password)) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['password_current'=>'Текущий пароль введен не верно']];
+            return ['errors' => ['password_current' => 'Текущий пароль введен не верно']];
         }
 
         if ($post['password_new'] != $post['password_compare']) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['password_compare'=>'Пароли не совпадают']];
+            return ['errors' => ['password_compare' => 'Пароли не совпадают']];
         }
 
         $user->password = Yii::$app->security->generatePasswordHash($post['password_new']);
@@ -486,51 +512,53 @@ class UserController extends Controller {
         return $user;
     }
 
-    public function actionChangePhone() {
+    public function actionChangePhone()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
         if (!array_key_exists('phone', $post) || empty($post['phone'])) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['phone'=>['Заполните поле']]];
+            return ['errors' => ['phone' => ['Заполните поле']]];
         }
 
         if (User::find()->where(['phone' => $post['phone']])->andWhere(['!=', 'id', $user->id])->exists()) {
-             Yii::$app->response->statusCode = 422;
-             return ['errors'=>['phone'=>['Этот номер телефона уже используется.']]];
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['phone' => ['Этот номер телефона уже используется.']]];
         }
 
         $user->saveCode($post['phone']);
 
-        return ['data'=>['message' => 'Код для подтверждения нового номера отправлен.']];
+        return ['data' => ['message' => 'Код для подтверждения нового номера отправлен.']];
     }
 
-    public function actionAcceptChangeCode() {
+    public function actionAcceptChangeCode()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
         if (!array_key_exists('phone', $post)) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['phone'=>['Заполните поле']]];
-        }
-        
-        if (!array_key_exists('code', $post)) {
-            Yii::$app->response->statusCode = 422;
-            return ['errors'=>['code'=>['Заполните поле']]];
+            return ['errors' => ['phone' => ['Заполните поле']]];
         }
 
-        $sms_code = SmsCode::findOne(['phone'=>$post['phone'], 'code'=>$post['code']]);
+        if (!array_key_exists('code', $post)) {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['code' => ['Заполните поле']]];
+        }
+
+        $sms_code = SmsCode::findOne(['phone' => $post['phone'], 'code' => $post['code']]);
 
         if (!$sms_code) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['code'=>['Неверный код подтверждения']]];
+            return ['errors' => ['code' => ['Неверный код подтверждения']]];
         }
 
         $user = User::findOne($user->id);
 
         if (!$user) {
             Yii::$app->response->statusCode = 404;
-            return ['errors'=>['phone'=>['Пользователь не найден']]];
+            return ['errors' => ['phone' => ['Пользователь не найден']]];
         }
 
         $user->phone = $post['phone'];
@@ -541,40 +569,43 @@ class UserController extends Controller {
         return $user;
     }
 
-    public function actionAddressRemove() {
+    public function actionAddressRemove()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
         if (!$post['address_id']) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>['address_id'=>'Введите ID адреса']];
+            return ['errors' => ['address_id' => 'Введите ID адреса']];
         }
 
-        $model = UserAddress::findOne(['id'=>$post['address_id'], 'user_id'=>$user->id]);
+        $model = UserAddress::findOne(['id' => $post['address_id'], 'user_id' => $user->id]);
 
         if (!$model) {
             Yii::$app->response->statusCode = 404;
-            return ['errors'=>['address_id'=>'Адрес не найден']];
+            return ['errors' => ['address_id' => 'Адрес не найден']];
         }
 
         $model->delete();
 
-        $user = User::find()->with('image', 'addresses')->where(['id'=>$user->id])->one();
+        $user = User::find()->with('image', 'addresses')->where(['id' => $user->id])->one();
         return $user;
     }
 
-    public function actionRemovePhoto() {
-        $model = User::find()->with('image')->where(['id'=>Yii::$app->user->identity->id])->one();
+    public function actionRemovePhoto()
+    {
+        $model = User::find()->with('image')->where(['id' => Yii::$app->user->identity->id])->one();
 
         if ($model && $model->image) {
             $model->image->removeImageSize();
         }
 
-        return ['data'=>$model];
+        return ['data' => $model];
     }
 
-    public function actionRemoveAccount() {
-        $model = User::find()->with('image')->where(['id'=>Yii::$app->user->identity->id])->one();
+    public function actionRemoveAccount()
+    {
+        $model = User::find()->with('image')->where(['id' => Yii::$app->user->identity->id])->one();
 
         if ($model) {
             if ($model->image) {
@@ -586,10 +617,17 @@ class UserController extends Controller {
         throw new HttpException(200, 'OK');
     }
 
-    public function actionUploadPhoto() {
-        $model = Yii::$app->request->post();
+    public function actionUploadPhoto()
+    {
+        /** @var User $user */
+        $user = Yii::$app->user->identity ?? null;
 
-        $user = User::find()->with('image')->where(['id'=>Yii::$app->user->identity->id])->one();
+        if (!$user) {
+            Yii::$app->response->statusCode = 404;
+            return ['errors' => ['user' => 'Пользователь не найден']];
+        }
+
+        $user = User::find()->with('image')->where(['id' => $user?->id])->one();
 
         $image = new Images;
 
@@ -600,22 +638,24 @@ class UserController extends Controller {
             $image->uploadPhoto($user->id, 'user');
         }
 
-        $user = User::find()->with('image')->where(['id'=>Yii::$app->user->identity->id])->one();
+        $user = User::find()->with('image')->where(['id' => Yii::$app->user->identity->id])->one();
 
-        return ['data'=>$user];
+        return ['data' => $user];
     }
 
-    public function actionSetRate() {
+    public function actionSetRate()
+    {
         $model = new Cbu();
 
         $cbu_uz = $model->getOneByDate('USD', date('Y-m-d'));
         @file_put_contents('cbu_uz.txt', $cbu_uz['rate']);
     }
 
-    public function actionCards() {
+    public function actionCards()
+    {
         $user = Yii::$app->user->identity;
 
-        $query = UserCard::find()->with('cardType')->where(['status'=>1])->andWhere(['user_id'=>$user->id]);
+        $query = UserCard::find()->with('cardType')->where(['status' => 1])->andWhere(['user_id' => $user->id]);
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
 
@@ -629,7 +669,8 @@ class UserController extends Controller {
         ]);
     }
 
-    public function actionCardAdd() {
+    public function actionCardAdd()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
@@ -638,42 +679,44 @@ class UserController extends Controller {
 
         if (!$card->validate()) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>$card->errors];
+            return ['errors' => $card->errors];
         }
 
         $card->saveObject();
 
-        $card = UserCard::find()->with('cardType')->where(['id'=>$card->id, 'user_id'=>$user->id])->one();
+        $card = UserCard::find()->with('cardType')->where(['id' => $card->id, 'user_id' => $user->id])->one();
 
-        return ['data'=>$card];
+        return ['data' => $card];
     }
 
-    public function actionCardDetail($card_id) {
+    public function actionCardDetail($card_id)
+    {
         $user = Yii::$app->user->identity;
-        $card = UserCard::find()->with('cardType')->where(['id'=>$card_id, 'user_id'=>$user->id])->one();
+        $card = UserCard::find()->with('cardType')->where(['id' => $card_id, 'user_id' => $user->id])->one();
 
-        return ['data'=>$card];
+        return ['data' => $card];
     }
 
-    public function actionCardRemove() {
+    public function actionCardRemove()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
         if (!array_key_exists('card_id', $post)) {
             Yii::$app->response->statusCode = 422;
-            return ['date'=>['errors'=>['card_id'=>'Введите ID карты']]];
+            return ['date' => ['errors' => ['card_id' => 'Введите ID карты']]];
         }
 
-        $card = UserCard::find()->with('cardType')->where(['id'=>$post['card_id'], 'user_id'=>$user->id])->one();
+        $card = UserCard::find()->with('cardType')->where(['id' => $post['card_id'], 'user_id' => $user->id])->one();
 
         if (!$card) {
             Yii::$app->response->statusCode = 404;
-            return ['date'=>['errors'=>['card_id'=>'Карта не найдена']]];
+            return ['date' => ['errors' => ['card_id' => 'Карта не найдена']]];
         }
 
         $card->delete();
 
-        $query = UserCard::find()->with('cardType')->where(['status'=>1])->andWhere(['user_id'=>$user->id]);
+        $query = UserCard::find()->with('cardType')->where(['status' => 1])->andWhere(['user_id' => $user->id]);
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
 
@@ -695,7 +738,8 @@ class UserController extends Controller {
      * Assumes user has completed Didox registration and has a valid Didox token
      * Supports user type (fiz/yur) - defaults to 'fiz' if not specified
      */
-    public function actionEimzoAuth() {
+    public function actionEimzoAuth()
+    {
         $post = Yii::$app->request->post();
 
         // Validate required fields
@@ -787,7 +831,7 @@ class UserController extends Controller {
                     if (isset($profileData['vatRegCode'])) {
                         $user->inn = $profileData['vatRegCode'];
                     }
-                    
+
                     // Set manager information (director or accountant)
                     if (isset($profileData['director']) && !empty($profileData['director'])) {
                         $user->manager = $profileData['director'];
@@ -820,7 +864,7 @@ class UserController extends Controller {
             } else {
                 // User exists - update with profile data
                 Yii::info('Authenticating existing platform user with Tax ID: ' . $post['tax_id'], __METHOD__);
-                
+
                 // Update fields from DIDOX profile data if they're empty
                 if (!empty($profileData)) {
                     if (empty($user->email) && isset($profileData['email'])) {
@@ -878,7 +922,7 @@ class UserController extends Controller {
 
             // Generate or refresh our app token
             $user->token = $user->generateToken();
-            
+
             // Ensure required fields are set to prevent save errors
             if (empty($user->phone) && isset($post['mobile'])) {
                 $user->phone = $post['mobile'];
@@ -902,7 +946,7 @@ class UserController extends Controller {
             } else {
                 // Log validation errors for debugging
                 Yii::error('User save failed with errors: ' . json_encode($user->getErrors()), __METHOD__);
-                throw new HttpException(500, 'Failed to save user data: ' . implode(', ', array_map(function($errors) {
+                throw new HttpException(500, 'Failed to save user data: ' . implode(', ', array_map(function ($errors) {
                     return implode(', ', $errors);
                 }, $user->getErrors())));
             }
@@ -931,7 +975,8 @@ class UserController extends Controller {
      * Optional fields:
      * - user_type: 'fiz' or 'yur' (defaults to 'fiz')
      */
-    public function actionEimzoRegister() {
+    public function actionEimzoRegister()
+    {
         $post = Yii::$app->request->post();
 
         // Validate required fields according to Didox documentation
@@ -958,7 +1003,7 @@ class UserController extends Controller {
 
             // Step 1: Create timestamp signature according to Didox documentation
             $timestampResult = $didoxService->createTimestamp($post['pkcs7_64'], $post['signature_hex']);
-            
+
             if (!$timestampResult['success']) {
                 Yii::$app->response->statusCode = 500;
                 return ['errors' => ['timestamp' => 'Failed to create timestamp: ' . (isset($timestampResult['error']) ? $timestampResult['error'] : 'Unknown error')]];
@@ -1057,7 +1102,7 @@ class UserController extends Controller {
 
             // Generate app token
             $user->token = $user->generateToken();
-            
+
             // Ensure required fields are set to prevent save errors
             if (empty($user->date)) {
                 $user->date = date('Y-m-d H:i:s');
@@ -1072,7 +1117,7 @@ class UserController extends Controller {
             } else {
                 // Log validation errors for debugging
                 Yii::error('User save failed with errors: ' . json_encode($user->getErrors()), __METHOD__);
-                throw new HttpException(500, 'Failed to save user data: ' . implode(', ', array_map(function($errors) {
+                throw new HttpException(500, 'Failed to save user data: ' . implode(', ', array_map(function ($errors) {
                     return implode(', ', $errors);
                 }, $user->getErrors())));
             }
@@ -1089,7 +1134,8 @@ class UserController extends Controller {
      * Login existing user with E-IMZO
      * This endpoint is for existing users who have already registered
      */
-    public function actionEimzoLogin() {
+    public function actionEimzoLogin()
+    {
         $post = Yii::$app->request->post();
 
         // Validate required fields
@@ -1126,7 +1172,7 @@ class UserController extends Controller {
             $certificateInfo = [];
             if (isset($post['certificate_info'])) {
                 $certificateInfo = $didoxService->extractCertificateInfo($post['certificate_info']);
-                
+
                 // Update user with latest certificate info
                 if (!empty($certificateInfo)) {
                     $user->eimzo_certificate_info = json_encode($certificateInfo);
@@ -1158,7 +1204,8 @@ class UserController extends Controller {
     /**
      * Get user profile with E-IMZO information
      */
-    public function actionEimzoProfile() {
+    public function actionEimzoProfile()
+    {
         $user = Yii::$app->user->identity;
 
         if (!$user) {
@@ -1183,42 +1230,43 @@ class UserController extends Controller {
         return $response;
     }
     // end E-IMZO integration
-    
+
     /**
      * Get BTS regions list
      * GET /api/user/bts-regions
      */
-    public function actionBtsRegions() {
+    public function actionBtsRegions()
+    {
         $language = Yii::$app->request->get('language') ?? 'ru';
         $regions = \yii\services\BTS::getRegions($language);
-        
+
         return ['data' => [
             'regions' => $regions
         ]];
     }
-    
+
     /**
      * Get BTS cities by region
      * GET /api/user/bts-cities?region_id=5
      */
-    public function actionBtsCities($region_id = null) {
+    public function actionBtsCities($region_id = null)
+    {
         if (!$region_id) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['region_id' => 'Region ID is required']];
         }
-        
+
         $language = Yii::$app->request->get('language') ?? 'ru';
         $cities = \yii\services\BTS::getCities($region_id, $language);
         $cityList = [];
-        
+
         foreach ($cities as $id => $city) {
             $cityList[$id] = $city['name'];
         }
-        
+
         return ['data' => [
             'cities' => $cityList,
             'region_id' => (int)$region_id
         ]];
     }
 }
-?>
