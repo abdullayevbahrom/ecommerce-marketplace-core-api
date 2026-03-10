@@ -5,7 +5,7 @@ use yii\grid\GridView;
 $this->title = 'Заказ #'.$model->id;
 $this->params['breadcrubs'][] = $this->title;
 
-$location = explode(', ', $model->map_location);
+$location = $model->map_location ? explode(', ', $model->map_location) : [];
 ?>
 
 <?php if ($model->map_location) {?>
