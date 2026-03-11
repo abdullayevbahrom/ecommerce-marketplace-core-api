@@ -276,9 +276,9 @@ class UserMyid extends ActiveRecord
         // Gender mapping
         if (isset($commonData['gender'])) {
             $gender = strtolower((string)$commonData['gender']);
-            if (in_array($gender, ['male', '1', 'м'])) {
+            if (in_array($gender, ['male', '1', 'м', 'm'])) {
                 $model->gender = self::GENDER_MALE;
-            } elseif (in_array($gender, ['female', '2', 'ж'])) {
+            } elseif (in_array($gender, ['female', '2', 'ж', 'f'])) {
                 $model->gender = self::GENDER_FEMALE;
             }
         }
@@ -386,9 +386,9 @@ class UserMyid extends ActiveRecord
         // Gender mapping
         if (isset($myidData['gender'])) {
             $gender = strtolower((string)$myidData['gender']);
-            if ($gender === 'male' || $gender === '1') {
+            if (in_array($gender, ['male', '1', 'м', 'm'])) {
                 $model->gender = self::GENDER_MALE;
-            } elseif ($gender === 'female' || $gender === '2') {
+            } elseif (in_array($gender, ['female', '2', 'ж', 'f'])) {
                 $model->gender = self::GENDER_FEMALE;
             }
         }

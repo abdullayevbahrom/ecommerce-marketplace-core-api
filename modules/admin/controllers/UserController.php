@@ -55,6 +55,29 @@ class UserController extends Controller {
         return parent::beforeAction($action);
     }
 
+    /**
+     * Все пользователи — все роли, с отображением роли
+     */
+    public function actionAll() {
+        $searchModel = new UserSearch();
+        $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
+        $dataProvider->query->with('image')->andWhere(['!=', 'status', 0]);
+
+        $dataProvider->setSort([
+            'defaultOrder' => [
+                'id' => 'desc'
+            ]
+        ]);
+
+        return $this->render('all', [
+            'searchModel' => $searchModel,
+            'dataProvider' => $dataProvider
+        ]);
+    }
+
+    /**
+     * Клиенты — только ROLE_USER
+     */
     public function actionIndex() {
         $searchModel = new UserSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
@@ -67,6 +90,66 @@ class UserController extends Controller {
         ]);
 
         return $this->render('index', [
+            'searchModel' => $searchModel,
+            'dataProvider' => $dataProvider
+        ]);
+    }
+
+    /**
+     * Администраторы — только ROLE_ADMIN
+     */
+    public function actionAdmins() {
+        $searchModel = new UserSearch();
+        $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
+        $dataProvider->query->with('image')->andWhere(['role'=>User::ROLE_ADMIN])->andWhere(['!=', 'status', 0]);
+
+        $dataProvider->setSort([
+            'defaultOrder' => [
+                'id' => 'desc'
+            ]
+        ]);
+
+        return $this->render('admins', [
+            'searchModel' => $searchModel,
+            'dataProvider' => $dataProvider
+        ]);
+    }
+
+    /**
+     * Операторы — только ROLE_OPERATOR
+     */
+    public function actionOperators() {
+        $searchModel = new UserSearch();
+        $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
+        $dataProvider->query->with('image')->andWhere(['role'=>User::ROLE_OPERATOR])->andWhere(['!=', 'status', 0]);
+
+        $dataProvider->setSort([
+            'defaultOrder' => [
+                'id' => 'desc'
+            ]
+        ]);
+
+        return $this->render('operators', [
+            'searchModel' => $searchModel,
+            'dataProvider' => $dataProvider
+        ]);
+    }
+
+    /**
+     * Логисты — только ROLE_LOGIST
+     */
+    public function actionLogists() {
+        $searchModel = new UserSearch();
+        $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
+        $dataProvider->query->with('image')->andWhere(['role'=>User::ROLE_LOGIST])->andWhere(['!=', 'status', 0]);
+
+        $dataProvider->setSort([
+            'defaultOrder' => [
+                'id' => 'desc'
+            ]
+        ]);
+
+        return $this->render('logists', [
             'searchModel' => $searchModel,
             'dataProvider' => $dataProvider
         ]);
@@ -95,9 +178,54 @@ class UserController extends Controller {
         return $this->redirect(Yii::$app->request->referrer);
     }
 
+    /**
+     * Смена роли пользователя (только для ROLE_ADMIN)
+     */
+    public function actionChangeRole($id) {
+        if ($this->user->role !== User::ROLE_ADMIN) {
+            throw new HttpException(403, 'Только администратор может менять роли');
+        }
+
+        $model = User::findOne($id);
+        if (!$model) {
+            throw new HttpException(404, 'Пользователь не найден');
+        }
+
+        $newRole = (int) Yii::$app->request->post('role');
+        $validRoles = [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_USER, User::ROLE_SHOP, User::ROLE_LOGIST, User::ROLE_OPERATOR];
+
+        if (!in_array($newRole, $validRoles)) {
+            Yii::$app->session->setFlash('error', 'Неверная роль');
+            return $this->redirect(Yii::$app->request->referrer);
+        }
+
+        // Prevent admin from changing own role
+        if ($model->id === $this->user->id) {
+            Yii::$app->session->setFlash('error', 'Нельзя изменить свою собственную роль');
+            return $this->redirect(Yii::$app->request->referrer);
+        }
+
+        $oldRoleLabel = $model->getRoleLabel();
+        $model->role = $newRole;
+
+        if ($model->save(false)) {
+            Yii::$app->session->setFlash('user_saved', 'Роль изменена: ' . $oldRoleLabel . ' → ' . $model->getRoleLabel());
+        }
+
+        return $this->redirect(['/admin/user/view', 'id' => $model->id]);
+    }
+
     public function actionCreate() {
         $model = new User;
         $model->scenario = User::SIGNUP_ADMIN_USER;
+        $current_password = null;
+
+        // Default role from ?role= GET param (e.g. /admin/user/create?role=1)
+        $defaultRole = (int) Yii::$app->request->get('role', User::ROLE_USER);
+        $validRoles = [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_USER, User::ROLE_SHOP, User::ROLE_LOGIST, User::ROLE_OPERATOR];
+        if (!in_array($defaultRole, $validRoles)) {
+            $defaultRole = User::ROLE_USER;
+        }
 
         if ($id = Yii::$app->request->get('id')) {
             if ($model = User::find()->with('image', 'addresses')->where(['id'=>$id])->one()) {
@@ -109,16 +237,29 @@ class UserController extends Controller {
             }
         }
 
+        // Pre-set role for new users based on context
+        if ($model->isNewRecord) {
+            $model->role = $defaultRole;
+        }
+
         if ($model->load(Yii::$app->request->post()) && $model->validate()) {
             $model->password = !$model->password ? $current_password : $model->generatePassword($model->password);
-            if ($model->saveObject(User::ROLE_USER, 1)) {
-                Yii::$app->session->setFlash('user_saved', 'Saved');
+
+            // Use the role from form (admin can change it), fallback to model's current role
+            $saveRole = (int) ($model->role ?: $defaultRole);
+            if (!in_array($saveRole, $validRoles)) {
+                $saveRole = User::ROLE_USER;
+            }
+
+            if ($model->saveObject($saveRole)) {
+                Yii::$app->session->setFlash('user_saved', 'Пользователь сохранен');
             }
             return $this->redirect(['/admin/user/view', 'id'=>$model->id]);
         }
-        
+
         return $this->render('create', [
-            'model'=>$model
+            'model' => $model,
+            'defaultRole' => $defaultRole,
         ]);
     }
 

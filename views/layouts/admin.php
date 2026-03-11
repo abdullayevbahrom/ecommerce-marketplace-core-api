@@ -128,10 +128,35 @@ $product_request_count = ProductRequest::find()->where(['status'=>ProductRequest
                     <?php }?>
 
                     <?php if($user && (($user->role == User::ROLE_ADMIN) || in_array('user', $accesses))) {?>
-                        <li <?=($controller == 'user') ? 'class="active"' : '';?>>
-                            <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user'])?>">
+                        <li class="treeview<?=($controller == 'user' || $controller == 'moderator') ? ' active' : '';?>">
+                            <a href="#">
                                 <i class="fa fa-group"></i> <span>Пользователи</span>
+                                <span class="pull-right-container">
+                                    <i class="fa fa-angle-left pull-right"></i>
+                                </span>
                             </a>
+                            <ul class="treeview-menu">
+                                <li <?=($controller == 'user' && $action == 'all') ? 'class="active"' : '';?>>
+                                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/all'])?>"><i class="fa fa-circle-o"></i> Все пользователи</a>
+                                </li>
+                                <li <?=($controller == 'user' && $action == 'index') ? 'class="active"' : '';?>>
+                                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user'])?>"><i class="fa fa-circle-o"></i> Клиенты</a>
+                                </li>
+                                <?php if ($user->role == User::ROLE_ADMIN) {?>
+                                    <li <?=($controller == 'user' && $action == 'admins') ? 'class="active"' : '';?>>
+                                        <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/admins'])?>"><i class="fa fa-circle-o"></i> Администраторы</a>
+                                    </li>
+                                <?php }?>
+                                <li <?=($controller == 'moderator') ? 'class="active"' : '';?>>
+                                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/moderator'])?>"><i class="fa fa-circle-o"></i> Модераторы</a>
+                                </li>
+                                <li <?=($controller == 'user' && $action == 'logists') ? 'class="active"' : '';?>>
+                                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/logists'])?>"><i class="fa fa-circle-o"></i> Логисты</a>
+                                </li>
+                                <li <?=($controller == 'user' && $action == 'operators') ? 'class="active"' : '';?>>
+                                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/operators'])?>"><i class="fa fa-circle-o"></i> Операторы</a>
+                                </li>
+                            </ul>
                         </li>
                     <?php }?>
 
@@ -330,13 +355,7 @@ $product_request_count = ProductRequest::find()->where(['status'=>ProductRequest
                         </li>
                     <?php }?>
 
-                    <?php if ($user && (($user->role == User::ROLE_ADMIN))) {?>
-                        <li <?=($controller == 'moderator') ? 'class="active"' : '';?>>
-                            <a href="<?=Yii::$app->urlManager->createUrl(['/admin/moderator'])?>">
-                                <i class="fa fa-user"></i> <span>Модераторы</span>
-                            </a>
-                        </li>
-                    <?php }?>
+                    <?php /* Модераторы moved inside Пользователи dropdown */ ?>
 
                     <?php if ($user && (($user->role == User::ROLE_ADMIN) || in_array('category', $accesses) || in_array('delivery', $accesses) || in_array('brand', $accesses) || in_array('category?type=product', $accesses) || in_array('category?type=region', $accesses) || in_array('category?type=card', $accesses) || in_array('category?type=payment', $accesses) || in_array('category?type=unit', $accesses) || in_array('category?type=currency', $accesses))) {?>
                         <li  class="treeview<?=(($controller == 'category') || ($controller == 'delivery') || ($controller == 'brand')) ? ' active' : '';?>">

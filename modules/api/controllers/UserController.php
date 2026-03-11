@@ -122,7 +122,10 @@ class UserController extends Controller
             $model->phone = $post['phone'];
             $model->token = '';
             // $model->role = User::ROLE_USER;
-            $model->type = 'fiz'; // Default user type for phone login
+            // Only set default type for new users; preserve existing type
+            if ($model->isNewRecord) {
+                $model->type = 'fiz';
+            }
             $model->sms_live = strtotime('+3 minute');
 
             // Add validation check before saving
@@ -207,10 +210,12 @@ class UserController extends Controller
 
         $user->token = $user->generateToken();
         $user->status = 1;
-        $user->type = 'fiz';
+        // Only set default type for users without a type; preserve existing type
+        if (empty($user->type)) {
+            $user->type = 'fiz';
+        }
         $user->phone_code = null;
         $user->sms_live = null;
-
 
         if (!$user->save()) {
             return $this->sendError(
@@ -283,9 +288,9 @@ class UserController extends Controller
             return ['errors' => ['phone' => ['Пользователь не найден']]];
         }
 
-        // $code = $user->generateCode();
-        $code = '123456';
-        $user->password = 1;
+        // Generate a temporary random password (hashed) - user must set a new one
+        $tempPassword = Yii::$app->security->generateRandomString(16);
+        $user->password = Yii::$app->security->generatePasswordHash($tempPassword);
         $user->status = 1;
         $user->save(false);
 
@@ -786,7 +791,9 @@ class UserController extends Controller
                 $user->eimzo_tax_id = $post['tax_id'];
                 $user->role = User::ROLE_USER;
                 $user->status = 1;
-                $user->password = 1; // No password needed for E-IMZO auth
+                $user->password = Yii::$app->security->generatePasswordHash(
+                    Yii::$app->security->generateRandomString(16)
+                ); // Random secure password for E-IMZO auth users
                 $user->type = $userType; // Set user type (fiz/yur)
 
                 // Set fields from DIDOX profile data
@@ -1042,7 +1049,9 @@ class UserController extends Controller
             $user->eimzo_tax_id = $post['tax_id'];
             $user->role = User::ROLE_USER;
             $user->status = 1;
-            $user->password = 1; // No password needed for E-IMZO auth
+            $user->password = Yii::$app->security->generatePasswordHash(
+                Yii::$app->security->generateRandomString(16)
+            ); // Random secure password for E-IMZO auth users
             $user->email = $post['email']; // Set from mandatory field
             $user->phone = $post['mobile']; // Set from mandatory field
             $user->type = $userType; // Set user type (fiz/yur)

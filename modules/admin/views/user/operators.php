@@ -1,9 +1,8 @@
 <?php
 use yii\helpers\Html;
 use yii\grid\GridView;
-use yii\widgets\Pjax;
 
-$this->title = 'Модераторы';
+$this->title = 'Операторы';
 $this->params['breadcrumbs'][] = $this->title;
 ?>
 
@@ -17,28 +16,25 @@ $this->params['breadcrumbs'][] = $this->title;
         </ol>
     </section>
     <section class="content">
-        <?php if (Yii::$app->session->hasFlash('moderator_removed')) {?>
-            <div class="alert alert-success text-center"><?=Yii::$app->session->getFlash('moderator_removed');?></div>
-        <?php }?>
         <div class="box box-info color-palette-box">
-            <div class="box-header">
+            <div class="box-header with-border">
+                <h3 class="box-title"><i class="fa fa-headphones"></i> Список операторов</h3>
                 <div class="pull-right">
-                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/create', 'role' => \app\models\user\User::ROLE_MODERATOR])?>" class="btn btn-primary"><i class="fa fa-plus"></i> Добавить модератора</a>
-                </div>
-                <div id="action-links">
-                    <a href="javascript:;" class="btn btn-danger" data-value="remove"><i class="fa fa-trash"></i> Удалить</a>
+                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/create', 'role' => \app\models\user\User::ROLE_OPERATOR])?>" class="btn btn-primary">
+                        <i class="fa fa-plus"></i> Добавить оператора
+                    </a>
                 </div>
             </div>
             <div class="box-body" id="item-block">
                 <?= GridView::widget([
                     'dataProvider' => $dataProvider,
                     'filterModel' => $searchModel,
-                    'summary' => "Показано {begin} - {end} из {totalCount} модераторов<br/><br/>",
-                    'emptyText' => 'Модераторы не найдены',
+                    'summary' => "Показано {begin} - {end} из {totalCount} операторов<br/><br/>",
+                    'emptyText' => 'Операторы не найдены',
                     'rowOptions' => function ($model, $index, $widget, $grid) {
                         return [
                             'id' => $model['id'],
-                            'url' => Yii::$app->urlManager->createUrl('/admin/moderator/view').'?id='.$model['id']
+                            'url' => Yii::$app->urlManager->createUrl('/admin/user/view').'?id='.$model['id']
                         ];
                     },
                     'pager' => [
@@ -57,9 +53,6 @@ $this->params['breadcrumbs'][] = $this->title;
                     'columns' => [
                         ['class' => 'yii\grid\SerialColumn'],
                         [
-                            'class' => 'yii\grid\CheckboxColumn'
-                        ],
-                        [
                             'label' => 'Фото',
                             'format' => 'html',
                             'value' => function($data) { return Html::img($data->getPhoto('50x50'), ['width'=>'30']); },
@@ -74,15 +67,8 @@ $this->params['breadcrumbs'][] = $this->title;
                             'label'=>'<i class="fa fa-sort"></i> Имя',
                             'encodeLabel' => false,
                             'value' => function ($model) {
-                                return $model->name ?: 'Нет данных';
-                            },
-                        ],
-                        [
-                            'attribute'=>'phone',
-                            'label'=>'<i class="fa fa-sort"></i> Телефон',
-                            'encodeLabel' => false,
-                            'value' => function ($model) {
-                                return $model->phone ?: 'Нет данных';
+                                $parts = array_filter([$model->lastname, $model->name, $model->middlename]);
+                                return $parts ? implode(' ', $parts) : 'Нет данных';
                             },
                         ],
                         [
@@ -94,11 +80,16 @@ $this->params['breadcrumbs'][] = $this->title;
                             },
                         ],
                         [
-                            'attribute'=>'date',
-                            'label'=>'<i class="fa fa-sort"></i> Дата',
+                            'attribute'=>'phone',
+                            'label'=>'<i class="fa fa-sort"></i> Телефон',
+                            'encodeLabel' => false,
+                        ],
+                        [
+                            'attribute'=>'email',
+                            'label'=>'<i class="fa fa-sort"></i> E-mail',
                             'encodeLabel' => false,
                             'value' => function ($model) {
-                                return $model->date ?: 'Нет данных';
+                                return $model->email ?: 'Нет данных';
                             },
                         ],
                         [
@@ -117,17 +108,13 @@ $this->params['breadcrumbs'][] = $this->title;
                             },
                         ],
                         [
-                            'class' => 'yii\grid\ActionColumn',
-                            'template' => '{update} {delete}',
-                            'buttons' => [
-                                'update' => function ($url, $model) {
-                                    return Html::a('<span class="glyphicon glyphicon-pencil"></span>', Yii::$app->urlManager->createUrl(['/admin/moderator/create', 'id'=>$model->id]), ['class'=>'btn btn-warning btn-xs']);
-                                },
-                                'delete' => function ($url, $model) {
-                                    return Html::a('<span class="glyphicon glyphicon-trash"></span>', Yii::$app->urlManager->createUrl(['/admin/moderator/remove', 'id'=>$model->id]), ['class'=>'btn btn-danger btn-xs remove-object']);
-                                }
-                            ],
-                        ]
+                            'attribute'=>'date',
+                            'label'=>'<i class="fa fa-sort"></i> Дата',
+                            'encodeLabel' => false,
+                            'value' => function ($model) {
+                                return $model->date ?: 'Нет данных';
+                            },
+                        ],
                     ],
                 ]); ?>
             </div>

@@ -38,6 +38,18 @@ class ErrorCodes
     const ERROR_MYID_PINFL_LINKED = -35;
     const ERROR_MYID_SESSION_FAILED = -36;
     const ERROR_MYID_VERIFICATION_FAILED = -37;
+    const ERROR_MYID_MISSING_REQUIRED_DATA = -38;
+
+    // E-IMZO Errors
+    const ERROR_EIMZO_SERVER_UNREACHABLE = -40;
+    const ERROR_EIMZO_PKCS7_REQUIRED = -41;
+    const ERROR_EIMZO_TIMESTAMP_FAILED = -42;
+    const ERROR_EIMZO_AUTH_FAILED = -43;
+    const ERROR_EIMZO_INN_MISSING = -44;
+    const ERROR_EIMZO_USER_CREATE_FAILED = -45;
+    const ERROR_EIMZO_VERIFY_FAILED = -46;
+    const ERROR_EIMZO_SIGN_FAILED = -47;
+    const ERROR_EIMZO_STATUS_FAILED = -48;
 
     // Error Messages
     public static $messages = [
@@ -69,6 +81,17 @@ class ErrorCodes
         self::ERROR_MYID_PINFL_LINKED => 'This PINFL is already linked to another account',
         self::ERROR_MYID_SESSION_FAILED => 'Failed to create MyID verification session',
         self::ERROR_MYID_VERIFICATION_FAILED => 'MyID verification failed',
+        self::ERROR_MYID_MISSING_REQUIRED_DATA => 'Missing required data for MyID session',
+
+        self::ERROR_EIMZO_SERVER_UNREACHABLE => 'E-IMZO server is unreachable',
+        self::ERROR_EIMZO_PKCS7_REQUIRED => 'PKCS#7 data is required',
+        self::ERROR_EIMZO_TIMESTAMP_FAILED => 'Failed to attach E-IMZO timestamp',
+        self::ERROR_EIMZO_AUTH_FAILED => 'E-IMZO authentication failed',
+        self::ERROR_EIMZO_INN_MISSING => 'Could not extract INN from certificate',
+        self::ERROR_EIMZO_USER_CREATE_FAILED => 'Failed to create user from E-IMZO',
+        self::ERROR_EIMZO_VERIFY_FAILED => 'PKCS#7 signature verification failed',
+        self::ERROR_EIMZO_SIGN_FAILED => 'Server-side signing failed',
+        self::ERROR_EIMZO_STATUS_FAILED => 'E-IMZO server status check failed',
     ];
 
     // HTTP Status Codes Map
@@ -101,6 +124,17 @@ class ErrorCodes
         self::ERROR_MYID_PINFL_LINKED => 409,
         self::ERROR_MYID_SESSION_FAILED => 502,
         self::ERROR_MYID_VERIFICATION_FAILED => 500,
+        self::ERROR_MYID_MISSING_REQUIRED_DATA => 422,
+
+        self::ERROR_EIMZO_SERVER_UNREACHABLE => 502,
+        self::ERROR_EIMZO_PKCS7_REQUIRED => 422,
+        self::ERROR_EIMZO_TIMESTAMP_FAILED => 502,
+        self::ERROR_EIMZO_AUTH_FAILED => 401,
+        self::ERROR_EIMZO_INN_MISSING => 400,
+        self::ERROR_EIMZO_USER_CREATE_FAILED => 500,
+        self::ERROR_EIMZO_VERIFY_FAILED => 400,
+        self::ERROR_EIMZO_SIGN_FAILED => 502,
+        self::ERROR_EIMZO_STATUS_FAILED => 502,
     ];
 
     public static function getMessage($code)

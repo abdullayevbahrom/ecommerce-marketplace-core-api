@@ -97,6 +97,14 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                     <div class="box box-primary">
                         <div class="box-header with-border">
                             <h3 class="box-title"><i class="fa fa-info-circle"></i> Основная информация</h3>
+                            <div class="box-tools pull-right">
+                                <?= $model->getRoleBadge() ?>
+                                <?php if ($model->type == 'yur'): ?>
+                                    <small class="label bg-black">Юр. лицо</small>
+                                <?php else: ?>
+                                    <small class="label bg-aqua">Физ. лицо</small>
+                                <?php endif; ?>
+                            </div>
                         </div>
                         <div class="box-body">
                             <div class="row">
@@ -125,6 +133,11 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                             </a>
                                         <?php endif; ?>
                                     </p>
+
+                                    <?php if ($model->login): ?>
+                                        <strong><i class="fa fa-sign-in margin-r-5"></i> Логин</strong>
+                                        <p class="text-muted"><?= Html::encode($model->login) ?></p>
+                                    <?php endif; ?>
                                 </div>
                                 <div class="col-md-6">
                                     <strong><i class="fa fa-birthday-cake margin-r-5"></i> Дата рождения</strong>
@@ -139,15 +152,111 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                         echo $model->gender ? ($genders[$model->gender] ?? 'Не указан') : 'Не указан';
                                         ?>
                                     </p>
-                                    
+
                                     <strong><i class="fa fa-calendar margin-r-5"></i> Дата регистрации</strong>
                                     <p class="text-muted">
                                         <?= formatDateSafe($model->date, 'datetime') ?>
                                     </p>
+
+                                    <?php if ($model->organization_name): ?>
+                                        <strong><i class="fa fa-building margin-r-5"></i> Организация</strong>
+                                        <p class="text-muted"><?= Html::encode($model->organization_name) ?></p>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    <?php
+                    // E-IMZO / MyID verification info
+                    $hasEimzo = !empty($model->eimzo_tax_id);
+                    $userMyid = \app\models\user\UserMyid::findOne(['user_id' => $model->id]);
+                    $hasMyid = $userMyid !== null;
+                    ?>
+                    <?php if ($hasEimzo || $hasMyid): ?>
+                    <!-- Verification & Identity -->
+                    <div class="box box-success">
+                        <div class="box-header with-border">
+                            <h3 class="box-title"><i class="fa fa-check-circle"></i> Верификация и идентификация</h3>
+                        </div>
+                        <div class="box-body">
+                            <div class="row">
+                                <?php if ($hasEimzo): ?>
+                                <div class="col-md-6">
+                                    <div class="info-box bg-blue">
+                                        <span class="info-box-icon"><i class="fa fa-id-card"></i></span>
+                                        <div class="info-box-content">
+                                            <span class="info-box-text">E-IMZO</span>
+                                            <span class="info-box-number"><?= Html::encode($model->eimzo_tax_id) ?></span>
+                                            <span class="progress-description">
+                                                <?php if ($model->eimzo_last_login): ?>
+                                                    Последний вход: <?= formatDateSafe($model->eimzo_last_login, 'datetime') ?>
+                                                <?php else: ?>
+                                                    Привязан
+                                                <?php endif; ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <?php if ($model->eimzo_certificate_info): ?>
+                                        <?php $certInfo = json_decode($model->eimzo_certificate_info, true); ?>
+                                        <?php if ($certInfo): ?>
+                                            <dl class="dl-horizontal" style="font-size: 12px;">
+                                                <?php if (isset($certInfo['fullName'])): ?>
+                                                    <dt>Наименование:</dt>
+                                                    <dd><?= Html::encode($certInfo['fullName']) ?></dd>
+                                                <?php endif; ?>
+                                                <?php if (isset($certInfo['director'])): ?>
+                                                    <dt>Руководитель:</dt>
+                                                    <dd><?= Html::encode($certInfo['director']) ?></dd>
+                                                <?php endif; ?>
+                                            </dl>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
+                                <?php endif; ?>
+
+                                <?php if ($hasMyid): ?>
+                                <div class="col-md-6">
+                                    <div class="info-box bg-green">
+                                        <span class="info-box-icon"><i class="fa fa-user-circle"></i></span>
+                                        <div class="info-box-content">
+                                            <span class="info-box-text">MyID</span>
+                                            <span class="info-box-number"><?= Html::encode($userMyid->pinfl ?: 'Верифицирован') ?></span>
+                                            <span class="progress-description">
+                                                <?php if ($userMyid->comparison_value): ?>
+                                                    Совпадение: <?= round($userMyid->comparison_value * 100) ?>%
+                                                <?php endif; ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <dl class="dl-horizontal" style="font-size: 12px;">
+                                        <?php if ($userMyid->first_name || $userMyid->last_name): ?>
+                                            <dt>ФИО (MyID):</dt>
+                                            <dd><?= Html::encode(trim($userMyid->last_name . ' ' . $userMyid->first_name . ' ' . ($userMyid->middle_name ?? ''))) ?></dd>
+                                        <?php endif; ?>
+                                        <?php if ($userMyid->birth_date): ?>
+                                            <dt>Дата рождения:</dt>
+                                            <dd><?= Html::encode($userMyid->birth_date) ?></dd>
+                                        <?php endif; ?>
+                                        <?php if ($userMyid->passport_number): ?>
+                                            <dt>Документ:</dt>
+                                            <dd><?= Html::encode(($userMyid->passport_series ?? '') . ' ' . $userMyid->passport_number) ?></dd>
+                                        <?php endif; ?>
+                                        <?php if ($userMyid->phone): ?>
+                                            <dt>Телефон (MyID):</dt>
+                                            <dd><?= Html::encode($userMyid->phone) ?></dd>
+                                        <?php endif; ?>
+                                        <?php if ($userMyid->created_at): ?>
+                                            <dt>Дата верификации:</dt>
+                                            <dd><?= formatDateSafe($userMyid->created_at, 'datetime') ?></dd>
+                                        <?php endif; ?>
+                                    </dl>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
 
                     <!-- Tabbed Content -->
                     <div class="nav-tabs-custom shadow-sm">
@@ -726,18 +835,21 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                     <dd><?= Html::encode($model->device_id ?: 'Не указан') ?></dd>
                                                     
                                                     <dt>Роль:</dt>
+                                                    <dd><?= $model->getRoleBadge() ?></dd>
+
+                                                    <dt>Тип:</dt>
                                                     <dd>
-                                                        <?php
-                                                        $roles = [
-                                                            User::ROLE_ADMIN => 'Администратор',
-                                                            User::ROLE_MODERATOR => 'Модератор', 
-                                                            User::ROLE_USER => 'Пользователь',
-                                                            User::ROLE_SHOP => 'Магазин',
-                                                            User::ROLE_LOGIST => 'Логист'
-                                                        ];
-                                                        echo $roles[$model->role] ?? 'Неизвестная роль';
-                                                        ?>
+                                                        <?php if ($model->type == 'yur'): ?>
+                                                            <small class="label bg-black">Юр. лицо</small>
+                                                        <?php else: ?>
+                                                            <small class="label bg-aqua">Физ. лицо</small>
+                                                        <?php endif; ?>
                                                     </dd>
+
+                                                    <?php if ($model->login): ?>
+                                                        <dt>Логин:</dt>
+                                                        <dd><?= Html::encode($model->login) ?></dd>
+                                                    <?php endif; ?>
                                                 </dl>
                                             </div>
                                         </div>

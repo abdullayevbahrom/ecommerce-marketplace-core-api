@@ -47,6 +47,24 @@ class User extends ActiveRecord implements IdentityInterface
     const ROLE_LOGIST = 5;
     const ROLE_OPERATOR = 6;
 
+    const ROLE_LABELS = [
+        self::ROLE_ADMIN => 'Администратор',
+        self::ROLE_MODERATOR => 'Модератор',
+        self::ROLE_USER => 'Клиент',
+        self::ROLE_SHOP => 'Магазин',
+        self::ROLE_LOGIST => 'Логист',
+        self::ROLE_OPERATOR => 'Оператор',
+    ];
+
+    const ROLE_COLORS = [
+        self::ROLE_ADMIN => 'bg-red',
+        self::ROLE_MODERATOR => 'bg-purple',
+        self::ROLE_USER => 'bg-aqua',
+        self::ROLE_SHOP => 'bg-green',
+        self::ROLE_LOGIST => 'bg-orange',
+        self::ROLE_OPERATOR => 'bg-blue',
+    ];
+
     const PHOTO_PATH = 'uploads/user/';
     const PHOTO_DEFAULT = '/assets_files/images/user.png';
 
@@ -442,7 +460,10 @@ class User extends ActiveRecord implements IdentityInterface
     public function saveObject($type = self::ROLE_USER)
     {
         $this->ip = $_SERVER['REMOTE_ADDR'];
-        $this->role = $type;
+        // Only set role for new users; preserve existing role on update
+        if ($this->isNewRecord) {
+            $this->role = $type;
+        }
 
         if (!Yii::$app->request->get('id')) {
             $this->token = $this->generateToken();
@@ -577,6 +598,21 @@ class User extends ActiveRecord implements IdentityInterface
             return $user;
         }
         return false;
+    }
+
+    public function getRoleLabel()
+    {
+        return self::ROLE_LABELS[$this->role] ?? 'Неизвестно';
+    }
+
+    public function getRoleColor()
+    {
+        return self::ROLE_COLORS[$this->role] ?? 'bg-gray';
+    }
+
+    public function getRoleBadge()
+    {
+        return '<small class="label ' . $this->getRoleColor() . '">' . $this->getRoleLabel() . '</small>';
     }
 
     public function getPhoto($size = 'original')

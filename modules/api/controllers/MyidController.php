@@ -47,7 +47,7 @@ class MyidController extends Controller
 
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
-            'optional' => ['options', 'init-web', 'callback', 'verify', 'register', 'sdk-config', 'session-result', 'create-session', 'session-status'],
+            'optional' => ['options', 'init-web', 'callback', 'verify', 'register', 'sdk-config', 'session-result', 'session-status'],
         ];
 
         $auth = $behaviors['authenticator'];
@@ -234,15 +234,14 @@ class MyidController extends Controller
     /**
      * Create a session for mobile SDK initialization (SDK New Flow).
      *
+     * Creates an empty session on MyID. The SDK will display a screen
+     * for the user to enter passport information manually.
+     *
+     * Requires authentication (Bearer token) to link MyID data with user.
+     *
      * POST /api/myid/create-session
-     * Body (all optional): {
-     *   "pinfl": "12345678901234",
-     *   "pass_data": "AA1234567",
-     *   "phone_number": "998901234567",
-     *   "birth_date": "1990-01-15",
-     *   "is_resident": true,
-     *   "threshold": 0.7
-     * }
+     * Authorization: Bearer {token}  // required
+     * Body: {} (empty)
      */
     public function actionCreateSession()
     {
@@ -252,56 +251,56 @@ class MyidController extends Controller
             return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Method not allowed', [], 405);
         }
 
+        $currentUser = Yii::$app->user->identity;
+        if (!$currentUser) {
+            return $this->sendError(ErrorCodes::ERROR_UNAUTHORIZED, 'Authentication required');
+        }
+
         $myidService = new MyidService();
         if (!$myidService->isConfigured()) {
             return $this->sendError(ErrorCodes::ERROR_MYID_NOT_CONFIGURED);
         }
 
-        $post = Yii::$app->request->post();
-        $currentUser = Yii::$app->user->identity;
+        // Empty session — SDK will show passport entry screen to the user
+        $result = $myidService->createSdkSession([]);
 
-        $params = [];
-
-        // For authenticated users: auto-populate passport data from DB (backend-to-backend)
-        // Mobile only needs to send {use_reuid: bool} or {threshold: float}
-        if ($currentUser) {
-            $existingMyid = UserMyid::findByUserId($currentUser->id);
-
-            // Secondary flow: use reuid if available and requested
-            if (isset($post['use_reuid']) && $post['use_reuid'] && $existingMyid && $existingMyid->hasValidReuid()) {
-                $params['reuid'] = $existingMyid->reuid;
-            } elseif ($existingMyid) {
-                // Primary flow: auto-populate from existing verification data
-                if ($existingMyid->pinfl) {
-                    $params['pinfl'] = $existingMyid->pinfl;
-                }
-                $passData = $existingMyid->getPassportFull();
-                if ($passData) {
-                    $params['pass_data'] = $passData;
-                }
-                if ($existingMyid->birth_date) {
-                    $params['birth_date'] = $existingMyid->birth_date;
-                }
-                if ($existingMyid->phone) {
-                    $params['phone_number'] = $existingMyid->phone;
-                }
-            }
-
-            // Allow threshold override from request
-            if (isset($post['threshold']) && $post['threshold'] !== '') {
-                $params['threshold'] = (float)$post['threshold'];
-            }
-        } else {
-            // Unauthenticated: accept passport data from request (empty session or with data)
-            $allowedFields = ['pinfl', 'pass_data', 'phone_number', 'birth_date', 'is_resident', 'threshold'];
-            foreach ($allowedFields as $field) {
-                if (isset($post[$field]) && $post[$field] !== '') {
-                    $params[$field] = $post[$field];
-                }
-            }
-        }
-
-        $result = $myidService->createSdkSession($params);
+        // --- Commented out: DB lookup + request body override flow ---
+        // If needed later, uncomment to pre-fill passport data from DB/request.
+        //
+        // $post = Yii::$app->request->post();
+        // $existingMyid = UserMyid::findByUserId($currentUser->id);
+        //
+        // // Priority: request body > user_myid table > user table
+        // $pinfl = $this->getPostValue($post, 'pinfl')
+        //     ?? ($existingMyid ? $existingMyid->pinfl : null)
+        //     ?? $currentUser->pinfl
+        //     ?? null;
+        //
+        // $passData = $this->getPostValue($post, 'pass_data')
+        //     ?? ($existingMyid ? $existingMyid->getPassportFull() : null)
+        //     ?? $currentUser->pass_data
+        //     ?? null;
+        //
+        // $phoneNumber = $this->getPostValue($post, 'phone_number')
+        //     ?? $currentUser->phone
+        //     ?? null;
+        //
+        // $birthDate = $this->getPostValue($post, 'birth_date')
+        //     ?? ($existingMyid ? $existingMyid->birth_date : null)
+        //     ?? $this->formatBirthDate($currentUser->birthday)
+        //     ?? null;
+        //
+        // $params = [];
+        // if ($pinfl) $params['pinfl'] = $pinfl;
+        // if ($passData) $params['pass_data'] = $passData;
+        // if ($phoneNumber) $params['phone_number'] = $phoneNumber;
+        // if ($birthDate) $params['birth_date'] = $birthDate;
+        // $params['is_resident'] = isset($post['is_resident']) ? $post['is_resident'] : true;
+        // $params['threshold'] = isset($post['threshold']) && $post['threshold'] !== ''
+        //     ? (float)$post['threshold'] : 0.5;
+        //
+        // $result = $myidService->createSdkSession($params);
+        // --- End commented out ---
 
         if (!$result['success']) {
             $step = $result['step'] ?? 'unknown';
@@ -597,6 +596,37 @@ class MyidController extends Controller
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    /**
+     * Get a non-empty string value from POST data, or null.
+     */
+    private function getPostValue($post, $key)
+    {
+        return isset($post[$key]) && $post[$key] !== '' ? $post[$key] : null;
+    }
+
+    /**
+     * Convert birthday to YYYY-MM-DD format for MyID.
+     * Handles common formats: YYYY-MM-DD, DD.MM.YYYY, DD/MM/YYYY, timestamp.
+     */
+    private function formatBirthDate($birthday)
+    {
+        if (empty($birthday)) {
+            return null;
+        }
+
+        // Already YYYY-MM-DD
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthday)) {
+            return $birthday;
+        }
+
+        $timestamp = strtotime($birthday);
+        if ($timestamp !== false) {
+            return date('Y-m-d', $timestamp);
+        }
+
+        return null;
+    }
 
     /**
      * Format user data for API response.

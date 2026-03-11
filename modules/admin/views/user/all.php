@@ -1,8 +1,9 @@
 <?php
 use yii\helpers\Html;
 use yii\grid\GridView;
+use app\models\user\User;
 
-$this->title = 'Клиенты';
+$this->title = 'Все пользователи';
 $this->params['breadcrumbs'][] = $this->title;
 ?>
 
@@ -24,7 +25,7 @@ $this->params['breadcrumbs'][] = $this->title;
         <div class="box box-info color-palette-box">
             <div class="box-header with-border">
                 <div class="box-title pull-right" style="font-size: 14px">
-                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/create', 'role' => \app\models\user\User::ROLE_USER])?>" class="btn btn-primary">
+                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/create'])?>" class="btn btn-primary">
                         <i class="fa fa-plus"></i> Добавить клиента
                     </a>
                 </div>
@@ -36,8 +37,8 @@ $this->params['breadcrumbs'][] = $this->title;
                 <?= GridView::widget([
                     'dataProvider' => $dataProvider,
                     'filterModel' => $searchModel,
-                    'summary' => "Показано {begin} - {end} из {totalCount} клиентов<br/><br/>",
-                    'emptyText' => 'Клиенты не найдены',
+                    'summary' => "Показано {begin} - {end} из {totalCount} пользователей<br/><br/>",
+                    'emptyText' => 'Пользователи не найдены',
                     'rowOptions' => function ($model, $index, $widget, $grid) {
                         return [
                             'id' => $model['id'],
@@ -71,6 +72,23 @@ $this->params['breadcrumbs'][] = $this->title;
                             'attribute'=>'id',
                             'label'=>'<i class="fa fa-sort"></i> ID',
                             'encodeLabel' => false,
+                        ],
+                        [
+                            'attribute'=>'role',
+                            'label'=>'<i class="fa fa-sort"></i> Роль',
+                            'encodeLabel' => false,
+                            'format' => 'html',
+                            'filter' => Html::activeDropDownList($searchModel, 'role', [
+                                User::ROLE_ADMIN => 'Администратор',
+                                User::ROLE_MODERATOR => 'Модератор',
+                                User::ROLE_USER => 'Клиент',
+                                User::ROLE_SHOP => 'Магазин',
+                                User::ROLE_LOGIST => 'Логист',
+                                User::ROLE_OPERATOR => 'Оператор',
+                            ], ['class'=>'form-control select2', 'prompt' => 'Все']),
+                            'value' => function ($model) {
+                                return $model->getRoleBadge();
+                            },
                         ],
                         [
                             'attribute'=>'type',
@@ -110,15 +128,11 @@ $this->params['breadcrumbs'][] = $this->title;
                             },
                         ],
                         [
-                            'attribute'=>'eimzo_tax_id',
-                            'label'=>'<i class="fa fa-sort"></i> ИНН (E-IMZO)',
+                            'attribute'=>'login',
+                            'label'=>'<i class="fa fa-sort"></i> Логин',
                             'encodeLabel' => false,
-                            'format' => 'html',
                             'value' => function ($model) {
-                                if ($model->eimzo_tax_id) {
-                                    return '<small class="label bg-blue">' . $model->eimzo_tax_id . '</small>';
-                                }
-                                return '<small class="text-muted">Нет</small>';
+                                return $model->login ?: '-';
                             },
                         ],
                         [
