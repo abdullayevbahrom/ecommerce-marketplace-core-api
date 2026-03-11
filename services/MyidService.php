@@ -285,6 +285,49 @@ class MyidService
         }
 
         $profile = $myidData['profile'] ?? null;
+
+        // Secondary flow (reuid): profile is null, only comparison_value is returned.
+        // Update the existing record's comparison_value without re-extracting profile data.
+        if ($profile === null) {
+            if (!$userId) {
+                return [
+                    'success' => false,
+                    'error' => 'Secondary flow requires an authenticated user',
+                    'step' => 'secondary_flow',
+                ];
+            }
+
+            $existingMyid = UserMyid::findByUserId($userId);
+            if (!$existingMyid) {
+                return [
+                    'success' => false,
+                    'error' => 'No existing verification found for secondary flow',
+                    'step' => 'secondary_flow',
+                ];
+            }
+
+            $existingMyid->comparison_value = $comparisonValue;
+            $existingMyid->job_id = $myidData['job_id'] ?? $existingMyid->job_id;
+            $existingMyid->verification_status = UserMyid::STATUS_VERIFIED;
+            $existingMyid->verified_at = date('Y-m-d H:i:s');
+
+            if (!$existingMyid->save()) {
+                Yii::error('Failed to update UserMyid for secondary flow: ' . json_encode($existingMyid->errors), __METHOD__);
+                return [
+                    'success' => false,
+                    'error' => 'Failed to update verification data',
+                    'step' => 'save',
+                ];
+            }
+
+            return [
+                'success' => true,
+                'verification' => $existingMyid->toApiArray(),
+                'user_id' => $existingMyid->user_id,
+            ];
+        }
+
+        // Primary flow: extract PINFL from profile
         $commonData = $profile['common_data'] ?? [];
         $pinfl = $commonData['pinfl'] ?? null;
 
@@ -761,9 +804,9 @@ class MyidService
 
             if (isset($myidData['gender'])) {
                 $gender = strtolower((string)$myidData['gender']);
-                if ($gender === 'male' || $gender === '1') {
+                if (in_array($gender, ['male', '1', 'м', 'm'])) {
                     $user->gender = 1;
-                } elseif ($gender === 'female' || $gender === '2') {
+                } elseif (in_array($gender, ['female', '2', 'ж', 'f'])) {
                     $user->gender = 2;
                 }
             }

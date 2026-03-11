@@ -217,6 +217,15 @@ $config = [
                 'POST api/myid/create-session' => 'api/myid/create-session',
                 'GET api/myid/session-status' => 'api/myid/session-status',
 
+                // E-IMZO direct integration endpoints
+                'POST api/eimzo/challenge' => 'api/eimzo/challenge',
+                'POST api/eimzo/timestamp' => 'api/eimzo/timestamp',
+                'POST api/eimzo/auth' => 'api/eimzo/auth',
+                'POST api/eimzo/verify' => 'api/eimzo/verify',
+                'POST api/eimzo/sign' => 'api/eimzo/sign',
+                'GET api/eimzo/ping' => 'api/eimzo/ping',
+                'GET api/eimzo/info' => 'api/eimzo/info',
+
                 // Wallet API
                 'GET api/wallet/balance' => 'api/wallet/balance',
                 'POST api/wallet/deploy' => 'api/wallet/deploy',

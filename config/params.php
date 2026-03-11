@@ -57,6 +57,11 @@ $config = [
         'web_url' => 'https://web.devid.example.com',
     ],
 
+    // E-IMZO direct integration (e-imzo-server instance)
+    'eimzo' => [
+        'serverUrl' => getenv('EIMZO_SERVER_URL') ?: 'http://127.0.0.1:8080',
+    ],
+
     // Wallet Configuration
     'walletServiceUrl' => 'https://wallet.example.com', // External Wallet Service URL
     'walletPaymentId' => 2, // Category ID for wallet payment type (set after inserting into `category` table)
