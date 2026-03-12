@@ -31,15 +31,14 @@ class PromocodeController extends Controller
     {
         $behaviors = parent::behaviors();
 
-        $behaviors['authenticator'] = [
-            'class' => HttpBearerAuth::className(),
+        $auth = [
+            'class' => HttpBearerAuth::class,
         ];
 
-        $auth = $behaviors['authenticator'];
         unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
-            'class' => \yii\filters\Cors::className(),
+            'class' => \yii\filters\Cors::class,
             'cors' => [
                 'Access-Control-Allow-Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
@@ -50,8 +49,7 @@ class PromocodeController extends Controller
             ]
         ];
 
-        $behaviors['authenticator']['except'] = ['options'];
-
+        $auth['except'] = ['options'];
         $behaviors['authenticator'] = $auth;
 
         return $behaviors;
@@ -68,6 +66,10 @@ class PromocodeController extends Controller
 
         $query = Promocode::find()
             ->where(['status' => Promocode::STATUS_ACTIVE])
+            ->andWhere(['or',
+                ['start_date' => null],
+                ['<=', 'start_date', $now]
+            ])
             ->andWhere(['or',
                 ['end_date' => null],
                 ['>=', 'end_date', $now]
@@ -117,6 +119,7 @@ class PromocodeController extends Controller
                 'code' => $promo->code,
                 'end_date' => $promo->end_date ? date('d.m.Y, H:i', strtotime($promo->end_date)) : null,
                 'min_order_amount' => $promo->min_order_amount,
+                'max_discount_amount' => $promo->max_discount_amount,
                 'value' => $promo->value,
                 'type' => $promo->type == Promocode::TYPE_FIXED ? 'fixed' : 'percent',
                 'is_personal' => !empty($promo->user_id)
@@ -124,6 +127,94 @@ class PromocodeController extends Controller
         }
 
         return $this->sendSuccess($availablePromos);
+    }
+
+    /**
+     * Check/validate a promocode (lightweight, no cart required)
+     * POST /api/promocode/check
+     * Body: { "code": "PROMO123" }
+     */
+    public function actionCheck()
+    {
+        $user = Yii::$app->user->identity;
+        $code = Yii::$app->request->post('code');
+
+        if (!$code) {
+            return $this->sendError(400, 'Promocode code is required');
+        }
+
+        $promocode = Promocode::findOne(['code' => $code]);
+
+        if (!$promocode) {
+            return $this->sendError(404, 'Promocode not found');
+        }
+
+        // Basic validity check (without cart-dependent checks)
+        if ($promocode->status !== Promocode::STATUS_ACTIVE) {
+            return $this->sendError(422, 'Promocode is inactive');
+        }
+
+        $now = date('Y-m-d H:i:s');
+        if ($promocode->start_date && $promocode->start_date > $now) {
+            return $this->sendError(422, 'Promocode is not active yet');
+        }
+        if ($promocode->end_date && $promocode->end_date < $now) {
+            return $this->sendError(422, 'Promocode has expired');
+        }
+
+        // Check personal ownership
+        if ($promocode->user_id !== null && $promocode->user_id != $user->id) {
+            return $this->sendError(422, 'This promocode is not valid for your account');
+        }
+
+        // Check global usage limit
+        if ($promocode->usage_limit !== null) {
+            $usedCount = \app\models\order\Order::find()->where(['promocode_id' => $promocode->id])->count();
+            if ($usedCount >= $promocode->usage_limit) {
+                return $this->sendError(422, 'Promocode usage limit reached');
+            }
+        }
+
+        // Check per-user usage limit
+        $userUsedCount = 0;
+        if ($promocode->usage_limit_per_user > 0) {
+            $userUsedCount = \app\models\order\Order::find()
+                ->where(['promocode_id' => $promocode->id, 'user_id' => $user->id])
+                ->count();
+            if ($userUsedCount >= $promocode->usage_limit_per_user) {
+                return $this->sendError(422, 'You have already used this promocode');
+            }
+        }
+
+        // Check first order requirement
+        if ($promocode->is_first_order) {
+            $hasOrders = \app\models\order\Order::find()
+                ->where(['user_id' => $user->id])
+                ->exists();
+            if ($hasOrders) {
+                return $this->sendError(422, 'This promocode is only for the first order');
+            }
+        }
+
+        return $this->sendSuccess([
+            'valid' => true,
+            'promocode' => [
+                'id' => $promocode->id,
+                'code' => $promocode->code,
+                'title' => $promocode->getTitle(),
+                'description' => $promocode->getDescription(),
+                'type' => $promocode->type == Promocode::TYPE_FIXED ? 'fixed' : 'percent',
+                'value' => $promocode->value,
+                'min_order_amount' => $promocode->min_order_amount,
+                'max_discount_amount' => $promocode->max_discount_amount,
+                'end_date' => $promocode->end_date ? date('d.m.Y, H:i', strtotime($promocode->end_date)) : null,
+                'used_count' => (int)$userUsedCount,
+                'usage_limit' => $promocode->usage_limit_per_user,
+                'is_first_order' => (bool)$promocode->is_first_order,
+                'category_id' => $promocode->category_id,
+                'product_id' => $promocode->product_id,
+            ],
+        ]);
     }
 
     /**
@@ -169,7 +260,8 @@ class PromocodeController extends Controller
             if (!$item->product) continue;
 
             $unitPrice = $item->product->getPriceByQuantity($item->amount);
-            $cartTotal += $unitPrice * $item->amount;
+            $lineTotal = $unitPrice * $item->amount;
+            $cartTotal += $lineTotal;
 
             $key = !empty($item->product->token_key) ? 'token_' . $item->product->token_key : 'prod_' . $item->product->id;
 
@@ -190,9 +282,9 @@ class PromocodeController extends Controller
             }
 
             $groups[$key]['total_amount'] += $item->amount;
-            $groups[$key]['total_price'] += $item->price;
+            $groups[$key]['total_price'] += $lineTotal;
             $groups[$key]['total_delivery_cost'] += $item->delivery_cost;
-            $groups[$key]['total_with_delivery'] += ($item->price + $item->delivery_cost);
+            $groups[$key]['total_with_delivery'] += ($lineTotal + $item->delivery_cost);
 
             $variantData = [
                 'id' => $item->id,
@@ -201,8 +293,8 @@ class PromocodeController extends Controller
                 'name_uz' => $item->product->name_uz,
                 'name_en' => $item->product->name_en,
                 'amount' => $item->amount,
-                'price' => $item->price,
-                'unit_price' => $item->amount > 0 ? $item->price / $item->amount : 0,
+                'price' => $lineTotal,
+                'unit_price' => $unitPrice,
                 'delivery_cost' => $item->delivery_cost,
                 'stock_amount' => $item->product->amount,
                 'color' => $item->product->color ? [
@@ -230,16 +322,7 @@ class PromocodeController extends Controller
             $groups[$key]['items'][] = $variantData;
         }
 
-        // Check how many times user has already used this promocode
-        $userUsedCount = \app\models\order\Order::find()
-            ->where(['promocode_id' => $promocode->id, 'user_id' => $user->id])
-            ->count();
-
-        if ($userUsedCount > 0 && $promocode->usage_limit_per_user > 0 && $userUsedCount >= $promocode->usage_limit_per_user) {
-            return $this->sendError(422, 'You have already used this promocode');
-        }
-
-        // Validate
+        // Validate against model (includes all checks: status, dates, limits, ownership, first order, category/product)
         list($isValid, $error) = $promocode->checkValidity($user, $cartTotal, $cartItems);
 
         if (!$isValid) {
@@ -249,6 +332,10 @@ class PromocodeController extends Controller
         // Calculate discount
         $discountAmount = $promocode->calculateDiscount($cartTotal);
 
+        $userUsedCount = \app\models\order\Order::find()
+            ->where(['promocode_id' => $promocode->id, 'user_id' => $user->id])
+            ->count();
+
         return $this->sendSuccess([
             'valid' => true,
             'message' => 'Promocode applied successfully',
@@ -256,12 +343,14 @@ class PromocodeController extends Controller
                 'code' => $promocode->code,
                 'title' => $promocode->getTitle(),
                 'description' => $promocode->getDescription(),
-                'type' => $promocode->type,
+                'type' => $promocode->type == Promocode::TYPE_FIXED ? 'fixed' : 'percent',
                 'value' => $promocode->value,
                 'used_count' => (int)$userUsedCount,
                 'usage_limit' => $promocode->usage_limit_per_user,
                 'discount_amount' => $discountAmount,
             ],
+            'cart_total' => $cartTotal,
+            'total_after_discount' => $cartTotal - $discountAmount,
             'cart' => array_values($groups),
         ]);
     }

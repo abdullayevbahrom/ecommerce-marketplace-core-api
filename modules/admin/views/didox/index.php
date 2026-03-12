@@ -22,14 +22,108 @@ $this->params['breadcrumbs'][] = $this->title;
         </ol>
     </section>
     <section class="content">
-        <?php 
+        <?php
         $isAuthenticated = Yii::$app->session->has('didox_authenticated') && Yii::$app->session->get('didox_authenticated') === true;
-        if (!$isAuthenticated): 
+        $sessionTaxId = Yii::$app->session->get('didox_tax_id');
+        $sessionConnectionType = Yii::$app->session->get('didox_connection_type');
+        $sessionAuthMethod = Yii::$app->session->get('didox_auth_method');
+        $sessionCertInfo = Yii::$app->session->get('didox_certificate_info');
+        $sessionUserData = Yii::$app->session->get('didox_user_data', []);
+
+        if (!$isAuthenticated):
         ?>
             <div class="callout callout-warning">
                 <h4><i class="fa fa-warning"></i> Требуется аутентификация DIDOX</h4>
                 <p>Вы не аутентифицированы на платформе DIDOX. Некоторые функции, такие как подписание, синхронизация и создание документов в DIDOX, будут недоступны.</p>
                 <p><a href="<?= Url::to(['login']) ?>" class="btn btn-sm btn-primary"><i class="fa fa-sign-in"></i> Войти в DIDOX</a></p>
+            </div>
+        <?php else: ?>
+            <!-- Authenticated user info -->
+            <div class="box box-success">
+                <div class="box-header with-border">
+                    <h3 class="box-title"><i class="fa fa-shield"></i> E-IMZO / DIDOX — Авторизован</h3>
+                    <div class="box-tools pull-right">
+                        <?= Html::a('<i class="fa fa-sign-out"></i> Выйти', ['eimzo-logout'], [
+                            'class' => 'btn btn-sm btn-warning',
+                            'data' => [
+                                'confirm' => 'Вы уверены, что хотите выйти из DIDOX?',
+                                'method' => 'post',
+                            ],
+                        ]) ?>
+                    </div>
+                </div>
+                <div class="box-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-condensed">
+                                <tr>
+                                    <td width="180"><strong><i class="fa fa-id-card"></i> ИНН (Tax ID):</strong></td>
+                                    <td><code style="font-size: 14px;"><?= Html::encode($sessionTaxId) ?></code></td>
+                                </tr>
+                                <?php if ($sessionCertInfo && is_array($sessionCertInfo)): ?>
+                                    <?php if (!empty($sessionCertInfo['displayName'])): ?>
+                                    <tr>
+                                        <td><strong><i class="fa fa-certificate"></i> Сертификат:</strong></td>
+                                        <td><?= Html::encode($sessionCertInfo['displayName']) ?></td>
+                                    </tr>
+                                    <?php endif; ?>
+                                    <?php if (!empty($sessionCertInfo['alias'])): ?>
+                                    <tr>
+                                        <td><strong><i class="fa fa-key"></i> Alias:</strong></td>
+                                        <td><small class="text-muted"><?= Html::encode($sessionCertInfo['alias']) ?></small></td>
+                                    </tr>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                                <tr>
+                                    <td><strong><i class="fa fa-plug"></i> Тип подключения:</strong></td>
+                                    <td>
+                                        <?php if ($sessionConnectionType === 'yur'): ?>
+                                            <span class="label label-primary">Юр. лицо</span>
+                                        <?php else: ?>
+                                            <span class="label label-info">Физ. лицо</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-condensed">
+                                <?php if ($sessionAuthMethod): ?>
+                                <tr>
+                                    <td width="180"><strong><i class="fa fa-lock"></i> Метод входа:</strong></td>
+                                    <td>
+                                        <?php if ($sessionAuthMethod === 'eimzo'): ?>
+                                            <span class="label label-success">E-IMZO</span>
+                                        <?php elseif ($sessionAuthMethod === 'password'): ?>
+                                            <span class="label label-default">Логин/Пароль</span>
+                                        <?php else: ?>
+                                            <span class="label label-default"><?= Html::encode($sessionAuthMethod) ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <?php endif; ?>
+                                <?php if (!empty($sessionUserData['original_individual_taxid'])): ?>
+                                <tr>
+                                    <td><strong><i class="fa fa-user"></i> Личный ИНН:</strong></td>
+                                    <td><code><?= Html::encode($sessionUserData['original_individual_taxid']) ?></code></td>
+                                </tr>
+                                <?php endif; ?>
+                                <?php
+                                $currentUser = Yii::$app->controller->user ?? null;
+                                if ($currentUser && $currentUser->eimzo_last_login): ?>
+                                <tr>
+                                    <td><strong><i class="fa fa-clock-o"></i> Последний вход:</strong></td>
+                                    <td><?= Html::encode($currentUser->eimzo_last_login) ?></td>
+                                </tr>
+                                <?php endif; ?>
+                                <tr>
+                                    <td><strong><i class="fa fa-user-circle"></i> Пользователь:</strong></td>
+                                    <td><?= Html::encode(Yii::$app->user->identity->name ?? '-') ?></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         <?php endif; ?>
 
@@ -38,13 +132,15 @@ $this->params['breadcrumbs'][] = $this->title;
                 <div class="box-title pull-right" style="font-size: 14px">
                     <?= Html::a('<i class="fa fa-file-text"></i> Создать счет-фактуру', ['create'], ['class' => 'btn btn-primary']) ?>
                     <?= Html::a('<i class="fa fa-file-contract"></i> Создать произвольный договор', ['create-arbitrary'], ['class' => 'btn btn-success', 'style' => 'margin-left: 5px;']) ?>
-                    <?= Html::a('<i class="fa fa-sign-out"></i> Выйти из DIDOX', ['eimzo-logout'], [
-                        'class' => 'btn btn-warning',
-                        'data' => [
-                            'confirm' => 'Are you sure you want to logout from DIDOX?',
-                            'method' => 'post',
-                        ],
-                    ]) ?>
+                    <?php if ($isAuthenticated): ?>
+                        <?= Html::a('<i class="fa fa-sign-out"></i> Выйти из DIDOX', ['eimzo-logout'], [
+                            'class' => 'btn btn-warning',
+                            'data' => [
+                                'confirm' => 'Вы уверены, что хотите выйти из DIDOX?',
+                                'method' => 'post',
+                            ],
+                        ]) ?>
+                    <?php endif; ?>
                 </div>
                 <div id="action-links">
                     <a href="javascript:;" class="btn btn-danger" data-value="remove"><i class="fa fa-trash"></i> Delete</a>

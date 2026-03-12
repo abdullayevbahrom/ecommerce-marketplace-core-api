@@ -174,23 +174,71 @@ class WalletController extends Controller
     }
 
     /**
-     * @deprecated Transfer endpoint has been removed from the wallet backend. Use /payment/* instead.
-     * POST /api/wallet/transfer
+     * Send tokens to another user by userId (auto-deploys wallets if needed).
+     * POST /api/wallet/send
+     * Accepts: receiverUserId (int), amount (string), symbol (string e.g. 'USDT')
+     * senderUserId is the authenticated user.
      */
-    public function actionTransfer()
+    public function actionSend()
     {
-        Yii::$app->response->statusCode = 410;
-        return ['error' => 'Transfer functionality is no longer available. Use /payment/* endpoints instead.'];
+        $senderUserId = Yii::$app->user->id;
+        if (!$senderUserId) {
+            return ['error' => 'User not found'];
+        }
+
+        $request = Yii::$app->request;
+        $receiverUserId = $request->post('receiverUserId');
+        $amount = $request->post('amount');
+        $symbol = $request->post('symbol');
+
+        if (!$receiverUserId || !$amount || !$symbol) {
+            return ['error' => 'Missing required parameters: receiverUserId, amount, symbol'];
+        }
+
+        try {
+            $result = $this->walletService->send($senderUserId, $receiverUserId, $amount, $symbol);
+
+            // Invalidate balance cache for both users
+            Yii::$app->cache->delete('wallet_balance_' . $senderUserId);
+            Yii::$app->cache->delete('wallet_balance_' . $receiverUserId);
+
+            return $result;
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+        }
     }
 
     /**
-     * @deprecated Transfer endpoint has been removed from the wallet backend.
-     * POST /api/wallet/transfer-by-name
+     * Mint tokens to a user by userId (test/admin endpoint).
+     * POST /api/wallet/mint-to-user
+     * Accepts: userId (int, optional - defaults to self), amount (string), symbol (string e.g. 'USDT')
      */
-    public function actionTransferByName()
+    public function actionMintToUser()
     {
-        Yii::$app->response->statusCode = 410;
-        return ['error' => 'Transfer functionality is no longer available. Use /payment/* endpoints instead.'];
+        $currentUserId = Yii::$app->user->id;
+        if (!$currentUserId) {
+            return ['error' => 'User not found'];
+        }
+
+        $request = Yii::$app->request;
+        $targetUserId = $request->post('userId', $currentUserId); // Default to self
+        $amount = $request->post('amount');
+        $symbol = $request->post('symbol');
+
+        if (!$amount || !$symbol) {
+            return ['error' => 'Missing required parameters: amount, symbol'];
+        }
+
+        try {
+            $result = $this->walletService->mintToUser($targetUserId, $amount, $symbol);
+
+            // Invalidate balance cache
+            Yii::$app->cache->delete('wallet_balance_' . $targetUserId);
+
+            return $result;
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+        }
     }
 
     /**

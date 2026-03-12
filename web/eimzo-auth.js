@@ -191,14 +191,14 @@ class EIMZOAuth {
     }
 
     // Login with selected certificate
-    async loginWithCertificate(certificateIndex, taxId = null, connectionType=null) {
+    async loginWithCertificate(certificateIndex, taxId = null, connectionType = null) {
         try {
             if (!this.certificates[certificateIndex]) {
                 throw new Error("Certificate not found");
             }
 
             const certificate = this.certificates[certificateIndex];
-            
+
             // Extract taxId from certificate if not provided
             if (!taxId) {
                 console.log(`extracting taxId from certificate: ${taxId}`);
@@ -208,22 +208,68 @@ class EIMZOAuth {
                 }
             }
 
-            this.loginData = { taxId, certificateIndex, certificate };
-            
+            this.loginData = { taxId, certificateIndex, certificate, connectionType };
+
             this.updateStatus("Загрузка ключа сертификата...", "info");
             this.updateStep(2);
-            
+
+            // Reconnect WebSocket if closed, then load key
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                console.log("WebSocket closed, reconnecting before load_key...");
+                await this.reconnect();
+            }
+
             this.loadCertificateKey();
-            
+
         } catch (error) {
             this.handleError(error.message);
         }
     }
 
+    // Reconnect WebSocket (returns promise that resolves when open)
+    reconnect() {
+        return new Promise((resolve, reject) => {
+            this.updateStatus("Переподключение к E-IMZO...", "info");
+
+            // Close existing if in a bad state
+            if (this.ws) {
+                try { this.ws.close(); } catch(e) { /* ignore */ }
+            }
+
+            this.ws = new WebSocket(this.EIMZO_WEBSOCKET);
+
+            const timeout = setTimeout(() => {
+                reject(new Error("E-IMZO reconnect timeout"));
+            }, 10000);
+
+            this.ws.onopen = () => {
+                clearTimeout(timeout);
+                console.log("E-IMZO WebSocket reconnected");
+                this.updateStatus("Соединение с E-IMZO восстановлено", "info");
+                resolve();
+            };
+
+            this.ws.onerror = (error) => {
+                clearTimeout(timeout);
+                console.error("E-IMZO WebSocket reconnect error:", error);
+                reject(new Error("Ошибка переподключения к E-IMZO"));
+            };
+
+            this.ws.onclose = () => {
+                console.log("E-IMZO WebSocket connection closed");
+            };
+
+            this.ws.onmessage = (evt) => {
+                console.log("E-IMZO message received:", evt.data);
+                this.handleWebSocketMessage(JSON.parse(evt.data));
+            };
+        });
+    }
+
     // Load certificate key
     loadCertificateKey() {
         const certificate = this.loginData.certificate;
-        
+
         this.ws.send(JSON.stringify({
             plugin: "pfx",
             name: "load_key",
@@ -232,15 +278,20 @@ class EIMZOAuth {
     }
 
     // Create E-IMZO signature
-    createSignature() {
+    async createSignature() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.log("WebSocket closed before createSignature, reconnecting...");
+            await this.reconnect();
+        }
+
         const dataToSign = btoa(this.loginData.taxId);
-        
+
         this.ws.send(JSON.stringify({
             plugin: "pkcs7",
             name: "create_pkcs7",
             arguments: [dataToSign, this.loginData.keyId, "no"]
         }));
-        
+
         this.updateStatus("Создание цифровой подписи...", "info");
     }
 
