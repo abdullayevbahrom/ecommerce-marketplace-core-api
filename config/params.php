@@ -57,6 +57,12 @@ $config = [
         'web_url' => 'https://web.devid.example.com',
     ],
 
+    // ASL Belgisi product registry integration
+    'aslBelgisi' => [
+        'apiKey' => getenv('ASL_BELGISI_API_KEY') ?: 'fdf30890-20f9-4d0e-9ba1-3e2e0968a1e8',
+        'baseUrl' => 'https://xtrace.marking.example.com',
+    ],
+
     // E-IMZO direct integration (e-imzo-server instance)
     'eimzo' => [
         'serverUrl' => getenv('EIMZO_SERVER_URL') ?: 'http://127.0.0.1:8080',

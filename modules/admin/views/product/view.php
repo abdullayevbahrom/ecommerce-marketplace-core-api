@@ -37,6 +37,21 @@ $type = Yii::$app->request->get('type');
                 <?=Yii::$app->session->getFlash('product_locked');?>
             </div>
         <?php }?>
+        <?php if (Yii::$app->session->hasFlash('asl_belgisi_success')) {?>
+            <div class="callout callout-success text-center">
+                <i class="fa fa-check-circle"></i> <?=Yii::$app->session->getFlash('asl_belgisi_success');?>
+            </div>
+        <?php }?>
+        <?php if (Yii::$app->session->hasFlash('asl_belgisi_warning')) {?>
+            <div class="callout callout-warning text-center">
+                <i class="fa fa-exclamation-triangle"></i> <?=Yii::$app->session->getFlash('asl_belgisi_warning');?>
+            </div>
+        <?php }?>
+        <?php if (Yii::$app->session->hasFlash('asl_belgisi_error')) {?>
+            <div class="callout callout-danger text-center">
+                <i class="fa fa-times-circle"></i> <?=Yii::$app->session->getFlash('asl_belgisi_error');?>
+            </div>
+        <?php }?>
         <div class="row">
             <div class="col-sm-3">
                 <?=AdminProductMenu::widget();?>
@@ -245,6 +260,66 @@ $type = Yii::$app->request->get('type');
                                 </table>
                             </div>
                         </div>
+
+                        <!-- ASL Belgisi Check Result -->
+                        <?php
+                        try {
+                            $aslEntry = \app\models\product\ProductAslBelgisi::findByProductBarcode($model->barcode);
+                        } catch (\Throwable $e) {
+                            $aslEntry = null;
+                        }
+                        if ($aslEntry) {?>
+                        <div class="box box-<?= $aslEntry->status === 'PUBLISHED' ? 'success' : 'warning' ?>">
+                            <div class="box-header with-border">
+                                <h3 class="box-title"><i class="fa fa-check-circle"></i> ASL Belgisi</h3>
+                                <div class="box-tools pull-right">
+                                    <small class="text-muted">Проверено: <?= $aslEntry->checked_at ?></small>
+                                </div>
+                            </div>
+                            <div class="box-body">
+                                <table class="table table-striped">
+                                    <tr>
+                                        <td><strong>Статус:</strong></td>
+                                        <td>
+                                            <?php if ($aslEntry->status === 'PUBLISHED') {?>
+                                                <span class="label label-success"><i class="fa fa-check"></i> <?= Html::encode($aslEntry->status) ?></span>
+                                            <?php } else {?>
+                                                <span class="label label-warning"><?= Html::encode($aslEntry->status ?: 'Неизвестно') ?></span>
+                                            <?php }?>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>GTIN:</strong></td>
+                                        <td><?= Html::encode($aslEntry->gtin) ?></td>
+                                    </tr>
+                                    <?php if ($aslEntry->product_name_ru) {?>
+                                    <tr>
+                                        <td><strong>Название (RU):</strong></td>
+                                        <td><?= Html::encode($aslEntry->product_name_ru) ?></td>
+                                    </tr>
+                                    <?php }?>
+                                    <?php if ($aslEntry->product_name_uz) {?>
+                                    <tr>
+                                        <td><strong>Название (UZ):</strong></td>
+                                        <td><?= Html::encode($aslEntry->product_name_uz) ?></td>
+                                    </tr>
+                                    <?php }?>
+                                    <?php if ($aslEntry->inn) {?>
+                                    <tr>
+                                        <td><strong>ИНН владельца:</strong></td>
+                                        <td><?= Html::encode($aslEntry->inn) ?></td>
+                                    </tr>
+                                    <?php }?>
+                                    <?php if ($aslEntry->product_group) {?>
+                                    <tr>
+                                        <td><strong>Группа:</strong></td>
+                                        <td><?= Html::encode($aslEntry->product_group) ?></td>
+                                    </tr>
+                                    <?php }?>
+                                </table>
+                            </div>
+                        </div>
+                        <?php }?>
                     </div>
                 </div>
 

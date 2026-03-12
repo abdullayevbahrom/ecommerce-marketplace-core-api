@@ -32,6 +32,8 @@ use app\models\Settings;
 use app\models\product\ProductType;
 use app\models\product\ProductTypeValue;
 use app\models\product\ProductProductType;
+use app\models\product\ProductAslBelgisi;
+use app\services\AslBelgisiService;
 use GuzzleHttp\Client;
 use yii\services\Billz;
 use Intervention\Image\ImageManager;
@@ -227,6 +229,9 @@ class ProductController extends Controller {
                 $product = $model->updateObject(false);
             }
             
+            // Auto-check ASL Belgisi if product has barcode
+            $this->checkAslBelgisiForProduct($product);
+
             Yii::$app->session->setFlash('product_saved', 'Saved');
             return $this->redirect(['/admin/product/view', 'id' => $product->id]);
         }
@@ -417,6 +422,135 @@ class ProductController extends Controller {
 
 
     
+    /**
+     * List all ASL Belgisi check records (read-only).
+     * GET /admin/product/asl-belgisi
+     */
+    public function actionAslBelgisi($page = 1)
+    {
+        $pageSize = 20;
+        $records = [];
+        $total = 0;
+        $search = Yii::$app->request->get('search');
+        $statusFilter = Yii::$app->request->get('status');
+
+        try {
+            $query = ProductAslBelgisi::find()
+                ->orderBy(['checked_at' => SORT_DESC]);
+
+            if ($search) {
+                $query->andWhere([
+                    'or',
+                    ['like', 'gtin', $search],
+                    ['like', 'product_name_ru', $search],
+                    ['like', 'inn', $search],
+                    ['like', 'asl_product_id', $search],
+                ]);
+            }
+
+            if ($statusFilter) {
+                $query->andWhere(['status' => $statusFilter]);
+            }
+
+            $total = $query->count();
+            $records = $query
+                ->offset(($page - 1) * $pageSize)
+                ->limit($pageSize)
+                ->all();
+        } catch (\Throwable $e) {
+            Yii::error('ASL Belgisi table not available: ' . $e->getMessage(), __METHOD__);
+        }
+
+        return $this->render('asl-belgisi', [
+            'records' => $records,
+            'page' => $page,
+            'pageSize' => $pageSize,
+            'total' => $total,
+            'search' => $search,
+            'statusFilter' => $statusFilter,
+        ]);
+    }
+
+    /**
+     * Check product barcode against ASL Belgisi registry.
+     * GET /admin/product/check-asl-belgisi?id=123
+     */
+    public function actionCheckAslBelgisi($id)
+    {
+        $model = Product::findOne($id);
+        if (!$model) {
+            throw new HttpException(404, 'Product not found');
+        }
+
+        $gtin = $model->barcode;
+        if (empty($gtin)) {
+            Yii::$app->session->setFlash('asl_belgisi_error', 'У товара не указан штрихкод (barcode)');
+            return $this->redirect(Yii::$app->request->referrer ?: ['/admin/product/view', 'id' => $id]);
+        }
+
+        $service = new AslBelgisiService();
+        if (!$service->isConfigured()) {
+            Yii::$app->session->setFlash('asl_belgisi_error', 'ASL Belgisi сервис не настроен');
+            return $this->redirect(Yii::$app->request->referrer ?: ['/admin/product/view', 'id' => $id]);
+        }
+
+        $result = $service->searchByGtin($gtin);
+
+        if (!$result['success']) {
+            Yii::$app->session->setFlash('asl_belgisi_error', 'Ошибка ASL Belgisi: ' . $result['error']);
+            return $this->redirect(Yii::$app->request->referrer ?: ['/admin/product/view', 'id' => $id]);
+        }
+
+        if (empty($result['products'])) {
+            Yii::$app->session->setFlash('asl_belgisi_warning', 'Товар с GTIN ' . $gtin . ' не найден в реестре ASL Belgisi');
+            return $this->redirect(Yii::$app->request->referrer ?: ['/admin/product/view', 'id' => $id]);
+        }
+
+        // Upsert ASL entry by GTIN (one entry per GTIN, products auto-match via barcode)
+        $first = $result['products'][0];
+        $parsed = $service->parseProduct($first);
+        $entry = ProductAslBelgisi::upsertByGtin($gtin, $parsed);
+
+        $aslStatus = $parsed['status'] ?? 'unknown';
+        $aslName = $parsed['product_name_ru'] ?? '';
+        $matchedCount = Product::find()->where(['barcode' => $gtin])->count();
+
+        Yii::$app->session->setFlash(
+            'asl_belgisi_success',
+            "ASL Belgisi: статус {$aslStatus}. {$aslName}. Совпадающих товаров: {$matchedCount}"
+        );
+
+        return $this->redirect(Yii::$app->request->referrer ?: ['/admin/product/view', 'id' => $id]);
+    }
+
+    /**
+     * View a single ASL Belgisi entry with all products sharing the same GTIN.
+     * GET /admin/product/asl-belgisi-view?id=123
+     */
+    public function actionAslBelgisiView($id)
+    {
+        try {
+            $entry = ProductAslBelgisi::findOne($id);
+        } catch (\Throwable $e) {
+            throw new HttpException(500, 'ASL Belgisi table not available');
+        }
+
+        if (!$entry) {
+            throw new HttpException(404, 'ASL Belgisi record not found');
+        }
+
+        // All products whose barcode matches this GTIN (auto-connected)
+        $matchedProducts = Product::find()
+            ->where(['barcode' => $entry->gtin])
+            ->orderBy(['id' => SORT_DESC])
+            ->all();
+
+        return $this->render('asl-belgisi-view', [
+            'entry' => $entry,
+            'matchedProducts' => $matchedProducts,
+        ]);
+    }
+
     public function actionRemoves($id,$page = 1) {
     if(Yii::$app->user->identity->role == User::ROLE_ADMIN){
         $this->log('remove'.$id);
@@ -618,6 +752,34 @@ class ProductController extends Controller {
         $get = file_get_contents('log.txt');
         file_put_contents('log.txt',$get.'
         '.date("Y-m-s H:i:s").' - '.$type.' - '.Yii::$app->user->identity->id);
+    }
+
+    /**
+     * Auto-check product barcode against ASL Belgisi registry (silent, non-blocking).
+     */
+    private function checkAslBelgisiForProduct($product)
+    {
+        if (empty($product->barcode)) {
+            return;
+        }
+
+        try {
+            $service = new AslBelgisiService();
+            if (!$service->isConfigured()) {
+                return;
+            }
+
+            $result = $service->searchByGtin($product->barcode);
+            if (!$result['success'] || empty($result['products'])) {
+                return;
+            }
+
+            // Upsert one ASL entry per GTIN — products auto-match via barcode
+            $parsed = $service->parseProduct($result['products'][0]);
+            ProductAslBelgisi::upsertByGtin($product->barcode, $parsed);
+        } catch (\Throwable $e) {
+            Yii::error('ASL Belgisi auto-check failed: ' . $e->getMessage(), __METHOD__);
+        }
     }
 
     /**

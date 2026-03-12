@@ -19,6 +19,8 @@ use app\models\product\ProductTypeValue;
 use app\models\shop\Shop;
 use app\models\stock\Stock;
 use app\models\user\User;
+use app\models\product\ProductAslBelgisi;
+use app\services\AslBelgisiService;
 use yii\filters\ContentNegotiator;
 use yii\helpers\ArrayHelper;
 
@@ -443,12 +445,33 @@ class SyncController extends Controller
             ]))->save(false);
         }
 
+        // Auto-check ASL Belgisi if product has barcode
+        $aslResult = null;
+        if (!empty($product->barcode)) {
+            try {
+                $aslService = new AslBelgisiService();
+                if ($aslService->isConfigured()) {
+                    $aslCheck = $aslService->searchByGtin($product->barcode);
+                    if ($aslCheck['success'] && !empty($aslCheck['products'])) {
+                        $parsed = $aslService->parseProduct($aslCheck['products'][0]);
+                        $entry = ProductAslBelgisi::upsertByGtin($product->barcode, $parsed);
+                        if ($entry) {
+                            $aslResult = $parsed;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                Yii::error('ASL Belgisi auto-check failed for sync product: ' . $e->getMessage(), __METHOD__);
+            }
+        }
+
         return [
             'success' => true,
             'id' => $product->id,
             'yii_color_id' => $product->color_id,
             'created' => $created,
             'updated' => $updated,
+            'asl_belgisi' => $aslResult,
         ];
     }
 

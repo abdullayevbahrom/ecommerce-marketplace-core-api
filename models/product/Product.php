@@ -1623,6 +1623,23 @@ class Product extends \yii\db\ActiveRecord
     }
 
     /**
+     * ASL Belgisi entries matching this product's barcode.
+     */
+    public function getAslBelgisi()
+    {
+        return $this->hasMany(ProductAslBelgisi::class, ['gtin' => 'barcode']);
+    }
+
+    /**
+     * Latest ASL Belgisi entry for this product.
+     */
+    public function getLatestAslBelgisi()
+    {
+        return $this->hasOne(ProductAslBelgisi::class, ['gtin' => 'barcode'])
+            ->orderBy(['checked_at' => SORT_DESC]);
+    }
+
+    /**
      * Before save event - update IKPU cache
      */
     public function beforeSave($insert)

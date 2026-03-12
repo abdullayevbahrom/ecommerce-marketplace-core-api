@@ -30,6 +30,8 @@ use app\models\Settings;
 use app\models\product\ProductType;
 use app\models\product\ProductTypeValue;
 use app\models\product\ProductProductType;
+use app\models\product\ProductAslBelgisi;
+use app\services\AslBelgisiService;
 
 class ProductController extends Controller {
     public $user;
@@ -219,6 +221,9 @@ class ProductController extends Controller {
                 $product = $model->updateObject(false);
             }
             
+            // Auto-check ASL Belgisi if product has barcode
+            $this->checkAslBelgisiForProduct($product);
+
             Yii::$app->session->setFlash('product_saved', 'Товар успешно сохранен');
             return $this->redirect(['/shop/product/view', 'id' => $product->id]);
         }
@@ -295,6 +300,34 @@ class ProductController extends Controller {
         // }
     }
         return $this->redirect(['/shop/product']);
+    }
+
+    /**
+     * Auto-check product barcode against ASL Belgisi registry (silent, non-blocking).
+     */
+    private function checkAslBelgisiForProduct($product)
+    {
+        if (empty($product->barcode)) {
+            return;
+        }
+
+        try {
+            $service = new AslBelgisiService();
+            if (!$service->isConfigured()) {
+                return;
+            }
+
+            $result = $service->searchByGtin($product->barcode);
+            if (!$result['success'] || empty($result['products'])) {
+                return;
+            }
+
+            // Upsert one ASL entry per GTIN — products auto-match via barcode
+            $parsed = $service->parseProduct($result['products'][0]);
+            ProductAslBelgisi::upsertByGtin($product->barcode, $parsed);
+        } catch (\Throwable $e) {
+            Yii::error('ASL Belgisi auto-check failed: ' . $e->getMessage(), __METHOD__);
+        }
     }
 
     /**

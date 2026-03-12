@@ -27,6 +27,7 @@ use app\models\user\User;
                 <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/review', 'ProductReviewSearch[product_id]'=>$model->id])?>" class="btn btn-info width-full"><i class="fa fa-commenting"></i> Отзывы</a></li>
                 <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/product/lock', 'id'=>$model->id])?>" class="btn btn-warning width-full"><?php if ($model->status == 1) {?><i class="fa fa-lock"></i> Заблокировать<?php } else {?><i class="fa fa-unlock"></i> Разблокировать<?php }?></a></li>
                 <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/product/create', 'id'=>$model->id])?>" class="btn btn-primary width-full"><i class="fa fa-pencil"></i> Редактировать</a></li>
+                <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/product/check-asl-belgisi', 'id'=>$model->id])?>" class="btn btn-success width-full"><i class="fa fa-check-circle"></i> Проверить ASL Belgisi</a></li>
                 <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/product/removes', 'id'=>$model->id, 'page'=>$page])?>" class="btn btn-danger width-full remove-object"><i class="fa fa-trash"></i> Удалить</a></li>
             </ul>
         </div>
