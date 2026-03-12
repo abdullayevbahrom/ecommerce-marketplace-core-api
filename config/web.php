@@ -229,6 +229,8 @@ $config = [
                 // Wallet API
                 'GET api/wallet/balance' => 'api/wallet/balance',
                 'POST api/wallet/deploy' => 'api/wallet/deploy',
+                'POST api/wallet/send' => 'api/wallet/send',
+                'POST api/wallet/mint-to-user' => 'api/wallet/mint-to-user',
 
                 'POST /api/session/profile' => 'api/session/profile',
                 'POST /api/session/sessions' => 'api/session/sessions',
@@ -237,6 +239,7 @@ $config = [
                 'POST /api/session/logout-all' => 'api/session/logout-all',
 
                 'GET api/promocode/my' => 'api/promocode/my',
+                'POST api/promocode/check' => 'api/promocode/check',
                 'POST api/promocode/apply' => 'api/promocode/apply',
 
             ],

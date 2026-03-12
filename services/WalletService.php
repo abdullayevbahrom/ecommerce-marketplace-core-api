@@ -195,11 +195,60 @@ class WalletService extends Component
     }
 
     /**
-     * @deprecated Transfer endpoint has been removed from the wallet backend. Use pay() instead.
+     * Send tokens between users by userId (auto-deploys wallets if needed).
+     * @param int $senderUserId
+     * @param int $receiverUserId
+     * @param string $amount
+     * @param string $symbol Token symbol (e.g. 'USDT', 'USDC')
+     * @return array Response data
      */
-    public function transfer($userId, $token, $to, $amount)
+    public function send($senderUserId, $receiverUserId, $amount, $symbol)
     {
-        throw new Exception('Transfer functionality has been removed. Use /payment/* endpoints instead.');
+        try {
+            $senderLogin = $this->getUserLogin($senderUserId);
+            $receiverLogin = $this->getUserLogin($receiverUserId);
+
+            $response = $this->client->post('wallet/send', [
+                'json' => [
+                    'senderUserId' => (int)$senderUserId,
+                    'receiverUserId' => (int)$receiverUserId,
+                    'amount' => (string)$amount,
+                    'symbol' => strtoupper($symbol),
+                    'senderLogin' => $senderLogin,
+                    'receiverLogin' => $receiverLogin,
+                ]
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (\Exception $e) {
+            Yii::error('Wallet Send Error: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Mint tokens to a user by userId and symbol (no need to know the address).
+     * @param int $userId
+     * @param string $amount
+     * @param string $symbol Token symbol (e.g. 'USDT', 'USDC')
+     * @return array Response data
+     */
+    public function mintToUser($userId, $amount, $symbol)
+    {
+        try {
+            $response = $this->client->post('token/mint-to-user', [
+                'json' => [
+                    'userId' => (int)$userId,
+                    'amount' => (string)$amount,
+                    'symbol' => strtoupper($symbol),
+                ]
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (\Exception $e) {
+            Yii::error('Mint To User Error: ' . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**

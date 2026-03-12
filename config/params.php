@@ -16,7 +16,7 @@ $config = [
     'senderName' => 'Example.com mailer',
 
     // Didox E-IMZO integration settings
-    'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MzAyLCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQUlOIFRSQURJTkcgSE9MRElOR1wiIE1DSEoiLCJyb2xlIjoiUEFSVE5FUiIsInRpbiI6IjMwNzg2NTA1OCIsImlhdCI6MTc1MTM0NTA3MywiZXhwIjo0OTA3MTA1MDczfQ.ELZ0nE7sVmYmu2V7TFQAqg68Ut_qCl5Zmehw9cpMAZs', // Add your Didox partner token here
+    'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjM4LCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzYwOTM2NzIwfQ.Dr8fBTTwJ2O5KRh98tOtBeF4vfc8w4hxTye0hJ-qPSc', // Add your Didox partner token here
 
     // BTS delivery service integration settings
     'bts_token' => 'sample_logistics_token', // Your current BTS token
