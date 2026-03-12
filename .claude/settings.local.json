@@ -13,7 +13,8 @@
       "Bash(find /c/Users/user/Documents/app/app-market-backend/modules/shop/views -name *.php -type f)",
       "Bash(find /c/Users/user/Documents/app/app-market-backend/services -name *.php -type f)",
       "Bash(ls -1 /c/Users/user/Documents/app/app-market-backend/migrations/*.php)",
-      "Bash(ls /c/Users/user/Documents/app/app-market-backend/modules/*/controllers/)"
+      "Bash(ls /c/Users/user/Documents/app/app-market-backend/modules/*/controllers/)",
+      "Bash(xargs basename:*)"
     ]
   }
 }

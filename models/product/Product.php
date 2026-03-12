@@ -1297,6 +1297,26 @@ class Product extends \yii\db\ActiveRecord
             },
             'pricing_tiers' => function () {
                 return $this->getPricingTiers();
+            },
+            'asl_belgisi' => function () {
+                try {
+                    $asl = $this->latestAslBelgisi;
+                } catch (\Throwable $e) {
+                    return null;
+                }
+                if (!$asl) {
+                    return null;
+                }
+                return [
+                    'id' => $asl->id,
+                    'gtin' => $asl->gtin,
+                    'status' => $asl->status,
+                    'product_name_ru' => $asl->product_name_ru,
+                    'product_name_uz' => $asl->product_name_uz,
+                    'inn' => $asl->inn,
+                    'product_group' => $asl->product_group,
+                    'checked_at' => $asl->checked_at,
+                ];
             }
         ];
 
