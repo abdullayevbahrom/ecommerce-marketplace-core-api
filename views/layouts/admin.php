@@ -235,6 +235,9 @@ $product_request_count = ProductRequest::find()->where(['status'=>ProductRequest
                                 <?php if ($user->role == User::ROLE_ADMIN || in_array('product-type', $accesses)) {?>
                                     <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/product-type'])?>"><i class="fa fa-circle-o"></i> Тип товаров</a></li>
                                 <?php }?>
+                                <?php if ($user->role == User::ROLE_ADMIN || in_array('product', $accesses)) {?>
+                                    <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/product/asl-belgisi'])?>"><i class="fa fa-check-circle"></i> ASL Belgisi</a></li>
+                                <?php }?>
                             </ul>
                         </li>
                     <?php }?>
