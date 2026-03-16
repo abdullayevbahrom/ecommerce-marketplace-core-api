@@ -451,9 +451,9 @@ class User extends ActiveRecord implements IdentityInterface
     public function generateCode($phone = false)
     {
         if (isset($phone) && $phone == '+71112223344') {
-            return 1234567;
+            return 123456;
         }
-        return 1234567;
+        return 123456;
         // return mt_rand(100000, 999999);
     }
 
