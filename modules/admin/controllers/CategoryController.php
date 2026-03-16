@@ -45,7 +45,6 @@ class CategoryController extends Controller{
         $model = new Category;
 
         $query = Category::find()->where(['type' => $type])
-            ->andWhere(['deleted_at' => null])
             ->orderBy('sort');
 
         if ($this->user->role === User::ROLE_MODERATOR) {

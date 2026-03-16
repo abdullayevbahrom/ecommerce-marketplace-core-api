@@ -280,6 +280,10 @@ $this->params['breadcrumbs'][] = $this->title;
                 <?=$form->field($model, 'id')->hiddenInput(['id'=>'category-update-id'])->label(false);?>
                 <?=$form->field($model, 'parent_id')->hiddenInput(['id'=>'category-update-parent_id'])->label(false);?>
                 <div class="modal-body">
+                    <div class="form-group">
+                        <label>ID</label>
+                        <input type="text" class="form-control" id="category-update-id-display" readonly style="background-color:#eee;" />
+                    </div>
                     <?=AdminLanguageTab::widget();?>
                     <br/>
                     <div class="lang-block lang-block-ru">
