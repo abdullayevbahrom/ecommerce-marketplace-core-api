@@ -180,6 +180,12 @@ class OrderController extends Controller
             return ['errors' => $model->errors];
         }
 
+        // Check if this is a wallet payment — if so, wrap everything in a DB transaction
+        $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
+        $isWalletPayment = $walletPaymentId && isset($post['payment_id']) && $post['payment_id'] == $walletPaymentId;
+
+        $dbTransaction = $isWalletPayment ? Yii::$app->db->beginTransaction() : null;
+
         $saveResult = $model->saveObject($cart);
         if ($saveResult) {
             $order = Order::find()->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image', 'shop')->where(['id' => $model->id])->one();
@@ -193,14 +199,12 @@ class OrderController extends Controller
             }
 
             // Process wallet payment if payment_id matches wallet type
-            $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
-            if ($walletPaymentId && $order->payment_id == $walletPaymentId) {
+            if ($isWalletPayment) {
                 $walletToken = $post['wallet_token'] ?? Yii::$app->params['walletDefaultToken'] ?? 'USDT';
                 $merchantId = $order->shop ? $order->shop->user_id : null;
 
                 if (!$merchantId) {
-                    $order->status_payment = 0;
-                    $order->save(false);
+                    $dbTransaction->rollBack();
                     Yii::$app->response->statusCode = 422;
                     return ['errors' => ['wallet' => 'Shop owner not found for wallet payment']];
                 }
@@ -223,12 +227,13 @@ class OrderController extends Controller
                     $transaction->amount = $order->price;
                     $transaction->status = 1;
                     $transaction->save(false);
+
+                    $dbTransaction->commit();
                 } catch (\Exception $e) {
-                    // Wallet payment failed — mark order as unpaid
-                    $order->status_payment = 0;
-                    $order->save(false);
+                    // Wallet payment failed — rollback entire order
+                    $dbTransaction->rollBack();
                     Yii::$app->response->statusCode = 422;
-                    return ['errors' => ['wallet' => 'Wallet payment failed: ' . $e->getMessage()], 'data' => $order];
+                    return ['errors' => ['wallet' => 'Wallet payment failed: ' . $e->getMessage()]];
                 }
             }
 
@@ -256,6 +261,11 @@ class OrderController extends Controller
                 }
             }
             return $response;
+        }
+
+        // saveObject failed — rollback if wallet transaction is open
+        if ($dbTransaction) {
+            $dbTransaction->rollBack();
         }
 
         // Check if there are validation errors (like minimum order violations)

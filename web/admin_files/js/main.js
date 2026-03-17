@@ -69,6 +69,7 @@ $(function() {
                     $('#remove-photo').hide();
                 }
                 $('#category-update-id').val(data['category']['id']);
+                $('#category-update-id-display').val(data['category']['id']);
                 $('#category-update-icon').attr('src', data['category']['photo']);
                 $('#category-update-name-ru').val(data['category']['name_ru']);
                 CKEDITOR.instances['category-update-description-ru'].setData(data['category']['description_ru']);

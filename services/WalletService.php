@@ -262,12 +262,17 @@ class WalletService extends Component
     public function pay($payerId, $merchantId, $amount, $symbol)
     {
         try {
+            $payerLogin = $this->getUserLogin($payerId);
+            $merchantLogin = $this->getUserLogin($merchantId);
+
             $response = $this->client->post('payment/execute-batch', [
                 'json' => [
                     'payerId' => (int)$payerId,
                     'merchantId' => (int)$merchantId,
                     'amount' => (string)$amount,
                     'symbol' => strtoupper($symbol),
+                    'payerLogin' => $payerLogin,
+                    'merchantLogin' => $merchantLogin,
                 ]
             ]);
 

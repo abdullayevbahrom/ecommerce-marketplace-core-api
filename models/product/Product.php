@@ -1667,20 +1667,28 @@ class Product extends \yii\db\ActiveRecord
     {
         parent::afterSave($insert, $changedAttributes);
 
-        \Yii::$app->queue->push(new EsSyncProductJob([
-            'productId' => (int)$this->id,
-            'action' => 'upsert',
-        ]));
+        try {
+            \Yii::$app->queue->push(new EsSyncProductJob([
+                'productId' => (int)$this->id,
+                'action' => 'upsert',
+            ]));
+        } catch (\Throwable $e) {
+            \Yii::error('ES sync queue push failed: ' . $e->getMessage(), 'product');
+        }
     }
 
     public function afterDelete()
     {
         parent::afterDelete();
 
-        \Yii::$app->queue->push(new EsSyncProductJob([
-            'productId' => (int)$this->id,
-            'action' => 'delete',
-        ]));
+        try {
+            \Yii::$app->queue->push(new EsSyncProductJob([
+                'productId' => (int)$this->id,
+                'action' => 'delete',
+            ]));
+        } catch (\Throwable $e) {
+            \Yii::error('ES sync queue push failed: ' . $e->getMessage(), 'product');
+        }
     }
 
     private function syncToWarehouse()

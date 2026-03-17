@@ -285,7 +285,7 @@ class UserController extends Controller {
     }
 
     public function actionView($id) {
-        $model = User::find()->with('image', 'addresses')->where(['id'=>$id])->andWhere(['!=', 'status', 0])->andWhere(['!=', 'role', User::ROLE_SHOP])->one();
+        $model = User::find()->with('image', 'addresses')->where(['id'=>$id])->andWhere(['!=', 'status', 0])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
