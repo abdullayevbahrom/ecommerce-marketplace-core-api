@@ -32,8 +32,8 @@ class MerchantQuestion extends ActiveRecord
     {
         return [
             [['client_id', 'merchant_id', 'created_at'], 'required'],
-            [['client_id', 'merchant_id', 'entity_id', 'status', 'created_at', 'answered_at'], 'integer'],
-            [['entity_type'], 'string', 'max' => 50],
+            [['client_id', 'merchant_id', /* 'entity_id', */ 'status', 'created_at', 'answered_at'], 'integer'],
+            // [['entity_type'], 'string', 'max' => 50],
             ['status', 'default', 'value' => self::STATUS_OPEN],
         ];
     }
@@ -44,8 +44,8 @@ class MerchantQuestion extends ActiveRecord
             'id' => 'ID',
             'client_id' => 'Client',
             'merchant_id' => 'Merchant',
-            'entity_type' => 'Entity Type',
-            'entity_id' => 'Entity ID',
+            // 'entity_type' => 'Entity Type',
+            // 'entity_id' => 'Entity ID',
             'status' => 'Status',
             'created_at' => 'Created At',
             'answered_at' => 'Answered At',

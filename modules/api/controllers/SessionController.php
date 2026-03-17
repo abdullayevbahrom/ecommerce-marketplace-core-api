@@ -25,7 +25,6 @@ class SessionController extends Controller
     {
         $behaviors = parent::behaviors();
 
-        $auth = $behaviors['authenticator'];
         unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [

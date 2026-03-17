@@ -5,7 +5,6 @@ namespace app\models\shop;
 use Yii;
 use yii\web\UploadedFile;
 use yii\helpers\ArrayHelper;
-
 use app\models\Images;
 use app\models\user\User;
 use app\models\user\favorite_shop\UserShopFavorite;
@@ -16,7 +15,6 @@ use app\models\product\Product;
 use app\models\product\review\ProductReview;
 use app\models\news\News;
 use app\models\shop\oferta\ShopOferta;
-
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use yii\db\Exception as DbException;
@@ -52,17 +50,11 @@ class Shop extends \yii\db\ActiveRecord
     // seller info
     public $inn, $account, $bank, $address_legal, $oked, $okohx, $mfo, $organization;
 
-    /**
-     * {@inheritdoc}
-     */
     public static function tableName()
     {
         return 'shop';
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function rules()
     {
         return [
@@ -85,9 +77,6 @@ class Shop extends \yii\db\ActiveRecord
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function attributeLabels()
     {
         return [
@@ -314,9 +303,6 @@ class Shop extends \yii\db\ActiveRecord
         }
     }
 
-
-
-
     public function createDefaultStock()
     {
         $stock = new Stock();
@@ -435,6 +421,7 @@ class Shop extends \yii\db\ActiveRecord
     public function isFavorite()
     {
         $favorite = UserShopFavorite::findOne(['shop_id' => $this->id, 'user_id' => Yii::$app->user->identity?->id]);
+
         return $favorite ? true : false;
     }
 
@@ -448,6 +435,9 @@ class Shop extends \yii\db\ActiveRecord
 
         $data = [
             'id',
+            'merchant_id' => function () {
+                return $this->user_id;
+            },
             'name' => function () {
                 return $this->name_ru;
             },
@@ -522,61 +512,61 @@ class Shop extends \yii\db\ActiveRecord
      */
     public function getShopSellers()
     {
-        return $this->hasMany(ShopSeller::className(), ['shop_id' => 'id']);
+        return $this->hasMany(ShopSeller::class, ['shop_id' => 'id']);
     }
 
     public function getShopSeller()
     {
-        return $this->hasOne(ShopSeller::className(), ['shop_id' => 'id']);
+        return $this->hasOne(ShopSeller::class, ['shop_id' => 'id']);
     }
 
     public function getShopAdvertisings()
     {
-        return $this->hasMany(ShopAdvertising::className(), ['shop_id' => 'id']);
+        return $this->hasMany(ShopAdvertising::class, ['shop_id' => 'id']);
     }
 
     public function getProducts()
     {
-        return $this->hasMany(Product::className(), ['shop_id' => 'id']);
+        return $this->hasMany(Product::class, ['shop_id' => 'id']);
     }
 
     public function getUser()
     {
-        return $this->hasOne(User::className(), ['id' => 'user_id']);
+        return $this->hasOne(User::class, ['id' => 'user_id']);
     }
 
     public function getImage()
     {
-        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'shop', 'main' => 1]);
+        return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'shop', 'main' => 1]);
     }
 
     public function getBanner()
     {
-        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'shop', 'main' => 3]);
+        return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'shop', 'main' => 3]);
     }
 
     public function getGallery()
     {
-        return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'shop', 'main' => 2]);
+        return $this->hasMany(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'shop', 'main' => 2]);
     }
 
     public function getNews()
     {
-        return $this->hasMany(News::className(), ['shop_id' => 'id']);
+        return $this->hasMany(News::class, ['shop_id' => 'id']);
     }
 
     public function getStocks()
     {
-        return $this->hasMany(Stock::className(), ['shop_id' => 'id']);
+        return $this->hasMany(Stock::class, ['shop_id' => 'id']);
     }
 
     public function getStock()
     {
-        return $this->hasOne(Stock::className(), ['shop_id' => 'id']);
+        return $this->hasOne(Stock::class, ['shop_id' => 'id']);
     }
 
     public function getShopOfertas()
     {
-        return $this->hasMany(ShopOferta::className(), ['shop_id' => 'id']);
+        return $this->hasMany(ShopOferta::class, ['shop_id' => 'id']);
     }
 }
