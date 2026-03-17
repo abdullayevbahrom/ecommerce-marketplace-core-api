@@ -8,20 +8,64 @@ use app\models\user\User;
 use Yii;
 use yii\data\ActiveDataProvider;
 use yii\filters\auth\HttpBearerAuth;
+use yii\filters\Cors;
+use yii\filters\VerbFilter;
 use yii\rest\Controller;
 use yii\web\HttpException;
 use yii\web\Response;
 
 class MerchantQuestionController extends Controller
 {
+    public function beforeAction($action)
+    {
+        $this->enableCsrfValidation = false;
+
+        return parent::beforeAction($action);
+    }
+
     public function behaviors()
     {
-        return [
-            // $behaviors = parent::behaviors(),
-            'authenticator' => [
-                'class' => HttpBearerAuth::class,
-            ]
+        $behaviors = parent::behaviors();
+
+        unset($behaviors['authenticator']);
+
+        $behaviors['corsFilter'] = [
+            'class' => Cors::class,
+            'cors' => [
+                'Origin' => ['*'],
+                'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+                'Access-Control-Request-Headers' => ['Authorization', 'Content-Type'],
+                'Access-Control-Allow-Credentials' => false,
+                'Access-Control-Max-Age' => 86400,
+            ],
         ];
+
+        $behaviors['authenticator'] = [
+            'class' => HttpBearerAuth::class,
+            'except' => ['options'],
+        ];
+
+        $behaviors['verbs'] = [
+            'class' => VerbFilter::class,
+            'actions' => [
+                'index' => ['GET'],
+                'create' => ['POST'],
+                'close' => ['POST'],
+                'options' => ['OPTIONS'],
+            ],
+        ];
+
+        return $behaviors;
+    }
+
+    public function actions()
+    {
+        $actions = parent::actions();
+        $actions['options'] = [
+            'class' => \yii\rest\OptionsAction::class,
+        ];
+
+        return $actions;
     }
 
     public function actionIndex()
@@ -43,7 +87,7 @@ class MerchantQuestionController extends Controller
                 },
             ])->orderBy(['created_at' => SORT_DESC]);
 
-        if (in_array($user->role, [User::ROLE_ADMIN, User::ROLE_ADMIN, User::ROLE_MODERATOR])) {
+        if (in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR])) {
         } elseif ($user->role === User::ROLE_SHOP) {
             $query->andWhere(['merchant_id' => $user->id]);
         } elseif ($user->role === User::ROLE_USER) {
@@ -72,7 +116,6 @@ class MerchantQuestionController extends Controller
         ];
     }
 
-
     public function actionCreate()
     {
         Yii::$app->response->format = Response::FORMAT_JSON;
@@ -93,7 +136,7 @@ class MerchantQuestionController extends Controller
             ];
         }
 
-        $merchant = User::find()->where(['id'   => $merchantId, 'role' => User::ROLE_SHOP])->one();
+        $merchant = User::find()->where(['id' => $merchantId, 'role' => User::ROLE_SHOP])->one();
 
         if (!$merchant) {
             return [
@@ -123,7 +166,7 @@ class MerchantQuestionController extends Controller
 
             $model = new MerchantQuestion();
             $model->client_id   = $user->id;
-            $model->merchant_id = $merchant->id; //Yii::$app->request->post('merchant_id');
+            $model->merchant_id = $merchant->id;
             $model->status      = MerchantQuestion::STATUS_OPEN;
             $model->created_at  = time();
 
@@ -135,7 +178,7 @@ class MerchantQuestionController extends Controller
             $msg->question_id = $model->id;
             $msg->sender_role = MerchantQuestionMessage::ROLE_CLIENT;
             $msg->sender_id   = $user->id;
-            $msg->message     = $message; //Yii::$app->request->post('message');
+            $msg->message     = $message;
             $msg->created_at  = time();
             $msg->save(false);
 
@@ -156,8 +199,6 @@ class MerchantQuestionController extends Controller
         }
     }
 
-
-    // POST /merchant/questions/{id}/close
     public function actionClose($id)
     {
         $user = Yii::$app->user->identity;
@@ -246,7 +287,6 @@ class MerchantQuestionController extends Controller
             Yii::error($e->getMessage(), 'merchant_ticket_closed');
         }
     }
-
 
     private function sendDataToWarehouse(User $user, $merchant, MerchantQuestion $ticket, $message)
     {

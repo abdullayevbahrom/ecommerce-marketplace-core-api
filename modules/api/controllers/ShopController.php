@@ -1,4 +1,5 @@
 <?php
+
 namespace app\modules\api\controllers;
 
 
@@ -8,12 +9,13 @@ use yii\rest\Controller;
 use yii\data\ActiveDataProvider;
 use yii\filters\auth\HttpBearerAuth;
 use yii\helpers\ArrayHelper;
-
 use app\models\shop\Shop;
 use app\models\user\favorite_shop\UserShopFavorite;
 
-class ShopController extends Controller {
-    public function beforeAction($action) {
+class ShopController extends Controller
+{
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
 
         Yii::$app->response->getHeaders()->add('Access-Control-Allow-Origin', '*');
@@ -27,10 +29,11 @@ class ShopController extends Controller {
         return parent::beforeAction($action);
     }
 
-    public function behaviors() {
+    public function behaviors()
+    {
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
-            'class' => HttpBearerAuth::className(),
+            'class' => HttpBearerAuth::class,
             'optional' => ['*'],
         ];
 
@@ -38,7 +41,7 @@ class ShopController extends Controller {
         unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
-            'class' => \yii\filters\Cors::className(),
+            'class' => \yii\filters\Cors::class,
             'cors' => [
                 'Access-Control-Allow-Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
@@ -52,7 +55,7 @@ class ShopController extends Controller {
         $behaviors['authenticator']['except'] = ['options'];
 
         $behaviors['authenticator'] = $auth;
-        
+
         return $behaviors;
     }
 
@@ -61,8 +64,9 @@ class ShopController extends Controller {
         'collectionEnvelope' => 'data',
     ];
 
-    public function actionIndex() {
-        $query = Shop::find()->with('image')->where(['status'=>1])->orderBy('id desc');
+    public function actionIndex()
+    {
+        $query = Shop::find()->with('image')->where(['status' => 1])->orderBy('id desc');
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
 
@@ -76,10 +80,12 @@ class ShopController extends Controller {
         ]);
     }
 
-    public function actionSearch($query) {
+    public function actionSearch($query)
+    {
         $products = Shop::find()->with('image')
-            ->where(['status'=>1])
-            ->andWhere(['or', 
+            ->where(['status' => 1])
+            ->andWhere([
+                'or',
                 ['like', 'name_ru', $query],
                 ['like', 'name_uz', $query],
                 ['like', 'name_en', $query],
@@ -100,18 +106,19 @@ class ShopController extends Controller {
         ]);
     }
 
-    public function actionDetail($id) {
-        $shop = Shop::find()->with('image', 'gallery', 'shopSeller', 'user')->where(['id'=>$id])->one();
+    public function actionDetail($id)
+    {
+        $shop = Shop::find()->with('image', 'gallery', 'shopSeller', 'user')->where(['id' => $id])->one();
 
-        return ['data'=>$shop];
+        return ['data' => $shop];
     }
 
-    // favorites
-    public function actionFavorites() {
+    public function actionFavorites()
+    {
         $user = Yii::$app->user->identity;
 
-        $ids = ArrayHelper::map(UserShopFavorite::find()->where(['user_id'=>$user->id])->all(), 'shop_id', 'shop_id');
-        $query = Shop::find()->with('image')->where(['status'=>1])->andWhere(['in', 'id', $ids]);
+        $ids = ArrayHelper::map(UserShopFavorite::find()->where(['user_id' => $user->id])->all(), 'shop_id', 'shop_id');
+        $query = Shop::find()->with('image')->where(['status' => 1])->andWhere(['in', 'id', $ids]);
 
         $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
 
@@ -125,7 +132,8 @@ class ShopController extends Controller {
         ]);
     }
 
-    public function actionSetFavorite() {
+    public function actionSetFavorite()
+    {
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
@@ -134,23 +142,21 @@ class ShopController extends Controller {
 
         if (!$user_shop_favorite->validate()) {
             Yii::$app->response->statusCode = 422;
-            return ['errors'=>$user_shop_favorite->errors];
+            return ['errors' => $user_shop_favorite->errors];
         }
 
-        $shop = Shop::find()->with('image')->where(['id'=>$post['shop_id']])->one();
-        $favorite = UserShopFavorite::findOne(['user_id'=>$user->id, 'shop_id'=>$post['shop_id']]);
+        $shop = Shop::find()->with('image')->where(['id' => $post['shop_id']])->one();
+        $favorite = UserShopFavorite::findOne(['user_id' => $user->id, 'shop_id' => $post['shop_id']]);
 
         if ($favorite) {
             $favorite->delete();
             Yii::$app->response->statusCode = 200;
-            return ['data'=>$shop];
+            return ['data' => $shop];
         }
 
         $user_shop_favorite->saveObject($user->id);
 
         Yii::$app->response->statusCode = 200;
-        return ['data'=>$shop];
+        return ['data' => $shop];
     }
-    // end favorites
 }
-?>

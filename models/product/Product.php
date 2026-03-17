@@ -23,9 +23,7 @@ use app\models\user\favorite\UserFavorite;
 use app\models\user\User;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
-use Intervention\Image\ImageManager;
 use Yii;
-use yii\helpers\ArrayHelper;
 use yii\web\UploadedFile;
 
 /**
@@ -62,7 +60,7 @@ class Product extends \yii\db\ActiveRecord
 {
     public $imageFiles = [];
     public $imageGallery = [];
-    public $galleryFiles = []; // Added for gallery file uploads
+    public $galleryFiles = [];
     public $filters = [];
     public $properties_data = [];
 
@@ -73,17 +71,11 @@ class Product extends \yii\db\ActiveRecord
     public $product_relation_id;
     public $office_id;
 
-    /**
-     * {@inheritdoc}
-     */
     public static function tableName()
     {
         return 'product';
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function rules()
     {
         return [
@@ -94,10 +86,10 @@ class Product extends \yii\db\ActiveRecord
             [['qty_small_wholesale', 'qty_big_wholesale'], 'integer', 'min' => 1],
             [['date', 'filters', 'sub_category_id', 'properties_data', 'colors', 'product_types', 'galleryFiles'], 'safe'],
             [['name_ru', 'name_en', 'name_uz', 'category_tree', 'credit_label'], 'string', 'max' => 255],
-            [['category_id'], 'exist', 'skipOnError' => true, 'targetClass' => Category::className(), 'targetAttribute' => ['category_id' => 'id']],
-            [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::className(), 'targetAttribute' => ['user_id' => 'id']],
-            [['shop_id'], 'exist', 'skipOnError' => true, 'targetClass' => Shop::className(), 'targetAttribute' => ['shop_id' => 'id']],
-            [['stock_id'], 'exist', 'skipOnError' => true, 'targetClass' => Stock::className(), 'targetAttribute' => ['stock_id' => 'id']],
+            [['category_id'], 'exist', 'skipOnError' => true, 'targetClass' => Category::class, 'targetAttribute' => ['category_id' => 'id']],
+            [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::class, 'targetAttribute' => ['user_id' => 'id']],
+            [['shop_id'], 'exist', 'skipOnError' => true, 'targetClass' => Shop::class, 'targetAttribute' => ['shop_id' => 'id']],
+            [['stock_id'], 'exist', 'skipOnError' => true, 'targetClass' => Stock::class, 'targetAttribute' => ['stock_id' => 'id']],
             // [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, webp'],
             // [['imageGallery'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, webp'],
             // [['galleryPhoto'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, webp'],
@@ -115,21 +107,14 @@ class Product extends \yii\db\ActiveRecord
         ];
     }
 
-    /**
-     * Custom validation for IKPU code
-     * Allows both existing IKPU codes from database and custom codes
-     */
     public function validateIkpuCode($attribute, $params)
     {
         if (!empty($this->$attribute)) {
-            // Check if IKPU exists in database
             $ikpu = Ikpu::findOne(['code' => $this->$attribute]);
 
             if ($ikpu) {
-                // If IKPU exists in database, clear custom name (will be auto-filled from relation)
                 $this->ikpu_name = null;
             } else {
-                // Custom IKPU code - require ikpu_name
                 if (empty($this->ikpu_name)) {
                     $this->addError('ikpu_name', 'Для пользовательского кода ИКПУ необходимо указать название');
                 }
@@ -137,9 +122,6 @@ class Product extends \yii\db\ActiveRecord
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function attributeLabels()
     {
         return [
@@ -304,7 +286,6 @@ class Product extends \yii\db\ActiveRecord
 
     public function saveObject($dashboard = false, $color = null, $token_key = null, $category_tree = null, $product_types = null, $price_data = null)
     {
-        // Create new product instance when we have variants (color or product_types)
         if ($color || $product_types) {
             $product = new Product;
             if ($dashboard === false) {
@@ -317,17 +298,14 @@ class Product extends \yii\db\ActiveRecord
                 $product->color_id = $color;
             }
         }
-        // Create new product for dashboard without variants
         else if (!$color && $dashboard == true) {
             $product = new Product;
             $product->setAttributes(Yii::$app->request->post());
             $product->token_key = $token_key;
         }
-        // Use existing product instance for regular updates
         else if (!$color && !$dashboard && !$product_types) {
             $product = $this;
         }
-        // For other cases, create new product
         else {
             $product = new Product;
             if ($dashboard === false) {
@@ -337,18 +315,15 @@ class Product extends \yii\db\ActiveRecord
                 $product->token_key = $token_key;
             }
         }
-        // Set token_key for linking variants
         if ($this->product_relation_id) {
             $pr = Product::findOne($this->product_relation_id);
             if ($pr) {
                 $product->token_key = $pr->token_key;
             }
         } else if (($color || $product_types) && !$product->token_key) {
-            // Generate token_key for linking variants if not set
             $product->token_key = $this->token_key ?: Yii::$app->security->generateRandomString();
         }
 
-        // Apply specific prices if provided
         if ($price_data) {
             if (!empty($price_data['price'])) {
                 $product->price = $price_data['price'];
@@ -361,7 +336,6 @@ class Product extends \yii\db\ActiveRecord
             }
             if (isset($price_data['amount']) && $price_data['amount'] !== '') {
                 $product->amount = $price_data['amount'];
-                // Update qty as well if needed, though model uses amount
                 $product->qty = $price_data['amount'];
             }
         }
@@ -948,7 +922,6 @@ class Product extends \yii\db\ActiveRecord
         $data = [];
         if ($this->products) {
             foreach ($this->products as $product) {
-                // Get color object with full information
                 $colorData = null;
                 if ($product->color) {
                     $colorData = [
@@ -958,7 +931,6 @@ class Product extends \yii\db\ActiveRecord
                     ];
                 }
 
-                // Get productTypes information with product_id and color
                 $productTypesData = [];
                 if ($product->productProductTypes) {
                     foreach ($product->productProductTypes as $productProductType) {
@@ -1427,12 +1399,12 @@ class Product extends \yii\db\ActiveRecord
 
     public function getShop()
     {
-        return $this->hasOne(Shop::className(), ['id' => 'shop_id']);
+        return $this->hasOne(Shop::class, ['id' => 'shop_id']);
     }
 
     public function getTag()
     {
-        return $this->hasOne(Category::className(), ['id' => 'tag_id']);
+        return $this->hasOne(Category::class, ['id' => 'tag_id']);
     }
 
     /**
@@ -1442,7 +1414,7 @@ class Product extends \yii\db\ActiveRecord
      */
     public function getCategory()
     {
-        return $this->hasOne(Category::className(), ['id' => 'category_id']);
+        return $this->hasOne(Category::class, ['id' => 'category_id']);
     }
 
     /**
@@ -1452,7 +1424,7 @@ class Product extends \yii\db\ActiveRecord
      */
     public function getProductFavorites()
     {
-        return $this->hasMany(\app\models\user\favorite\UserFavorite::className(), ['product_id' => 'id']);
+        return $this->hasMany(\app\models\user\favorite\UserFavorite::class, ['product_id' => 'id']);
     }
 
     /**
@@ -1462,7 +1434,7 @@ class Product extends \yii\db\ActiveRecord
      */
     public function getProductFilters()
     {
-        return $this->hasMany(ProductFilter::className(), ['product_id' => 'id'])
+        return $this->hasMany(ProductFilter::class, ['product_id' => 'id'])
             ->select([
                 'id' => 'MAX(id)',
                 'product_id',
@@ -1481,76 +1453,76 @@ class Product extends \yii\db\ActiveRecord
      */
     public function getProductViews()
     {
-        return $this->hasMany(ProductView::className(), ['product_id' => 'id']);
+        return $this->hasMany(ProductView::class, ['product_id' => 'id']);
     }
 
     // images
     public function getImage()
     {
-        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 1]);
+        return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 1]);
     }
 
 
     public function getGallery()
     {
-        return $this->hasMany(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 2]);
+        return $this->hasMany(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 2]);
     }
 
     public function getBrand()
     {
-        return $this->hasOne(CategoryBrand::className(), ['id' => 'brand_id']);
+        return $this->hasOne(CategoryBrand::class, ['id' => 'brand_id']);
     }
 
     // reviews
     public function getProductReviews()
     {
-        return $this->hasMany(ProductReview::className(), ['product_id' => 'id']);
+        return $this->hasMany(ProductReview::class, ['product_id' => 'id']);
     }
 
     // properties
     public function getProductProperties()
     {
-        return $this->hasMany(ProductProperty::className(), ['product_id' => 'id']);
+        return $this->hasMany(ProductProperty::class, ['product_id' => 'id']);
     }
 
     // product colors
     public function getProductColors()
     {
-        return $this->hasMany(ProductColor::className(), ['product_id' => 'id']);
+        return $this->hasMany(ProductColor::class, ['product_id' => 'id']);
     }
 
     public function getColor()
     {
-        return $this->hasOne(Color::className(), ['id' => 'color_id']);
+        return $this->hasOne(Color::class, ['id' => 'color_id']);
     }
 
     public function getProducts()
     {
-        return $this->hasMany(Product::className(), ['token_key' => 'token_key'])->andOnCondition(['!=', 'id', $this->id]);
+        return $this->hasMany(Product::class, ['token_key' => 'token_key'])->andOnCondition(['!=', 'id', $this->id]);
     }
 
     // delivery
     public function getDelivery()
     {
-        return $this->hasOne(Delivery::className(), ['id' => 'delivery_id']);
+        return $this->hasOne(Delivery::class, ['id' => 'delivery_id']);
     }
 
     // product office
     public function getProductOffices()
     {
-        return $this->hasMany(ProductOffice::className(), ['product_id' => 'id']);
+        return $this->hasMany(ProductOffice::class, ['product_id' => 'id']);
     }
 
     // user
     public function getUser()
     {
-        return $this->hasOne(User::className(), ['id' => 'user_id']);
+        return $this->hasOne(User::class, ['id' => 'user_id']);
     }
 
     // stock
     public function getStock()
     {
-        return $this->hasOne(Stock::className(), ['id' => 'stock_id']);
+        return $this->hasOne(Stock::class, ['id' => 'stock_id']);
     }
 
     // IKPU
@@ -1562,30 +1534,30 @@ class Product extends \yii\db\ActiveRecord
     // product types
     public function getProductProductTypes()
     {
-        return $this->hasMany(ProductProductType::className(), ['product_id' => 'id']);
+        return $this->hasMany(ProductProductType::class, ['product_id' => 'id']);
     }
 
     public function getProductTypes()
     {
-        return $this->hasMany(\app\models\product\ProductType::className(), ['id' => 'product_type_id'])
+        return $this->hasMany(\app\models\product\ProductType::class, ['id' => 'product_type_id'])
             ->via('productProductTypes');
     }
 
     public function getUnit()
     {
-        return $this->hasOne(Category::className(), ['id' => 'unit_id'])
+        return $this->hasOne(Category::class, ['id' => 'unit_id'])
             ->andOnCondition(['type' => 'unit']);
     }
 
     public function getCurrency()
     {
-        return $this->hasOne(Category::className(), ['id' => 'unit_id'])
+        return $this->hasOne(Category::class, ['id' => 'unit_id'])
             ->andOnCondition(['type' => 'currency']);
     }
 
     public function get()
     {
-        return $this->hasOne(Category::className(), ['id' => 'unit_id'])
+        return $this->hasOne(Category::class, ['id' => 'unit_id'])
             ->andOnCondition(['type' => 'currency']);
     }
 
