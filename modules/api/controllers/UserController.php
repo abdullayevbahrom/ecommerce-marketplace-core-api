@@ -20,6 +20,7 @@ use yii\caching\FileCache;
 use app\services\DidoxService;
 use app\modules\api\components\ErrorCodes;
 use app\modules\api\components\ApiResponseTrait;
+use yii\services\Cbu;
 
 class UserController extends Controller
 {
