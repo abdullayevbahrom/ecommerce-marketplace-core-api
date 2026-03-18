@@ -1,17 +1,18 @@
 <?php
+
 namespace app\modules\api\controllers;
 
 use Yii;
-use yii\web\Response;
 use yii\web\HttpException;
 use yii\rest\Controller;
-use yii\data\ActiveDataProvider;
 use yii\filters\auth\HttpBearerAuth;
 
 use app\models\seller\SellerApplication;
 
-class SellerController extends Controller {
-    public function beforeAction($action) {
+class SellerController extends Controller
+{
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
 
         Yii::$app->response->getHeaders()->add('Access-Control-Allow-Origin', '*');
@@ -25,18 +26,19 @@ class SellerController extends Controller {
         return parent::beforeAction($action);
     }
 
-    public function behaviors() {
+    public function behaviors()
+    {
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
-            'class' => HttpBearerAuth::className(),
-            'optional' => ['apply'], // No auth required for applying
+            'class' => HttpBearerAuth::class,
+            'optional' => ['apply'],
         ];
 
         $auth = $behaviors['authenticator'];
         unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
-            'class' => \yii\filters\Cors::className(),
+            'class' => \yii\filters\Cors::class,
             'cors' => [
                 'Access-Control-Allow-Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
@@ -58,54 +60,40 @@ class SellerController extends Controller {
         'collectionEnvelope' => 'data',
     ];
 
-    /**
-     * Apply to become a seller
-     * POST /api/seller/apply
-     * 
-     * @return array
-     */
-    public function actionApply() {
+    public function actionApply()
+    {
         $post = Yii::$app->request->post();
 
-        // Basic validation
         if (empty($post['name'])) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['name' => ['Заполните поле']]];
         }
 
-        if (empty($post['phone'])) {
+        $phone = $post['phone'] ? preg_replace('/[^\d]/', '', trim($post['phone'])) : null;
+
+        if (empty($phone)) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['phone' => ['Заполните поле']]];
         }
 
-        // Clean and validate phone number
-        $cleanPhone = preg_replace('/\D/', '', $post['phone']); // Remove all non-digits
-        
-        if (strlen($cleanPhone) != 12) {
+        if (strlen($phone) != 12) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['phone' => ['Номер телефона должен содержать ровно 12 цифр']]];
         }
-        
-        // Update phone in post data with cleaned version
-        $post['phone'] = $cleanPhone;
 
-        // Check if application already exists for this phone
-        $existingApplication = SellerApplication::findOne(['phone' => $post['phone']]);
+        $existingApplication = SellerApplication::findOne(['phone' => $phone]);
         if ($existingApplication) {
-            // If there's a pending application, return error
             if ($existingApplication->status == SellerApplication::STATUS_PENDING || $existingApplication->status == SellerApplication::STATUS_REJECTED) {
                 Yii::$app->response->statusCode = 422;
                 return ['errors' => ['phone' => ['Заявка с этим номером телефона уже подана и находится на рассмотрении']]];
             }
-            // If approved, return error (already a seller)
             if ($existingApplication->status == SellerApplication::STATUS_APPROVED) {
                 Yii::$app->response->statusCode = 422;
                 return ['errors' => ['phone' => ['Заявка с этим номером телефона уже одобрена.']]];
             }
-
         } else {
-            // Create new application
             $application = new SellerApplication();
+            $post['phone'] = $phone;
             $application->setAttributes($post);
         }
 
