@@ -25,7 +25,6 @@ class SessionController extends Controller
     {
         $behaviors = parent::behaviors();
 
-        $auth = $behaviors['authenticator'];
         unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
@@ -98,6 +97,7 @@ class SessionController extends Controller
         }
 
         $payload = [
+            'id' => (int)$user->id,
             'yii_id' => (int)$user->id,
             'phone' => (string)$user->phone,
             'name' => trim($user->name . ' ' . $user->lastname . ' ' . $user->middlename),
@@ -105,11 +105,22 @@ class SessionController extends Controller
             'is_active' => $user->status === User::STATUS_ACTIVE,
         ];
 
+        $token = md5($user->id . Yii::$app->params['apiSecretKey']);
         $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
+
         try {
             /** @var \GuzzleHttp\Client $client */
             $client = Yii::$app->httpClient;
-            $response = $client->post($warehouseApiUrl . '/api/shopLogin', ['json' => $payload]);
+            $response = $client->post(
+                $warehouseApiUrl . '/api/shopLogin',
+                [
+                    'json' => $payload,
+                    'headers' => [
+                        'X-Api-Token' => $token,
+                        'Content-Type' => 'application/json',
+                    ],
+                ]
+            );
 
             $status = $response->getStatusCode();
             $body = (string)$response->getBody();
@@ -147,6 +158,7 @@ class SessionController extends Controller
         }
 
         $payload = [
+            'id' => (int)$user->id,
             'yii_id' => (int)$user->id,
             'phone' => (string)$user->phone,
             'name' => trim($user->name . ' ' . $user->lastname . ' ' . $user->middlename),
@@ -156,11 +168,21 @@ class SessionController extends Controller
         ];
 
         $operatorApiUrl = rtrim(Yii::$app->params['operatorApiUrl'], '/');
+        $token = md5($user->id . Yii::$app->params['apiSecretKey']);
 
         try {
             /** @var \GuzzleHttp\Client $client */
             $client = Yii::$app->httpClient;
-            $response = $client->post($operatorApiUrl . '/api/auth/shopLogin', ['json' => $payload]);
+            $response = $client->post(
+                $operatorApiUrl . '/api/auth/shopLogin',
+                [
+                    'json' => $payload,
+                    'headers' => [
+                        'X-Api-Token' => $token,
+                        'Content-Type' => 'application/json',
+                    ],
+                ]
+            );
 
             $status = $response->getStatusCode();
             $body = (string)$response->getBody();
