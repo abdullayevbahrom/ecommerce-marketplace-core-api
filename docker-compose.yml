@@ -27,9 +27,6 @@ services:
       - ./docker/supervisor:/etc/supervisor
     depends_on:
       - eimzo-server
-    networks:
-      - default
-      - asad_network
 
   eimzo-server:
     container_name: eimzo-server
@@ -42,30 +39,3 @@ services:
       TZ: Asia/Tashkent
     volumes:
       - ./docker/eimzo-server:/opt/eimzo:rw
-    depends_on:
-      - eimzo-redis
-    networks:
-      - default
-
-  eimzo-redis:
-    container_name: eimzo-redis
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --requirepass ${EIMZO_REDIS_PASSWORD:-eimzo_secret_2026}
-    environment:
-      TZ: Asia/Tashkent
-    volumes:
-      - eimzo-redis-data:/data
-    networks:
-      - default
-
-volumes:
-  eimzo-redis-data:
-
-networks:
-  default:
-    driver: bridge
-  asad_network:
-    external: true
-    name: app-market-backend_default
-      
