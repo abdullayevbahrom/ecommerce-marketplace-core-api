@@ -11,17 +11,11 @@ runtime/
 .env.*
 .vscode/
 
-# Compiled Java class files
-*.class
-
 # Compiled Python bytecode
 *.py[cod]
 
 # Log files
 *.log
-
-# Package files
-*.jar
 
 # Maven
 target/
@@ -54,10 +48,10 @@ nul
 
 web/uploads/*
 
-# E-IMZO server sensitive files
+# E-IMZO server - VPN keys are secret, jar+lib are committed
 docker/eimzo-server/keys/*.key
 docker/eimzo-server/keys/*.jks
-docker/eimzo-server/e-imzo-server.jar
-docker/eimzo-server/lib/
+docker/eimzo-server/test.pfx
+docker/eimzo-server/SignChallenge.*
 
 eimzo-telegram/
