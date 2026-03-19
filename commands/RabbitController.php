@@ -1,0 +1,69 @@
+<?php
+
+namespace app\commands;
+
+use Yii;
+use yii\console\Controller;
+use yii\console\ExitCode;
+use app\models\IntegrationEvent;
+use app\components\RabbitMq\TopologySetup;
+use app\components\RabbitMq\Publisher;
+use app\components\RabbitMq\Consumer;
+
+class RabbitController extends Controller
+{
+    public function actionSetup(): int
+    {
+        try {
+            (new TopologySetup())->run();
+            $this->stdout("RabbitMQ topology created successfully.\n");
+            return ExitCode::OK;
+        } catch (\Throwable $e) {
+            $this->stderr("Setup failed: {$e->getMessage()}\n");
+            Yii::error($e, __METHOD__);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+    }
+
+    public function actionPublishOutbox(int $limit = 100): int
+    {
+        $publisher = new Publisher();
+
+        $events = IntegrationEvent::find()
+            ->where(['status' => 'pending'])
+            ->andWhere([
+                'or',
+                ['available_at' => null],
+                ['<=', 'available_at', date('Y-m-d H:i:s')],
+            ])
+            ->orderBy(['id' => SORT_ASC])
+            ->limit($limit)
+            ->all();
+
+        foreach ($events as $event) {
+            try {
+                $publisher->publish($event);
+                $this->stdout("Published: {$event->event_id}\n");
+            } catch (\Throwable $e) {
+                $event->markFailed($e->getMessage());
+
+                $this->stderr("Failed: {$event->event_id} - {$e->getMessage()}\n");
+                Yii::error($e, __METHOD__);
+            }
+        }
+
+        return ExitCode::OK;
+    }
+
+    public function actionConsumeMarketSync(): int
+    {
+        try {
+            (new Consumer())->consumeMarketSyncQueue();
+            return ExitCode::OK;
+        } catch (\Throwable $e) {
+            $this->stderr("Consumer failed: {$e->getMessage()}\n");
+            Yii::error($e, __METHOD__);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+    }
+}

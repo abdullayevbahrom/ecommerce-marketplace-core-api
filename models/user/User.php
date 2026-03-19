@@ -168,7 +168,7 @@ class User extends ActiveRecord implements IdentityInterface
 
     public function getOrderReviews()
     {
-        return $this->hasMany(OrderReview::className(), ['user_id' => 'id']);
+        return $this->hasMany(OrderReview::class, ['user_id' => 'id']);
     }
 
     // validate check password
@@ -636,21 +636,26 @@ class User extends ActiveRecord implements IdentityInterface
     // relations
     public function getImage()
     {
-        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'user', 'main' => 1]);
+        return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'user', 'main' => 1]);
     }
 
     public function getModeratorAccess()
     {
-        return $this->hasMany(ModeratorAccess::className(), ['user_id' => 'id']);
+        return $this->hasMany(ModeratorAccess::class, ['user_id' => 'id']);
     }
 
     public function getAddresses()
     {
-        return $this->hasMany(UserAddress::className(), ['user_id' => 'id']);
+        return $this->hasMany(UserAddress::class, ['user_id' => 'id']);
     }
 
     public function getShop()
     {
-        return $this->hasOne(Shop::className(), ['user_id' => 'id']);
+        return $this->hasOne(Shop::class, ['user_id' => 'id']);
+    }
+
+    public function getFullName(): string
+    {
+        return trim($this->name . ' ' . $this->lastname . ' ' . $this->middlename);
     }
 }

@@ -2,6 +2,8 @@
 
 namespace app\models\shop;
 
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use Yii;
 use yii\web\UploadedFile;
 use yii\helpers\ArrayHelper;
@@ -109,11 +111,11 @@ class Shop extends \yii\db\ActiveRecord
 
     public function saveUser()
     {
-        $user = new User;
         if ($this->user_id) {
             $user = User::findOne($this->user_id);
             $current_password = $user->password;
         } else {
+            $user = new User;
             $user->token = $user->generateToken();
         }
 
@@ -193,16 +195,16 @@ class Shop extends \yii\db\ActiveRecord
                 throw new DbException('Default stock creation failed');
             }
 
-            $this->syncShopToWarehouse($user);
+            // $this->syncShopToWarehouse($user);
 
-            $this->syncStockToWarehouse($stock, $user);
+            // $this->syncStockToWarehouse($stock, $user);
 
             $transaction->commit();
 
             return true;
         } catch (\Throwable $e) {
             $transaction->rollBack();
-            Yii::error(['message' => $e->getMessage(), 'shop_id' => $this->id ?? null, 'trace'   => $e->getTraceAsString()], 'warehouse_sync');
+            Yii::error(['message' => $e->getMessage(), 'shop_id' => $this->id ?? null, 'trace' => $e->getTraceAsString()], 'warehouse_sync');
             return false;
         }
     }
@@ -220,13 +222,13 @@ class Shop extends \yii\db\ActiveRecord
         $apiUrl = rtrim($baseUrl, '/') . '/api/sync/shop';
 
         $payload = [
-            'id'       => $this->id,
-            'user_id'  => $user->id,
-            'name'     => $user->name,
-            'shop_name_ru'     => $this->name_ru,
-            'phone'    => $this->phone,
-            'inn'      => $this->inn,
-            'address'  => $this->address_legal,
+            'id' => $this->id,
+            'user_id' => $user->id,
+            'name' => $user->name,
+            'shop_name_ru' => $this->name_ru,
+            'phone' => $this->phone,
+            'inn' => $this->inn,
+            'address' => $this->address_legal,
         ];
 
         $token = md5($this->id . $secretKey);
@@ -269,11 +271,11 @@ class Shop extends \yii\db\ActiveRecord
         $apiUrl = rtrim($baseUrl, '/') . '/api/sync/branch';
 
         $payload = [
-            'id'       => $stock->id,          // yii_stock_id
-            'shop_id'  => $this->id,          // yii_shop_id
+            'id' => $stock->id,          // yii_stock_id
+            'shop_id' => $this->id,          // yii_shop_id
             'user_id' => $user->id,
-            'name_ru'  => $stock->name_ru,
-            'address'  => $stock->getFullAddress(),
+            'name_ru' => $stock->name_ru,
+            'address' => $stock->getFullAddress(),
         ];
 
         $token = md5($stock->id . $secretKey);
@@ -415,7 +417,7 @@ class Shop extends \yii\db\ActiveRecord
     {
         $products = ArrayHelper::map(Product::find()->where(['shop_id' => $this->id])->all(), 'id', 'id');
 
-        return (int)ProductReview::find()->where(['in', 'product_id', $products])->count();
+        return (int) ProductReview::find()->where(['in', 'product_id', $products])->count();
     }
 
     public function isFavorite()
@@ -568,5 +570,118 @@ class Shop extends \yii\db\ActiveRecord
     public function getShopOfertas()
     {
         return $this->hasMany(ShopOferta::class, ['shop_id' => 'id']);
+    }
+
+    public function syncCreatedPayloadToWarehouse(): array
+    {
+        return [
+            'id' => $this->id,
+            'user_id' => $this->user_id,
+            'name_ru' => $this->name_ru,
+            'name_uz' => $this->name_uz,
+            'name_en' => $this->name_en,
+            'description_ru' => $this->description_ru,
+            'description_uz' => $this->description_uz,
+            'description_en' => $this->description_en,
+            'map_location' => $this->map_location,
+            'contact_user' => $this->contact_user,
+            'contact_phone' => $this->contact_phone,
+            'status' => $this->status,
+            'date' => $this->date,
+            'user' => [
+                'id' => $this->user->id,
+                'name' => $this->user->getFullName(),
+                'phone' => $this->user->phone,
+                'role' => $this->user->role,
+                'is_active' => $this->user->status === User::STATUS_ACTIVE,
+            ],
+            'stock' => [
+                'id' => $this->stock->id,
+                'name_ru' => $this->stock->name_ru,
+                'name_uz' => $this->stock->name_uz,
+                'name_en' => $this->stock->name_en,
+                'description_ru' => $this->stock->description_ru,
+                'description_uz' => $this->stock->description_uz,
+                'description_en' => $this->stock->description_en,
+                'status' => $this->stock->status,
+                'date' => $this->stock->date,
+                'sort' => $this->stock->sort,
+                'deleted_at' => $this->stock->deleted_at,
+                'bts_region_id' => $this->stock->bts_region_id,
+                'bts_city_id' => $this->stock->bts_city_id,
+                'address' => $this->stock->getFullAddress(),
+            ]
+        ];
+    }
+
+    public function syncUpdatedPayloadToWarehouse(): array
+    {
+        return [
+            'id' => $this->id,
+            'user_id' => $this->user_id,
+            'name_ru' => $this->name_ru,
+            'name_uz' => $this->name_uz,
+            'name_en' => $this->name_en,
+            'description_ru' => $this->description_ru,
+            'description_uz' => $this->description_uz,
+            'description_en' => $this->description_en,
+            'map_location' => $this->map_location,
+            'contact_user' => $this->contact_user,
+            'contact_phone' => $this->contact_phone,
+            'status' => $this->status,
+            'date' => $this->date,
+        ];
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        $eventType = $insert ? 'shop.created' : 'shop.updated';
+
+        $message = MessageFactory::make(
+            eventType: $eventType,
+            source: 'market',
+            entityType: 'shop',
+            entityId: $this->id,
+            branchId: null,
+            payload: $insert ? $this->syncCreatedPayloadToWarehouse() : $this->syncUpdatedPayloadToWarehouse(),
+        );
+
+        (new OutboxService)->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'shop',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        $message = MessageFactory::make(
+            eventType: 'shop.deleted',
+            source: 'market',
+            entityType: 'shop',
+            entityId: $this->id,
+            branchId: null,
+            payload: ['id' => $this->id],
+        );
+
+        (new OutboxService)->queue(
+            exchange: 'market_to_sklad',
+            routingKey: 'shop.deleted',
+            eventType: 'shop.deleted',
+            entityType: 'shop',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
     }
 }
