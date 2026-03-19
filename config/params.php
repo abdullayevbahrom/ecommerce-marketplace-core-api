@@ -66,6 +66,13 @@ $config = [
     // E-IMZO direct integration (e-imzo-server instance)
     'eimzo' => [
         'serverUrl' => getenv('EIMZO_SERVER_URL') ?: 'http://127.0.0.1:8080',
+        'siteId' => getenv('EIMZO_SITE_ID') ?: '3383',
+        // Registered upload URL for mobile PKCS#7 delivery
+        'uploadUrl' => 'https://api.example.com/v1/integration/eimzo',
+        // Status polling interval hint for mobile clients (seconds)
+        'mobileStatusPollInterval' => 5,
+        // Status polling timeout (seconds)
+        'mobileStatusTimeout' => 120,
     ],
 
     // Wallet Configuration

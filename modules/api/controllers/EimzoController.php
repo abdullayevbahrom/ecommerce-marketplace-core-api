@@ -17,13 +17,20 @@ use app\modules\api\components\ErrorCodes;
  * without going through Didox as an intermediary.
  *
  * Endpoints:
- *   POST /api/eimzo/challenge        — Get a challenge string (no auth required)
- *   POST /api/eimzo/timestamp         — Attach timestamp to signed PKCS#7 (no auth required)
- *   POST /api/eimzo/auth              — Verify signed challenge & authenticate user (no auth required)
- *   POST /api/eimzo/verify            — Verify a PKCS#7 signature (authenticated)
- *   POST /api/eimzo/sign              — Server-side sign data with PFX (authenticated)
- *   GET  /api/eimzo/ping              — Check E-IMZO server status (authenticated)
- *   GET  /api/eimzo/info              — Get E-IMZO server info (authenticated)
+ *   POST /api/eimzo/challenge           — Get a challenge string (no auth required)
+ *   POST /api/eimzo/timestamp           — Attach timestamp to signed PKCS#7 (no auth required)
+ *   POST /api/eimzo/auth               — Verify signed challenge & authenticate user (no auth required)
+ *   POST /api/eimzo/verify             — Verify a PKCS#7 signature (authenticated)
+ *   POST /api/eimzo/sign               — Server-side sign data with PFX (authenticated)
+ *   GET  /api/eimzo/ping               — Check E-IMZO server status (authenticated)
+ *   GET  /api/eimzo/info               — Get E-IMZO server info (authenticated)
+ *
+ * Mobile deeplink flow:
+ *   POST /api/eimzo/mobile/auth         — Initiate mobile authentication (no auth required)
+ *   POST /api/eimzo/mobile/sign         — Initiate mobile document signing (authenticated)
+ *   POST /api/eimzo/mobile/status       — Poll mobile operation status (no auth required)
+ *   POST /api/eimzo/mobile/auth-result  — Get auth result + login user (no auth required)
+ *   POST /api/eimzo/mobile/verify       — Verify mobile-signed document (authenticated)
  */
 class EimzoController extends Controller
 {
@@ -50,7 +57,7 @@ class EimzoController extends Controller
 
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::class,
-            'optional' => ['options', 'challenge', 'timestamp', 'auth'],
+            'optional' => ['options', 'challenge', 'timestamp', 'auth', 'mobile-auth', 'mobile-status', 'mobile-auth-result'],
         ];
 
         $auth = $behaviors['authenticator'];
@@ -156,17 +163,37 @@ class EimzoController extends Controller
             return $this->sendError(ErrorCodes::ERROR_EIMZO_INN_MISSING);
         }
 
-        // Find or create user by INN (tax ID)
+        $userType = Yii::$app->request->post('user_type', 'fiz');
+        if (!in_array($userType, ['fiz', 'yur'])) {
+            $userType = 'fiz';
+        }
+
+        // Find user by INN, or by phone if provided
         $user = \app\models\user\User::findOne(['eimzo_tax_id' => $inn]);
+
+        if (!$user) {
+            // Check if user exists by phone (prevent duplicates)
+            $phone = Yii::$app->request->post('phone');
+            if (!empty($phone)) {
+                $user = \app\models\user\User::findOne(['phone' => $phone]);
+                if ($user && empty($user->eimzo_tax_id)) {
+                    // Link E-IMZO to existing phone-registered user
+                    $user->eimzo_tax_id = $inn;
+                }
+            }
+        }
 
         if (!$user) {
             $user = new \app\models\user\User();
             $user->eimzo_tax_id = $inn;
             $user->role = \app\models\user\User::ROLE_USER;
             $user->status = 1;
+            $user->type = $userType;
             $user->password = Yii::$app->security->generatePasswordHash(
                 Yii::$app->security->generateRandomString(16)
             );
+            $user->date = date('Y-m-d H:i:s');
+            $user->ip = $userIp;
 
             // Parse name from CN
             if (!empty($commonName)) {
@@ -175,29 +202,32 @@ class EimzoController extends Controller
                 $user->name = $nameParts[1] ?? '';
                 $user->middlename = trim(implode(' ', array_slice($nameParts, 2)));
             }
-
-            if (!$user->save(false)) {
-                Yii::error('Failed to create user from E-IMZO: ' . json_encode($user->errors), 'eimzo');
-                return $this->sendError(ErrorCodes::ERROR_EIMZO_USER_CREATE_FAILED);
-            }
         }
 
         // Update E-IMZO metadata
         $user->eimzo_certificate_info = json_encode($certificate);
         $user->eimzo_last_login = date('Y-m-d H:i:s');
+        $user->eimzo_auth_completed = 1;
 
         // Generate auth token
-        $token = Yii::$app->security->generateRandomString(64);
-        $user->auth_key = $token;
-        $user->save(false);
+        $user->token = $user->generateToken();
+
+        if (!$user->save(false)) {
+            Yii::error('Failed to save user from E-IMZO: ' . json_encode($user->errors), 'eimzo');
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_USER_CREATE_FAILED);
+        }
 
         return $this->sendSuccess([
-            'token' => $token,
+            'token' => $user->token,
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'lastname' => $user->lastname,
+                'phone' => $user->phone,
                 'eimzo_tax_id' => $user->eimzo_tax_id,
+                'type' => $user->type,
+                'eimzo_auth_completed' => (bool)$user->eimzo_auth_completed,
+                'didox_auth_completed' => (bool)($user->didox_auth_completed ?? false),
             ],
             'certificate' => $certificate,
         ]);
@@ -290,5 +320,213 @@ class EimzoController extends Controller
         }
 
         return $this->sendSuccess($result['data']);
+    }
+
+    // ==================================================================
+    // Mobile deeplink flow endpoints
+    // ==================================================================
+
+    /**
+     * POST /api/eimzo/mobile/auth
+     *
+     * Initiate mobile authentication. Returns siteId, documentId, and challenge
+     * for the mobile app to build a QR code and open the E-IMZO deeplink.
+     *
+     * No authentication required — this is the first step of mobile auth.
+     */
+    public function actionMobileAuth()
+    {
+        $service = new EimzoService();
+        $result = $service->mobileAuth();
+
+        if (!$result['success']) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_MOBILE_INIT_FAILED, $result['error']);
+        }
+
+        return $this->sendSuccess([
+            'siteId' => $result['siteId'],
+            'documentId' => $result['documentId'],
+            'challenge' => $result['challenge'],
+            'pollInterval' => Yii::$app->params['eimzo']['mobileStatusPollInterval'] ?? 5,
+            'timeout' => Yii::$app->params['eimzo']['mobileStatusTimeout'] ?? 120,
+        ]);
+    }
+
+    /**
+     * POST /api/eimzo/mobile/sign
+     *
+     * Initiate mobile document signing. Returns siteId and documentId.
+     * Requires authentication — user must be logged in to sign documents.
+     *
+     * Body: { "document": "<base64 document to sign>" }
+     */
+    public function actionMobileSign()
+    {
+        $service = new EimzoService();
+        $result = $service->mobileSign();
+
+        if (!$result['success']) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_MOBILE_INIT_FAILED, $result['error']);
+        }
+
+        return $this->sendSuccess([
+            'siteId' => $result['siteId'],
+            'documentId' => $result['documentId'],
+            'pollInterval' => Yii::$app->params['eimzo']['mobileStatusPollInterval'] ?? 5,
+            'timeout' => Yii::$app->params['eimzo']['mobileStatusTimeout'] ?? 120,
+        ]);
+    }
+
+    /**
+     * POST /api/eimzo/mobile/status
+     *
+     * Poll mobile operation status.
+     * No authentication required — mobile app polls this after deeplink.
+     *
+     * Body: { "documentId": "<documentId from auth/sign>" }
+     *
+     * Returns: { status: 1 } (complete) or { status: 2 } (pending)
+     */
+    public function actionMobileStatus()
+    {
+        $documentId = Yii::$app->request->post('documentId');
+        if (empty($documentId)) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_DOCUMENT_ID_REQUIRED);
+        }
+
+        $service = new EimzoService();
+        $result = $service->mobileStatus($documentId);
+
+        if (!$result['success']) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_MOBILE_EXPIRED, $result['error']);
+        }
+
+        return $this->sendSuccess([
+            'status' => $result['status'],
+            'complete' => $result['status'] === 1,
+        ]);
+    }
+
+    /**
+     * POST /api/eimzo/mobile/auth-result
+     *
+     * After mobile status=1, get the authentication result and log the user in.
+     * No authentication required — this produces the auth token (same as actionAuth for desktop).
+     *
+     * Body: { "documentId": "<documentId>", "user_type": "fiz"|"yur" }
+     */
+    public function actionMobileAuthResult()
+    {
+        $documentId = Yii::$app->request->post('documentId');
+        if (empty($documentId)) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_DOCUMENT_ID_REQUIRED);
+        }
+
+        $service = new EimzoService();
+        $userIp = Yii::$app->request->userIP ?? '127.0.0.1';
+        $authResult = $service->mobileAuthenticate($documentId, $userIp);
+
+        if (!$authResult['success']) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_AUTH_FAILED, $authResult['error']);
+        }
+
+        // Extract user identity from certificate
+        $certificate = $authResult['certificate'];
+        $inn = $service->extractInn($certificate['subjectName'] ?? []);
+        $commonName = $service->extractCommonName($certificate['subjectName'] ?? []);
+
+        if (empty($inn)) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_INN_MISSING);
+        }
+
+        $userType = Yii::$app->request->post('user_type', 'fiz');
+        if (!in_array($userType, ['fiz', 'yur'])) {
+            $userType = 'fiz';
+        }
+
+        // Find or create user by INN (tax ID)
+        $user = \app\models\user\User::findOne(['eimzo_tax_id' => $inn]);
+
+        if (!$user) {
+            $user = new \app\models\user\User();
+            $user->eimzo_tax_id = $inn;
+            $user->role = \app\models\user\User::ROLE_USER;
+            $user->status = 1;
+            $user->type = $userType;
+            $user->password = Yii::$app->security->generatePasswordHash(
+                Yii::$app->security->generateRandomString(16)
+            );
+            $user->date = date('Y-m-d H:i:s');
+            $user->ip = $userIp;
+
+            if (!empty($commonName)) {
+                $nameParts = explode(' ', trim($commonName));
+                $user->lastname = $nameParts[0] ?? '';
+                $user->name = $nameParts[1] ?? '';
+                $user->middlename = trim(implode(' ', array_slice($nameParts, 2)));
+            }
+        }
+
+        // Update E-IMZO metadata
+        $user->eimzo_certificate_info = json_encode($certificate);
+        $user->eimzo_last_login = date('Y-m-d H:i:s');
+        $user->eimzo_auth_completed = 1;
+
+        // Generate auth token
+        $user->token = $user->generateToken();
+
+        if (!$user->save(false)) {
+            Yii::error('Failed to save user from mobile E-IMZO: ' . json_encode($user->errors), 'eimzo');
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_USER_CREATE_FAILED);
+        }
+
+        return $this->sendSuccess([
+            'token' => $user->token,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'lastname' => $user->lastname,
+                'eimzo_tax_id' => $user->eimzo_tax_id,
+                'type' => $user->type,
+                'eimzo_auth_completed' => (bool)$user->eimzo_auth_completed,
+                'didox_auth_completed' => (bool)($user->didox_auth_completed ?? false),
+            ],
+            'certificate' => $certificate,
+        ]);
+    }
+
+    /**
+     * POST /api/eimzo/mobile/verify
+     *
+     * Verify a mobile-signed document after status=1.
+     * Requires authentication.
+     *
+     * Body: { "documentId": "<documentId>", "document": "<base64 document>" }
+     */
+    public function actionMobileVerify()
+    {
+        $documentId = Yii::$app->request->post('documentId');
+        $documentB64 = Yii::$app->request->post('document');
+
+        if (empty($documentId)) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_DOCUMENT_ID_REQUIRED);
+        }
+        if (empty($documentB64)) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_PKCS7_REQUIRED, 'document is required');
+        }
+
+        $service = new EimzoService();
+        $userIp = Yii::$app->request->userIP ?? '127.0.0.1';
+        $result = $service->mobileVerify($documentId, $documentB64, $userIp);
+
+        if (!$result['success']) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_VERIFY_FAILED, $result['error']);
+        }
+
+        return $this->sendSuccess([
+            'certificate' => $result['certificate'],
+            'pkcs7Attached' => $result['pkcs7Attached'],
+            'verificationInfo' => $result['verificationInfo'],
+        ]);
     }
 }

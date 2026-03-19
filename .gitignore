@@ -53,3 +53,11 @@ nul
 *.wmv
 
 web/uploads/*
+
+# E-IMZO server sensitive files
+docker/eimzo-server/keys/*.key
+docker/eimzo-server/keys/*.jks
+docker/eimzo-server/e-imzo-server.jar
+docker/eimzo-server/lib/
+
+eimzo-telegram/

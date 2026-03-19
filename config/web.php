@@ -226,6 +226,13 @@ $config = [
                 'GET api/eimzo/ping' => 'api/eimzo/ping',
                 'GET api/eimzo/info' => 'api/eimzo/info',
 
+                // E-IMZO mobile deeplink flow
+                'POST api/eimzo/mobile/auth' => 'api/eimzo/mobile-auth',
+                'POST api/eimzo/mobile/sign' => 'api/eimzo/mobile-sign',
+                'POST api/eimzo/mobile/status' => 'api/eimzo/mobile-status',
+                'POST api/eimzo/mobile/auth-result' => 'api/eimzo/mobile-auth-result',
+                'POST api/eimzo/mobile/verify' => 'api/eimzo/mobile-verify',
+
                 // Wallet API
                 'GET api/wallet/balance' => 'api/wallet/balance',
                 'POST api/wallet/deploy' => 'api/wallet/deploy',
