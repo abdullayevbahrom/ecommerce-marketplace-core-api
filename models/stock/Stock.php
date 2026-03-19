@@ -4,7 +4,8 @@ namespace app\models\stock;
 
 use Yii;
 use yii\web\UploadedFile;
-
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use app\models\user\User;
 use app\models\product\Product;
 use app\models\shop\Shop;
@@ -38,6 +39,8 @@ use GuzzleHttp\Exception\RequestException;
  */
 class Stock extends \yii\db\ActiveRecord
 {
+
+    public bool $suppressSyncEvents = false;
     public $imageFiles = [];
     /**
      * {@inheritdoc}
@@ -59,7 +62,7 @@ class Stock extends \yii\db\ActiveRecord
             [['description_ru', 'description_en', 'description_uz', 'address'], 'string'],
             [['date'], 'safe'],
             [['name_ru', 'name_en', 'name_uz'], 'string', 'max' => 255],
-            [['shop_id'], 'exist', 'skipOnError' => true, 'targetClass' => Shop::className(), 'targetAttribute' => ['shop_id' => 'id']],
+            [['shop_id'], 'exist', 'skipOnError' => true, 'targetClass' => Shop::class, 'targetAttribute' => ['shop_id' => 'id']],
             [['bts_region_id'], 'validateBtsRegion'],
             [['bts_city_id'], 'validateBtsCity'],
             [['bts_city_id'], 'validateBtsLocation'],
@@ -181,12 +184,12 @@ class Stock extends \yii\db\ActiveRecord
      */
     public function getShop()
     {
-        return $this->hasOne(Shop::className(), ['id' => 'shop_id']);
+        return $this->hasOne(Shop::class, ['id' => 'shop_id']);
     }
 
     public function getProducts()
     {
-        return $this->hasMany(Product::className(), ['stock_id' => 'id']);
+        return $this->hasMany(Product::class, ['stock_id' => 'id']);
     }
 
     // location relationships using BTS constants
@@ -309,14 +312,8 @@ class Stock extends \yii\db\ActiveRecord
     // images
     public function getImage()
     {
-        return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'stock', 'main' => 1]);
+        return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'stock', 'main' => 1]);
     }
-
-    // public function afterSave($insert, $changedAttributes)
-    // {
-    //     parent::afterSave($insert, $changedAttributes);
-    //     $this->syncToWarehouse();
-    // }
 
     private function syncToWarehouse()
     {
@@ -349,5 +346,88 @@ class Stock extends \yii\db\ActiveRecord
         } catch (RequestException $e) {
             Yii::error('Failed to sync stock ID ' . $this->id . ' to warehouse. Error: ' . $e->getMessage(), 'warehouse_sync');
         }
+    }
+
+    public function syncPayloadToWarehouse(): array
+    {
+        return [
+            'id' => $this->id,
+            'name_ru' => $this->name_ru,
+            'name_uz' => $this->name_uz,
+            'name_en' => $this->name_en,
+            'shop_id' => $this->shop_id,
+            'description_ru' => $this->description_ru,
+            'description_uz' => $this->description_uz,
+            'description_en' => $this->description_en,
+            'status' => $this->status,
+            'date' => $this->date,
+            'sort' => $this->sort,
+            'deleted_at' => $this->deleted_at,
+            'bts_region_id' => $this->bts_region_id,
+            'bts_city_id' => $this->bts_city_id,
+            'address' => $this->getFullAddress(),
+            'responsible_person' => $this->shop->user->getFullName(),
+            'phone' => $this->shop->user->phone,
+        ];
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        $eventType = $insert ? 'stock.created' : 'stock.updated';
+
+        $message = MessageFactory::make(
+            eventType: $eventType,
+            source: 'market',
+            entityType: 'stock',
+            entityId: $this->id,
+            branchId: $this->id,
+            payload: $this->syncPayloadToWarehouse(),
+        );
+
+        (new OutboxService)->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'stock',
+            entityId: $this->id,
+            source: 'market',
+            branchId: $this->id,
+            message: $message
+        );
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        $message = MessageFactory::make(
+            eventType: 'stock.deleted',
+            source: 'market',
+            entityType: 'stock',
+            entityId: $this->id,
+            branchId: $this->id,
+            payload: ['id' => $this->id],
+        );
+
+        (new OutboxService)->queue(
+            exchange: 'market_to_sklad',
+            routingKey: 'stock.deleted',
+            eventType: 'stock.deleted',
+            entityType: 'stock',
+            entityId: $this->id,
+            source: 'market',
+            branchId: $this->id,
+            message: $message
+        );
     }
 }

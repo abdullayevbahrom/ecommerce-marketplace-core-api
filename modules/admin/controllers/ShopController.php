@@ -4,25 +4,23 @@ namespace app\modules\admin\controllers;
 
 use Yii;
 use yii\web\Controller;
-use yii\web\NotFoundHttpException;
-use yii\filters\VerbFilter;
-use yii\helpers\ArrayHelper;
 use yii\web\HttpException;
-
 use app\models\user\User;
 use app\models\user\UserSearch;
 use app\models\shop\Shop;
 use app\models\shop\ShopSearch;
 
-class ShopController extends Controller {
+class ShopController extends Controller
+{
     public $user;
 
-    public function beforeAction($action) {
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
         if (Yii::$app->user->isGuest) {
             return $this->redirect(['/admin/default']);
         }
-        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
+        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id' => Yii::$app->user->identity->id])->one();
 
         if (($this->user->role == User::ROLE_MODERATOR)) {
             $accesses = array();
@@ -43,7 +41,8 @@ class ShopController extends Controller {
         return parent::beforeAction($action);
     }
 
-    public function actionIndex($status = null) {
+    public function actionIndex($status = null)
+    {
         $searchModel = new ShopSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
         $dataProvider->query->with('user', 'image');
@@ -60,8 +59,9 @@ class ShopController extends Controller {
         ]);
     }
 
-    public function actionView($id) {
-        $model = Shop::find()->with('user', 'shopSeller', 'gallery', 'image')->where(['id'=>$id])->one();
+    public function actionView($id)
+    {
+        $model = Shop::find()->with('user', 'shopSeller', 'gallery', 'image')->where(['id' => $id])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
@@ -72,12 +72,13 @@ class ShopController extends Controller {
         ]);
     }
 
-    public function actionCreate($id = null) {
+    public function actionCreate($id = null)
+    {
         $model = new Shop;
 
         // edit
         if ($id) {
-            $model = Shop::find()->with('user', 'shopSeller', 'gallery', 'image')->where(['id'=>$id])->one();
+            $model = Shop::find()->with('user', 'shopSeller', 'gallery', 'image')->where(['id' => $id])->one();
 
             if (!$model) {
                 throw new HttpException(404, 'Page not found');
@@ -99,8 +100,9 @@ class ShopController extends Controller {
         ]);
     }
 
-    public function actionLock($id) {
-        $model = Shop::find()->with('user')->where(['id'=>$id])->one();
+    public function actionLock($id)
+    {
+        $model = Shop::find()->with('user')->where(['id' => $id])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
@@ -123,8 +125,9 @@ class ShopController extends Controller {
         return $this->redirect(Yii::$app->request->referrer);
     }
 
-    public function actionRemove($id) {
-        $model = Shop::find()->with('image')->where(['id'=>$id])->one();
+    public function actionRemove($id)
+    {
+        $model = Shop::find()->with('image')->where(['id' => $id])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
@@ -137,8 +140,9 @@ class ShopController extends Controller {
         return $this->redirect(['/admin/shop']);
     }
 
-    public function actionLocationRemove($id) {
-        $model = Shop::find()->with('image', 'user')->where(['id'=>$id])->one();
+    public function actionLocationRemove($id)
+    {
+        $model = Shop::find()->with('image', 'user')->where(['id' => $id])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
@@ -148,12 +152,13 @@ class ShopController extends Controller {
             $model->save(false);
         }
 
-        return $this->redirect(['/admin/shop/create', 'id'=>$id]);
+        return $this->redirect(['/admin/shop/create', 'id' => $id]);
     }
 
     // managers
-    public function actionManagers($id) {
-        $model = Shop::find()->with('image', 'user')->where(['id'=>$id])->one();
+    public function actionManagers($id)
+    {
+        $model = Shop::find()->with('image', 'user')->where(['id' => $id])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
@@ -161,7 +166,7 @@ class ShopController extends Controller {
 
         $searchModel = new UserSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
-        $dataProvider->query->where(['shop_id'=>$model->id, 'manager'=>1]);
+        $dataProvider->query->where(['shop_id' => $model->id, 'manager' => 1]);
 
         $dataProvider->setSort([
             'defaultOrder' => [
@@ -176,14 +181,15 @@ class ShopController extends Controller {
         ]);
     }
 
-    public function actionManagerView($id, $manager_id) {
-        $model = Shop::find()->with('image', 'user')->where(['id'=>$id])->one();
+    public function actionManagerView($id, $manager_id)
+    {
+        $model = Shop::find()->with('image', 'user')->where(['id' => $id])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
 
-        $manager = User::findOne(['shop_id'=>$model->id, 'id'=>$manager_id]);
+        $manager = User::findOne(['shop_id' => $model->id, 'id' => $manager_id]);
 
         return $this->render('managers/view', [
             'model' => $model,
@@ -191,15 +197,16 @@ class ShopController extends Controller {
         ]);
     }
 
-    public function actionManagerCreate($id, $manager_id = null) {
-        $model = Shop::find()->with('image', 'user')->where(['id'=>$id])->one();
+    public function actionManagerCreate($id, $manager_id = null)
+    {
+        $model = Shop::find()->with('image', 'user')->where(['id' => $id])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
 
         if ($manager_id) {
-            $manager = User::findOne(['shop_id'=>$model->id, 'id'=>$manager_id]);
+            $manager = User::findOne(['shop_id' => $model->id, 'id' => $manager_id]);
             $current_password = $manager->password;
         } else {
             $manager = new User;
@@ -218,7 +225,7 @@ class ShopController extends Controller {
 
             if ($manager->save()) {
                 Yii::$app->session->setFlash('manager_saved', 'Saved');
-                return $this->redirect(['/admin/shop/manager-view', 'id'=>$model->id, 'manager_id' => $manager->id]);
+                return $this->redirect(['/admin/shop/manager-view', 'id' => $model->id, 'manager_id' => $manager->id]);
             }
         }
 
@@ -228,19 +235,20 @@ class ShopController extends Controller {
         ]);
     }
 
-    public function actionManagerRemove($id, $manager_id) {
-        $model = Shop::find()->with('image', 'user')->where(['id'=>$id])->one();
+    public function actionManagerRemove($id, $manager_id)
+    {
+        $model = Shop::find()->with('image', 'user')->where(['id' => $id])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
 
-        $manager = User::findOne(['shop_id'=>$model->id, 'id'=>$manager_id]);
+        $manager = User::findOne(['shop_id' => $model->id, 'id' => $manager_id]);
 
         if ($manager && $manager->delete()) {
             Yii::$app->session->setFlash('manager_removed', 'Deleted');
         }
 
-        return $this->redirect(['/admin/shop/managers', 'id'=>$model->id,]);
+        return $this->redirect(['/admin/shop/managers', 'id' => $model->id,]);
     }
 }

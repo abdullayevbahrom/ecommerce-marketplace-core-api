@@ -10,6 +10,17 @@ $minioBucket = getenv('MINIO_BUCKET') ?: 'uploads';
 $minioRegion = getenv('MINIO_REGION') ?: 'us-east-1';
 $minioSecure = getenv('MINIO_SECURE') ?: true;
 
+$rabbitMqHost = getenv('RABBITMQ_HOST') ?: 'rabbitmq';
+$rabbitMqPort = getenv('RABBITMQ_PORT') ?: 5672;
+$rabbitMqUser = getenv('RABBITMQ_USER') ?: 'guest';
+$rabbitMqPassword = getenv('RABBITMQ_PASSWORD') ?: 'guest';
+$rabbitMqExchangeSkladToMarket = getenv('RABBITMQ_EXCHANGE_SKLAD_TO_MARKET') ?: 'sklad_to_market';
+$rabbitMqExchangeMarketToSklad = getenv('RABBITMQ_EXCHANGE_MARKET_TO_SKLAD') ?: 'market_to_sklad';
+$rabbitMqExchangeSkladToMarketRetry = getenv('RABBITMQ_EXCHANGE_SKLAD_TO_MARKET_RETRY') ?: 'sklad_to_market.retry';
+$rabbitMqExchangeMarketToSkladRetry = getenv('RABBITMQ_EXCHANGE_MARKET_TO_SKLAD_RETRY') ?: 'market_to_sklad.retry';
+$rabbitMqQueueSkladSyncMain = getenv('RABBITMQ_QUEUE_SKLAD_SYNC_MAIN') ?: 'sklad.sync.main';
+$rabbitMqQueueMarketSyncMain = getenv('RABBITMQ_QUEUE_MARKET_SYNC_MAIN') ?: 'market.sync.main';
+
 $config = [
     'adminEmail' => 'admin@example.com',
     'senderEmail' => 'noreply@example.com',
@@ -35,6 +46,18 @@ $config = [
         'bucket' => $minioBucket,
         'region' => $minioRegion,
         'secure' => $minioSecure
+    ],
+    'rabbitmq' => [
+        'host' => $rabbitMqHost,
+        'port' => $rabbitMqPort,
+        'user' => $rabbitMqUser,
+        'password' => $rabbitMqPassword,
+        'exchange_sklad_to_market' => $rabbitMqExchangeSkladToMarket,
+        'exchange_market_to_sklad' => $rabbitMqExchangeMarketToSklad,
+        'exchange_sklad_to_market_retry' => $rabbitMqExchangeSkladToMarketRetry,
+        'exchange_market_to_sklad_retry' => $rabbitMqExchangeMarketToSkladRetry,
+        'queue_sklad_sync_main' => $rabbitMqQueueSkladSyncMain,
+        'queue_market_sync_main' => $rabbitMqQueueMarketSyncMain,
     ],
     // Base URL
     'baseUrl' => 'https://api.example.com',
