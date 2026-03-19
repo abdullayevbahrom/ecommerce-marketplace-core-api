@@ -716,6 +716,17 @@ class DidoxDocument extends \yii\db\ActiveRecord
     }
 
     /**
+     * Gets query for [[Signatures]].
+     *
+     * @return \yii\db\ActiveQuery
+     */
+    public function getSignatures()
+    {
+        return $this->hasMany(DidoxDocumentSignature::class, ['didox_document_id' => 'id'])
+            ->orderBy(['signed_at' => SORT_DESC]);
+    }
+
+    /**
      * @inheritdoc
      */
     public function beforeSave($insert)

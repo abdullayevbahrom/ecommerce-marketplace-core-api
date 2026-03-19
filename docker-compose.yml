@@ -21,12 +21,46 @@ services:
       DB_PORT: 3306
       DB_USER: root
       DB_PASSWORD: ""
+      EIMZO_SERVER_URL: http://eimzo-server:8080
     volumes:
       - ./:/var/www/html:rw
       - ./docker/supervisor:/etc/supervisor
+    depends_on:
+      - eimzo-server
     networks:
       - default
       - asad_network
+
+  eimzo-server:
+    container_name: eimzo-server
+    image: amazoncorretto:8-alpine3.19-jre
+    restart: unless-stopped
+    working_dir: /opt/eimzo
+    command: >
+      java -Dfile.encoding=UTF-8 -jar e-imzo-server.jar config.properties
+    environment:
+      TZ: Asia/Tashkent
+    volumes:
+      - ./docker/eimzo-server:/opt/eimzo:rw
+    depends_on:
+      - eimzo-redis
+    networks:
+      - default
+
+  eimzo-redis:
+    container_name: eimzo-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${EIMZO_REDIS_PASSWORD:-eimzo_secret_2026}
+    environment:
+      TZ: Asia/Tashkent
+    volumes:
+      - eimzo-redis-data:/data
+    networks:
+      - default
+
+volumes:
+  eimzo-redis-data:
 
 networks:
   default:

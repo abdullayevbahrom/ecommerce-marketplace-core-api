@@ -12,6 +12,7 @@ use yii\web\Response;
 use yii\data\ActiveDataProvider;
 
 use app\models\didox\DidoxDocument;
+use app\models\didox\DidoxDocumentSignature;
 use app\models\user\User;
 
 /**
@@ -752,13 +753,22 @@ class DidoxController extends Controller
                 throw new HttpException(401, 'User not authenticated with DIDOX. Please login with E-IMZO first.');
             }
 
+            // Check token expiry
+            if (!empty($user->eimzo_didox_token_expires_at) && strtotime($user->eimzo_didox_token_expires_at) < time()) {
+                return [
+                    'success' => false,
+                    'didox_token_expired' => true,
+                    'message' => 'Didox token expired. Please re-authenticate with E-IMZO.',
+                ];
+            }
+
             // Accept document in DIDOX using the signature
             $didoxService = new \app\services\DidoxService();
             $result = $didoxService->acceptIncomingDocument($didoxId, $signature, $user->eimzo_didox_token);
 
             if ($result['success']) {
                 // Update document status
-                $document->didox_status = DidoxDocument::STATUS_SIGNED; // Status 3 = Signed
+                $document->didox_status = DidoxDocument::STATUS_SIGNED;
                 $document->didox_signed_at = date('Y-m-d H:i:s');
 
                 // Store the response data
@@ -766,21 +776,27 @@ class DidoxController extends Controller
                 $mergedData = array_merge($existingData, $result['data']);
                 $document->setDidoxData($mergedData);
 
-                if ($document->save(false)) {
-                    return [
-                        'success' => true,
-                        'message' => 'Document successfully signed and accepted',
-                        'data' => [
-                            'document_id' => $document->id,
-                            'didox_id' => $didoxId,
-                            'status' => $document->didox_status,
-                            'status_label' => $document->getDidoxStatusLabel(),
-                            'signed_at' => $document->didox_signed_at
-                        ]
-                    ];
-                } else {
-                    throw new HttpException(500, 'Failed to update document status');
-                }
+                $document->save(false);
+
+                // Save signature record
+                DidoxDocumentSignature::createFromAccept(
+                    $document,
+                    $user,
+                    $signature,
+                    $result['data'] ?? []
+                );
+
+                return [
+                    'success' => true,
+                    'message' => 'Document successfully signed and accepted',
+                    'data' => [
+                        'document_id' => $document->id,
+                        'didox_id' => $didoxId,
+                        'status' => $document->didox_status,
+                        'status_label' => $document->getDidoxStatusLabel(),
+                        'signed_at' => $document->didox_signed_at
+                    ]
+                ];
             } else {
                 $errorMessage = 'Failed to accept document in DIDOX: ';
                 if (isset($result['error'])) {
@@ -796,6 +812,154 @@ class DidoxController extends Controller
         } catch (\Exception $e) {
             Yii::error('Accept incoming document error: ' . $e->getMessage(), __METHOD__);
             throw new HttpException(500, 'Failed to accept document');
+        }
+    }
+
+    /**
+     * Reject incoming document
+     * POST /api/didox/reject-document
+     *
+     * Body: { "didox_id": "...", "comment": "reason for rejection" }
+     */
+    public function actionRejectDocument()
+    {
+        $user = Yii::$app->user->identity;
+        if (!$user) {
+            throw new HttpException(401, 'Authentication required');
+        }
+
+        $post = Yii::$app->request->post();
+        $didoxId = $post['didox_id'] ?? null;
+        $comment = $post['comment'] ?? '';
+
+        if (empty($didoxId)) {
+            throw new HttpException(400, 'didox_id is required');
+        }
+        if (empty($comment)) {
+            throw new HttpException(400, 'comment is required when rejecting a document');
+        }
+
+        try {
+            $document = DidoxDocument::find()
+                ->alias('d')
+                ->joinWith(['order o'])
+                ->where(['d.didox_id' => $didoxId])
+                ->andWhere([
+                    'or',
+                    ['d.to_user_id' => $user->id],
+                    ['o.user_id' => $user->id]
+                ])
+                ->one();
+
+            if (!$document) {
+                throw new HttpException(404, 'Document not found or not assigned to you');
+            }
+
+            if (empty($user->eimzo_didox_token)) {
+                throw new HttpException(401, 'User not authenticated with DIDOX. Please login with E-IMZO first.');
+            }
+
+            // Check token expiry
+            if (!empty($user->eimzo_didox_token_expires_at) && strtotime($user->eimzo_didox_token_expires_at) < time()) {
+                return [
+                    'success' => false,
+                    'didox_token_expired' => true,
+                    'message' => 'Didox token expired. Please re-authenticate with E-IMZO.',
+                ];
+            }
+
+            $didoxService = new \app\services\DidoxService();
+            $result = $didoxService->rejectDocument($didoxId, $comment, $user->eimzo_didox_token);
+
+            // Update local status
+            $document->didox_status = DidoxDocument::STATUS_REJECTED;
+            $document->save(false);
+
+            // Save rejection record
+            DidoxDocumentSignature::createFromReject(
+                $document,
+                $user,
+                $comment,
+                $result['data'] ?? []
+            );
+
+            return [
+                'success' => true,
+                'message' => 'Document rejected successfully',
+                'data' => [
+                    'document_id' => $document->id,
+                    'didox_id' => $didoxId,
+                    'status' => $document->didox_status,
+                    'status_label' => $document->getDidoxStatusLabel(),
+                ]
+            ];
+
+        } catch (HttpException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            Yii::error('Reject document error: ' . $e->getMessage(), __METHOD__);
+            throw new HttpException(500, 'Failed to reject document');
+        }
+    }
+
+    /**
+     * Get signatures for a document
+     * GET /api/didox/document-signatures?didox_document_id=123
+     */
+    public function actionDocumentSignatures()
+    {
+        $user = Yii::$app->user->identity;
+        if (!$user) {
+            throw new HttpException(401, 'Authentication required');
+        }
+
+        $documentId = Yii::$app->request->get('didox_document_id');
+        if (empty($documentId)) {
+            throw new HttpException(400, 'didox_document_id is required');
+        }
+
+        $signatures = DidoxDocumentSignature::find()
+            ->where(['didox_document_id' => $documentId])
+            ->orderBy(['signed_at' => SORT_DESC])
+            ->all();
+
+        return [
+            'success' => true,
+            'data' => $signatures,
+        ];
+    }
+
+    /**
+     * Proxy Didox timestamp through backend
+     * POST /api/didox/timestamp
+     *
+     * Body: { "pkcs7": "base64...", "signature_hex": "hex..." }
+     */
+    public function actionTimestamp()
+    {
+        $user = Yii::$app->user->identity;
+        if (!$user) {
+            throw new HttpException(401, 'Authentication required');
+        }
+
+        $pkcs7 = Yii::$app->request->post('pkcs7');
+        $signatureHex = Yii::$app->request->post('signature_hex');
+
+        if (empty($pkcs7)) {
+            throw new HttpException(400, 'pkcs7 is required');
+        }
+
+        try {
+            $didoxService = new \app\services\DidoxService();
+            $result = $didoxService->createTimestamp($pkcs7, $signatureHex);
+
+            return [
+                'success' => true,
+                'data' => $result,
+            ];
+        } catch (\Exception $e) {
+            Yii::error('Didox timestamp error: ' . $e->getMessage(), __METHOD__);
+            throw new HttpException(500, 'Failed to create timestamp');
         }
     }
 }

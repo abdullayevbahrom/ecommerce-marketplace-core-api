@@ -50,6 +50,10 @@ class ErrorCodes
     const ERROR_EIMZO_VERIFY_FAILED = -46;
     const ERROR_EIMZO_SIGN_FAILED = -47;
     const ERROR_EIMZO_STATUS_FAILED = -48;
+    const ERROR_EIMZO_MOBILE_INIT_FAILED = -49;
+    const ERROR_EIMZO_MOBILE_PENDING = -50;
+    const ERROR_EIMZO_MOBILE_EXPIRED = -51;
+    const ERROR_EIMZO_DOCUMENT_ID_REQUIRED = -52;
 
     // Error Messages
     public static $messages = [
@@ -92,6 +96,10 @@ class ErrorCodes
         self::ERROR_EIMZO_VERIFY_FAILED => 'PKCS#7 signature verification failed',
         self::ERROR_EIMZO_SIGN_FAILED => 'Server-side signing failed',
         self::ERROR_EIMZO_STATUS_FAILED => 'E-IMZO server status check failed',
+        self::ERROR_EIMZO_MOBILE_INIT_FAILED => 'Failed to initiate mobile E-IMZO operation',
+        self::ERROR_EIMZO_MOBILE_PENDING => 'Mobile signing is still pending',
+        self::ERROR_EIMZO_MOBILE_EXPIRED => 'Mobile signing session expired',
+        self::ERROR_EIMZO_DOCUMENT_ID_REQUIRED => 'DocumentID is required',
     ];
 
     // HTTP Status Codes Map
@@ -135,6 +143,10 @@ class ErrorCodes
         self::ERROR_EIMZO_VERIFY_FAILED => 400,
         self::ERROR_EIMZO_SIGN_FAILED => 502,
         self::ERROR_EIMZO_STATUS_FAILED => 502,
+        self::ERROR_EIMZO_MOBILE_INIT_FAILED => 502,
+        self::ERROR_EIMZO_MOBILE_PENDING => 202,
+        self::ERROR_EIMZO_MOBILE_EXPIRED => 410,
+        self::ERROR_EIMZO_DOCUMENT_ID_REQUIRED => 422,
     ];
 
     public static function getMessage($code)

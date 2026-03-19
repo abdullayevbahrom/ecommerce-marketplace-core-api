@@ -738,16 +738,20 @@ class UserController extends Controller
     // E-IMZO authentication methods
 
     /**
-     * Authenticate user with E-IMZO token from Didox
-     * This endpoint is for users who are already registered in Didox but may be new to our platform
-     * Assumes user has completed Didox registration and has a valid Didox token
-     * Supports user type (fiz/yur) - defaults to 'fiz' if not specified
+     * Connect Didox to an existing E-IMZO-authenticated user (Step 2 of auth flow).
+     *
+     * This endpoint enriches user profile with Didox business data.
+     * User must already be authenticated via E-IMZO (POST /api/eimzo/auth or /api/eimzo/mobile/auth-result).
+     *
+     * Also supports legacy flow: if user is not yet authenticated, creates account via Didox token.
+     *
+     * Required: didox_token, tax_id
+     * Optional: user_type (fiz/yur)
      */
     public function actionEimzoAuth()
     {
         $post = Yii::$app->request->post();
 
-        // Validate required fields
         if (!isset($post['didox_token'])) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['didox_token' => 'Didox token is required']];
@@ -758,211 +762,138 @@ class UserController extends Controller
             return ['errors' => ['tax_id' => 'Tax ID is required']];
         }
 
-        // Set user type - default to 'fiz' if not provided
         $userType = isset($post['user_type']) && in_array($post['user_type'], ['fiz', 'yur']) ? $post['user_type'] : 'fiz';
 
         try {
             $didoxService = new DidoxService();
 
-            // Step 1: Authenticate with Didox using the provided token
+            // Validate Didox token
             $didoxAuth = $didoxService->authenticateWithDidox($post['didox_token'], $post['tax_id']);
 
             if (!$didoxAuth['valid']) {
                 Yii::$app->response->statusCode = 401;
-                return ['errors' => ['didox_token' => 'Didox authentication failed: ' . (isset($didoxAuth['error']) ? $didoxAuth['error'] : 'Invalid token')]];
+                return ['errors' => ['didox_token' => 'Didox authentication failed: ' . ($didoxAuth['error'] ?? 'Invalid token')]];
             }
 
-            // Step 2: Get profile data from DIDOX
+            // Get profile data from Didox
             $profileResult = $didoxService->getUserProfile($post['didox_token']);
             $profileData = [];
             if ($profileResult['success'] && !empty($profileResult['data'])) {
                 $profileData = $profileResult['data'];
             }
 
-            // Step 3: Check if user exists in our platform
+            // Find or create user
             $user = User::findOne(['eimzo_tax_id' => $post['tax_id']]);
 
-            error_log('user123: ' . print_r($user, true));
-            error_log('profileData: ' . print_r($profileData, true));
-
             if (!$user) {
-                // User doesn't exist in our platform - create new user
+                // Legacy flow: create user directly via Didox (no prior E-IMZO auth)
                 $user = new User();
                 $user->eimzo_tax_id = $post['tax_id'];
                 $user->role = User::ROLE_USER;
                 $user->status = 1;
+                $user->type = $userType;
                 $user->password = Yii::$app->security->generatePasswordHash(
                     Yii::$app->security->generateRandomString(16)
-                ); // Random secure password for E-IMZO auth users
-                $user->type = $userType; // Set user type (fiz/yur)
-
-                // Set fields from DIDOX profile data
-                if (!empty($profileData)) {
-                    // For companies (yur) use company name, for individuals (fiz) try to extract name
-                    if ($userType === 'yur') {
-                        $user->name = $profileData['fullName'] ?? $profileData['name'] ?? $profileData['shortName'] ?? '';
-                        $user->organization_name = $profileData['fullName'] ?? $profileData['name'] ?? '';
-                    } else {
-                        // For individuals, try to split director name or fullName
-                        $fullName = $profileData['director'] ?? $profileData['fullName'] ?? '';
-                        if (!empty($fullName)) {
-                            $nameParts = explode(' ', trim($fullName));
-                            $user->lastname = $nameParts[0] ?? '';
-                            $user->name = $nameParts[1] ?? '';
-                            $user->middlename = trim(($nameParts[2] ?? '') . ' ' . ($nameParts[3] ?? ''));
-                        }
-                    }
-
-                    // Set contact information
-                    if (isset($profileData['email'])) {
-                        $user->email = $profileData['email'];
-                    }
-
-                    // Set business information
-                    if (isset($profileData['address'])) {
-                        $user->address = $profileData['address'];
-                        $user->address_legal = $profileData['address']; // Legal address same as main address
-                    }
-                    if (isset($profileData['oked'])) {
-                        $user->oked = $profileData['oked'];
-                    }
-                    if (isset($profileData['account'])) {
-                        $user->account = $profileData['account'];
-                    }
-                    if (isset($profileData['mfo'])) {
-                        $user->mfo = $profileData['mfo'];
-                    }
-                    if (isset($profileData['bankCode'])) {
-                        $user->bank = $profileData['bankCode'];
-                    }
-                    if (isset($profileData['vatRegCode'])) {
-                        $user->inn = $profileData['vatRegCode'];
-                    }
-
-                    // Set manager information (director or accountant)
-                    if (isset($profileData['director']) && !empty($profileData['director'])) {
-                        $user->manager = $profileData['director'];
-                    } elseif (isset($profileData['accountant']) && !empty($profileData['accountant'])) {
-                        $user->manager = $profileData['accountant'];
-                    }
-                }
-
-                // Override with explicitly provided data if available
-                if (isset($post['name'])) {
-                    $user->name = $post['name'];
-                }
-                if (isset($post['lastname'])) {
-                    $user->lastname = $post['lastname'];
-                }
-                if (isset($post['middlename'])) {
-                    $user->middlename = $post['middlename'];
-                }
-                if (isset($post['email'])) {
-                    $user->email = $post['email'];
-                }
-                if (isset($post['phone'])) {
-                    $user->phone = $post['phone'];
-                }
-                if (isset($post['organization_name'])) {
-                    $user->organization_name = $post['organization_name'];
-                }
-
-                Yii::info('Creating new platform user for existing Didox user with Tax ID: ' . $post['tax_id'], __METHOD__);
-            } else {
-                // User exists - update with profile data
-                Yii::info('Authenticating existing platform user with Tax ID: ' . $post['tax_id'], __METHOD__);
-
-                // Update fields from DIDOX profile data if they're empty
-                if (!empty($profileData)) {
-                    if (empty($user->email) && isset($profileData['email'])) {
-                        $user->email = $profileData['email'];
-                    }
-                    if (empty($user->phone)) {
-                        if (isset($profileData['mobile'])) {
-                            $user->phone = $profileData['mobile'];
-                        } elseif (isset($profileData['phone'])) {
-                            $user->phone = $profileData['phone'];
-                        }
-                    }
-                    if (empty($user->organization_name) && isset($profileData['fullName'])) {
-                        $user->organization_name = $profileData['fullName'];
-                    }
-                    if (empty($user->address) && isset($profileData['address'])) {
-                        $user->address = $profileData['address'];
-                    }
-                    if (empty($user->address_legal) && isset($profileData['address'])) {
-                        $user->address_legal = $profileData['address'];
-                    }
-                    if (empty($user->oked) && isset($profileData['oked'])) {
-                        $user->oked = $profileData['oked'];
-                    }
-                    if (empty($user->account) && isset($profileData['account'])) {
-                        $user->account = $profileData['account'];
-                    }
-                    if (empty($user->mfo) && isset($profileData['mfo'])) {
-                        $user->mfo = $profileData['mfo'];
-                    }
-                    if (empty($user->bank) && isset($profileData['bankCode'])) {
-                        $user->bank = $profileData['bankCode'];
-                    }
-                    if (empty($user->inn) && isset($profileData['vatRegCode'])) {
-                        $user->inn = $profileData['vatRegCode'];
-                    }
-                    if (empty($user->manager)) {
-                        if (isset($profileData['director']) && !empty($profileData['director'])) {
-                            $user->manager = $profileData['director'];
-                        } elseif (isset($profileData['accountant']) && !empty($profileData['accountant'])) {
-                            $user->manager = $profileData['accountant'];
-                        }
-                    }
-                }
+                );
+                $user->date = date('Y-m-d H:i:s');
+                $user->ip = Yii::$app->request->getUserIP() ?? '127.0.0.1';
             }
 
-            // Step 4: Update user with latest E-IMZO data
-            $user->eimzo_didox_token = $post['didox_token'];
-            $user->eimzo_last_login = date('Y-m-d H:i:s');
+            // Enrich user with Didox profile data
+            if (!empty($profileData)) {
+                $this->enrichUserFromDidoxProfile($user, $profileData, $userType);
+            }
 
-            // Store DIDOX profile data
+            // Override with explicitly provided data
+            foreach (['name', 'lastname', 'middlename', 'email', 'phone', 'organization_name'] as $field) {
+                if (isset($post[$field])) {
+                    $user->$field = $post[$field];
+                }
+            }
+            if (empty($user->phone) && isset($post['mobile'])) {
+                $user->phone = $post['mobile'];
+            }
+
+            // Update Didox connection data
+            $user->eimzo_didox_token = $post['didox_token'];
+            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+350 minutes'));
+            $user->eimzo_last_login = date('Y-m-d H:i:s');
+            $user->didox_auth_completed = 1;
+
             if (!empty($profileData)) {
                 $user->eimzo_certificate_info = json_encode($profileData);
             }
 
-            // Generate or refresh our app token
             $user->token = $user->generateToken();
 
-            // Ensure required fields are set to prevent save errors
-            if (empty($user->phone) && isset($post['mobile'])) {
-                $user->phone = $post['mobile'];
-            }
-            if (empty($user->status)) {
-                $user->status = 1; // Active status
-            }
-            if (empty($user->role)) {
-                $user->role = User::ROLE_USER;
-            }
-            if (empty($user->date)) {
-                $user->date = date('Y-m-d H:i:s');
-            }
-            if (empty($user->ip)) {
-                $user->ip = Yii::$app->request->getUserIP() ?? '127.0.0.1';
-            }
-
             if ($user->save(false)) {
-                // Return user object directly in data field (matching standard API format)
                 return ['data' => User::find()->with('image')->where(['id' => $user->id])->one()];
             } else {
-                // Log validation errors for debugging
-                Yii::error('User save failed with errors: ' . json_encode($user->getErrors()), __METHOD__);
-                throw new HttpException(500, 'Failed to save user data: ' . implode(', ', array_map(function ($errors) {
-                    return implode(', ', $errors);
-                }, $user->getErrors())));
+                Yii::error('User save failed: ' . json_encode($user->getErrors()), __METHOD__);
+                throw new HttpException(500, 'Failed to save user data');
             }
         } catch (HttpException $e) {
             throw $e;
         } catch (\Exception $e) {
-            Yii::error('E-IMZO auth error: ' . $e->getMessage(), __METHOD__);
+            Yii::error('E-IMZO/Didox auth error: ' . $e->getMessage(), __METHOD__);
             Yii::$app->response->statusCode = 500;
             return ['errors' => ['service' => 'Authentication service error: ' . $e->getMessage()]];
+        }
+    }
+
+    /**
+     * Enrich user model with Didox profile data.
+     * Only fills empty fields to avoid overwriting user-provided data.
+     */
+    private function enrichUserFromDidoxProfile(User $user, array $profileData, string $userType): void
+    {
+        if ($user->isNewRecord) {
+            // For new users, set all available fields
+            if ($userType === 'yur') {
+                $user->name = $profileData['fullName'] ?? $profileData['name'] ?? $profileData['shortName'] ?? '';
+                $user->organization_name = $profileData['fullName'] ?? $profileData['name'] ?? '';
+            } else {
+                $fullName = $profileData['director'] ?? $profileData['fullName'] ?? '';
+                if (!empty($fullName)) {
+                    $nameParts = explode(' ', trim($fullName));
+                    $user->lastname = $nameParts[0] ?? '';
+                    $user->name = $nameParts[1] ?? '';
+                    $user->middlename = trim(implode(' ', array_slice($nameParts, 2)));
+                }
+            }
+
+            if (isset($profileData['email'])) $user->email = $profileData['email'];
+            if (isset($profileData['address'])) {
+                $user->address = $profileData['address'];
+                $user->address_legal = $profileData['address'];
+            }
+            if (isset($profileData['oked'])) $user->oked = $profileData['oked'];
+            if (isset($profileData['account'])) $user->account = $profileData['account'];
+            if (isset($profileData['mfo'])) $user->mfo = $profileData['mfo'];
+            if (isset($profileData['bankCode'])) $user->bank = $profileData['bankCode'];
+            if (isset($profileData['vatRegCode'])) $user->inn = $profileData['vatRegCode'];
+            if (!empty($profileData['director'])) {
+                $user->manager = $profileData['director'];
+            } elseif (!empty($profileData['accountant'])) {
+                $user->manager = $profileData['accountant'];
+            }
+        } else {
+            // For existing users, only fill empty fields
+            if (empty($user->email) && isset($profileData['email'])) $user->email = $profileData['email'];
+            if (empty($user->phone) && isset($profileData['mobile'])) $user->phone = $profileData['mobile'];
+            if (empty($user->phone) && isset($profileData['phone'])) $user->phone = $profileData['phone'];
+            if (empty($user->organization_name) && isset($profileData['fullName'])) $user->organization_name = $profileData['fullName'];
+            if (empty($user->address) && isset($profileData['address'])) $user->address = $profileData['address'];
+            if (empty($user->address_legal) && isset($profileData['address'])) $user->address_legal = $profileData['address'];
+            if (empty($user->oked) && isset($profileData['oked'])) $user->oked = $profileData['oked'];
+            if (empty($user->account) && isset($profileData['account'])) $user->account = $profileData['account'];
+            if (empty($user->mfo) && isset($profileData['mfo'])) $user->mfo = $profileData['mfo'];
+            if (empty($user->bank) && isset($profileData['bankCode'])) $user->bank = $profileData['bankCode'];
+            if (empty($user->inn) && isset($profileData['vatRegCode'])) $user->inn = $profileData['vatRegCode'];
+            if (empty($user->manager)) {
+                if (!empty($profileData['director'])) $user->manager = $profileData['director'];
+                elseif (!empty($profileData['accountant'])) $user->manager = $profileData['accountant'];
+            }
         }
     }
 
@@ -1191,12 +1122,12 @@ class UserController extends Controller
             // Update login data
             $user->eimzo_didox_token = $post['didox_token'];
             $user->eimzo_last_login = date('Y-m-d H:i:s');
+            $user->didox_auth_completed = 1;
 
             // Generate new app token
             $user->token = $user->generateToken();
 
             if ($user->save(false)) {
-                // Return user object directly in data field (matching standard API format)
                 return ['data' => User::find()->with('image')->where(['id' => $user->id])->one()];
             } else {
                 throw new HttpException(500, 'Failed to update user data');

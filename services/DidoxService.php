@@ -955,6 +955,43 @@ class DidoxService
     }
 
     /**
+     * Reject a document in DIDOX
+     * @param string $docId DIDOX document ID
+     * @param string $comment Rejection reason
+     * @param string $userKey User authentication key
+     * @return array
+     */
+    public function rejectDocument($docId, $comment, $userKey = '')
+    {
+        try {
+            $headers = [
+                'Content-Type: application/json',
+                'Partner-Authorization: ' . $this->partnerToken
+            ];
+
+            if ($userKey) {
+                $headers[] = 'user-key: ' . $userKey;
+            }
+
+            $data = ['comment' => $comment];
+            $response = $this->makeRequestWithHeaders('POST', '/v1/documents/' . $docId . '/reject', $data, $headers);
+
+            return [
+                'success' => $response['isOk'],
+                'data' => $response['data'],
+                'httpCode' => $response['httpCode']
+            ];
+
+        } catch (\Exception $e) {
+            Yii::error('DIDOX reject document error: ' . $e->getMessage(), __METHOD__);
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
      * Authenticate user with E-IMZO signature via DIDOX API
      * @param string $taxId
      * @param string $signature

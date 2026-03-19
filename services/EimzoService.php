@@ -39,7 +39,7 @@ class EimzoService
      */
     public function getChallenge(): array
     {
-        $response = $this->post('/frontend/challenge');
+        $response = $this->get('/frontend/challenge');
 
         if ($response === null) {
             return ['success' => false, 'error' => 'E-IMZO server is unreachable'];
@@ -271,6 +271,192 @@ class EimzoService
         return ['success' => true, 'data' => $response];
     }
 
+    // ------------------------------------------------------------------
+    // Mobile endpoints (deeplink-based signing from phone)
+    // ------------------------------------------------------------------
+
+    /**
+     * Initiate mobile authentication.
+     *
+     * Returns siteId, documentId, and challenge for the mobile app
+     * to build a QR code and open the E-IMZO deeplink.
+     *
+     * @return array{success: bool, siteId?: string, documentId?: string, challenge?: string, error?: string}
+     */
+    public function mobileAuth(): array
+    {
+        $response = $this->post('/frontend/mobile/auth');
+
+        if ($response === null) {
+            return ['success' => false, 'error' => 'E-IMZO server is unreachable'];
+        }
+
+        if (($response['status'] ?? 0) !== 1) {
+            return [
+                'success' => false,
+                'error' => $this->mapMobileError($response['status'] ?? 0, $response['message'] ?? ''),
+                'status' => $response['status'] ?? null,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'siteId' => $response['siteId'] ?? '',
+            'documentId' => $response['documentId'] ?? '',
+            'challenge' => $response['challange'] ?? '', // note: e-imzo-server typo "challange"
+        ];
+    }
+
+    /**
+     * Initiate mobile document signing.
+     *
+     * Returns siteId and documentId for the mobile app to sign a document.
+     *
+     * @return array{success: bool, siteId?: string, documentId?: string, error?: string}
+     */
+    public function mobileSign(): array
+    {
+        $response = $this->post('/frontend/mobile/sign');
+
+        if ($response === null) {
+            return ['success' => false, 'error' => 'E-IMZO server is unreachable'];
+        }
+
+        if (($response['status'] ?? 0) !== 1) {
+            return [
+                'success' => false,
+                'error' => $this->mapMobileError($response['status'] ?? 0, $response['message'] ?? ''),
+                'status' => $response['status'] ?? null,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'siteId' => $response['siteId'] ?? '',
+            'documentId' => $response['documentId'] ?? '',
+        ];
+    }
+
+    /**
+     * Poll mobile operation status.
+     *
+     * Status values:
+     *  1 = complete (PKCS#7 uploaded by mobile service)
+     *  2 = pending (awaiting signature)
+     * -2 = documentId expired
+     *
+     * @param string $documentId
+     * @return array{success: bool, status?: int, error?: string}
+     */
+    public function mobileStatus(string $documentId): array
+    {
+        $response = $this->post(
+            '/frontend/mobile/status',
+            'documentId=' . urlencode($documentId),
+            ['Content-Type: application/x-www-form-urlencoded']
+        );
+
+        if ($response === null) {
+            return ['success' => false, 'error' => 'E-IMZO server is unreachable'];
+        }
+
+        $status = $response['status'] ?? -99;
+
+        if ($status === -2) {
+            return ['success' => false, 'error' => 'DocumentID expired', 'status' => -2];
+        }
+
+        return [
+            'success' => true,
+            'status' => $status, // 1=complete, 2=pending
+        ];
+    }
+
+    /**
+     * Get mobile authentication result after status=1.
+     *
+     * @param string $documentId
+     * @param string $userIp Client IP
+     * @return array{success: bool, certificate?: array, error?: string}
+     */
+    public function mobileAuthenticate(string $documentId, string $userIp): array
+    {
+        $response = $this->get('/backend/mobile/authenticate/' . urlencode($documentId), [
+            'X-Real-IP: ' . $userIp,
+        ]);
+
+        if ($response === null) {
+            return ['success' => false, 'error' => 'E-IMZO server is unreachable'];
+        }
+
+        if (($response['status'] ?? 0) !== 1) {
+            return [
+                'success' => false,
+                'error' => $this->mapAuthError($response['status'] ?? 0, $response['message'] ?? ''),
+                'status' => $response['status'] ?? null,
+            ];
+        }
+
+        $cert = $response['subjectCertificateInfo'] ?? [];
+
+        return [
+            'success' => true,
+            'certificate' => [
+                'serialNumber' => $cert['serialNumber'] ?? null,
+                'subjectName' => $cert['subjectName'] ?? [],
+                'validFrom' => $cert['validFrom'] ?? null,
+                'validTo' => $cert['validTo'] ?? null,
+            ],
+        ];
+    }
+
+    /**
+     * Verify a mobile-signed document after status=1.
+     *
+     * @param string $documentId
+     * @param string $documentB64 Base64-encoded document that was signed
+     * @param string $userIp Client IP
+     * @return array{success: bool, certificate?: array, pkcs7Attached?: string, verificationInfo?: array, error?: string}
+     */
+    public function mobileVerify(string $documentId, string $documentB64, string $userIp): array
+    {
+        $body = 'documentId=' . urlencode($documentId) . '&document=' . urlencode($documentB64);
+        $response = $this->post('/backend/mobile/verify', $body, [
+            'Content-Type: application/x-www-form-urlencoded',
+            'X-Real-IP: ' . $userIp,
+        ]);
+
+        if ($response === null) {
+            return ['success' => false, 'error' => 'E-IMZO server is unreachable'];
+        }
+
+        if (($response['status'] ?? 0) !== 1) {
+            return [
+                'success' => false,
+                'error' => $this->mapAuthError($response['status'] ?? 0, $response['message'] ?? ''),
+                'status' => $response['status'] ?? null,
+            ];
+        }
+
+        $cert = $response['subjectCertificateInfo'] ?? [];
+
+        return [
+            'success' => true,
+            'certificate' => [
+                'serialNumber' => $cert['serialNumber'] ?? null,
+                'subjectName' => $cert['subjectName'] ?? [],
+                'validFrom' => $cert['validFrom'] ?? null,
+                'validTo' => $cert['validTo'] ?? null,
+            ],
+            'pkcs7Attached' => $response['pkcs7Attached'] ?? null,
+            'verificationInfo' => $response['verificationInfo'] ?? [],
+        ];
+    }
+
+    // ------------------------------------------------------------------
+    // Certificate helpers
+    // ------------------------------------------------------------------
+
     /**
      * Extract INN (tax ID) from E-IMZO certificate subject name.
      *
@@ -335,12 +521,17 @@ class EimzoService
         return $decoded;
     }
 
-    private function get(string $path): ?array
+    private function get(string $path, array $headers = []): ?array
     {
         $ch = curl_init();
+
+        $defaultHeaders = ['Host: ' . parse_url($this->serverUrl, PHP_URL_HOST)];
+        $allHeaders = array_merge($defaultHeaders, $headers);
+
         curl_setopt_array($ch, [
             CURLOPT_URL => $this->serverUrl . $path,
             CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $allHeaders,
             CURLOPT_TIMEOUT => 10,
             CURLOPT_SSL_VERIFYPEER => true,
         ]);
@@ -369,5 +560,15 @@ class EimzoService
         ];
 
         return $errors[$status] ?? ($message ?: "Unknown error (status: $status)");
+    }
+
+    private function mapMobileError(int $status, string $message): string
+    {
+        $errors = [
+            -1 => 'Redis connection error (mobile storage unavailable)',
+            -2 => 'DocumentID not found or expired',
+        ];
+
+        return $errors[$status] ?? ($message ?: "Mobile error (status: $status)");
     }
 }
