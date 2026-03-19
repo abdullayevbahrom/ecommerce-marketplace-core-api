@@ -29,7 +29,8 @@
       "Bash(cp 'c:\\\\Users\\\\user\\\\Documents\\\\app\\\\app-market-backend\\\\eimzo-telegram\\\\test-eimzo.example.com-2026-09-19\\\\keys\\\\test-truststore.jks' 'c:\\\\Users\\\\user\\\\Documents\\\\app\\\\app-market-backend\\\\docker\\\\eimzo-server\\\\keys/')",
       "Bash(curl -s -X POST http://localhost:8002/api/eimzo/challenge)",
       "Bash(MSYS_NO_PATHCONV=1 docker run --rm -v \"c:/Users/user/Documents/app/app-market-backend/docker/eimzo-server:/opt/eimzo\" -w \"/opt/eimzo\" amazoncorretto:8 sh -c 'javac -cp \"\"e-imzo-server.jar:lib/*\"\" SignChallenge.java 2>&1')",
-      "Bash(MSYS_NO_PATHCONV=1 docker exec eimzo-server sh -c 'java -cp \"\"/opt/eimzo/e-imzo-server.jar:/opt/eimzo/lib/*:/opt/eimzo\"\" SignChallenge /opt/eimzo/test.pfx 12345678 \"\"f866126d-c1b5-4fd9-ae5f-44378f4bbc30\"\" 2>&1')"
+      "Bash(MSYS_NO_PATHCONV=1 docker exec eimzo-server sh -c 'java -cp \"\"/opt/eimzo/e-imzo-server.jar:/opt/eimzo/lib/*:/opt/eimzo\"\" SignChallenge /opt/eimzo/test.pfx 12345678 \"\"f866126d-c1b5-4fd9-ae5f-44378f4bbc30\"\" 2>&1')",
+      "Bash(git check-ignore:*)"
     ]
   }
 }
