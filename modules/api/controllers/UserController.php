@@ -57,7 +57,8 @@ class UserController extends Controller
                 'send-phone',
                 'eimzo-auth',
                 'eimzo-register',
-                'eimzo-login'
+                'eimzo-login',
+                'eimzo-sign-in'
             ]
         ];
 
@@ -1074,11 +1075,15 @@ class UserController extends Controller
      * Login existing user with E-IMZO
      * This endpoint is for existing users who have already registered
      */
+    /**
+     * Pure E-IMZO login (login-only via Didox token, no registration).
+     * POST /api/user/eimzo-login
+     * Body: { didox_token, tax_id, certificate_info? }
+     */
     public function actionEimzoLogin()
     {
         $post = Yii::$app->request->post();
 
-        // Validate required fields
         if (!isset($post['didox_token'])) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['didox_token' => 'Didox token is required']];
@@ -1092,39 +1097,32 @@ class UserController extends Controller
         try {
             $didoxService = new DidoxService();
 
-            // Validate the token
             $tokenValidation = $didoxService->validateAndExtractTokenInfo($post['didox_token'], $post['tax_id']);
 
             if (!$tokenValidation['valid']) {
                 Yii::$app->response->statusCode = 401;
-                return ['errors' => ['token' => 'Invalid or expired Didox token: ' . (isset($tokenValidation['error']) ? $tokenValidation['error'] : 'Unknown error')]];
+                return ['errors' => ['token' => 'Invalid or expired Didox token: ' . ($tokenValidation['error'] ?? 'Unknown error')]];
             }
 
-            // Find existing user
             $user = User::findOne(['eimzo_tax_id' => $post['tax_id']]);
 
             if (!$user) {
                 Yii::$app->response->statusCode = 404;
-                return ['errors' => ['tax_id' => 'User not found. Please register first using the registration endpoint.']];
+                return ['errors' => ['tax_id' => 'Пользователь не найден. Сначала войдите через ЭЦП.']];
             }
 
-            // Extract and update certificate information if provided
-            $certificateInfo = [];
             if (isset($post['certificate_info'])) {
                 $certificateInfo = $didoxService->extractCertificateInfo($post['certificate_info']);
-
-                // Update user with latest certificate info
                 if (!empty($certificateInfo)) {
                     $user->eimzo_certificate_info = json_encode($certificateInfo);
                 }
             }
 
-            // Update login data
             $user->eimzo_didox_token = $post['didox_token'];
+            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+350 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
             $user->didox_auth_completed = 1;
 
-            // Generate new app token
             $user->token = $user->generateToken();
 
             if ($user->save(false)) {
@@ -1138,6 +1136,102 @@ class UserController extends Controller
             Yii::error('E-IMZO login error: ' . $e->getMessage(), __METHOD__);
             Yii::$app->response->statusCode = 500;
             return ['errors' => ['service' => 'Login service error: ' . $e->getMessage()]];
+        }
+    }
+
+    /**
+     * Pure E-IMZO sign-in (no Didox required, no E-IMZO server on backend).
+     * Frontend signs data with E-IMZO on user's computer, sends certificate info.
+     * Backend finds/creates user by tax_id.
+     *
+     * POST /api/user/eimzo-sign-in
+     * Body: { tax_id, certificate_info, user_type? }
+     */
+    public function actionEimzoSignIn()
+    {
+        $post = Yii::$app->request->post();
+
+        if (empty($post['tax_id'])) {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['tax_id' => 'Tax ID is required']];
+        }
+
+        $taxId = $post['tax_id'];
+        $userType = isset($post['user_type']) && in_array($post['user_type'], ['fiz', 'yur']) ? $post['user_type'] : 'fiz';
+
+        try {
+            // Find or create user by tax_id
+            $user = User::findOne(['eimzo_tax_id' => $taxId]);
+
+            $isNewUser = false;
+
+            if (!$user) {
+                // Also check by phone to prevent duplicates
+                if (!empty($post['phone'])) {
+                    $user = User::findOne(['phone' => $post['phone']]);
+                    if ($user && empty($user->eimzo_tax_id)) {
+                        $user->eimzo_tax_id = $taxId;
+                    }
+                }
+            }
+
+            if (!$user) {
+                $isNewUser = true;
+                $user = new User();
+                $user->eimzo_tax_id = $taxId;
+                $user->role = User::ROLE_USER;
+                $user->status = 1;
+                $user->type = $userType;
+                $user->password = Yii::$app->security->generatePasswordHash(
+                    Yii::$app->security->generateRandomString(16)
+                );
+                $user->date = date('Y-m-d H:i:s');
+                $user->ip = Yii::$app->request->getUserIP() ?? '127.0.0.1';
+            }
+
+            // Update certificate info if provided
+            if (!empty($post['certificate_info'])) {
+                $certInfo = $post['certificate_info'];
+                $user->eimzo_certificate_info = is_string($certInfo) ? $certInfo : json_encode($certInfo);
+
+                // Parse name from certificate info
+                if (is_array($certInfo)) {
+                    if (!empty($certInfo['displayName']) && (empty($user->name) || $isNewUser)) {
+                        $nameParts = explode(' ', trim($certInfo['displayName']));
+                        $user->lastname = $nameParts[0] ?? '';
+                        $user->name = $nameParts[1] ?? '';
+                        if (count($nameParts) > 2) {
+                            $user->middlename = trim(implode(' ', array_slice($nameParts, 2)));
+                        }
+                    }
+                }
+            }
+
+            // Update auth metadata
+            $user->eimzo_last_login = date('Y-m-d H:i:s');
+            $user->eimzo_auth_completed = 1;
+
+            // Generate auth token
+            $user->token = $user->generateToken();
+
+            if (!$user->save(false)) {
+                Yii::error('Failed to save user from E-IMZO sign-in: ' . json_encode($user->errors), __METHOD__);
+                throw new HttpException(500, 'Failed to save user');
+            }
+
+            $userData = User::find()->with('image')->where(['id' => $user->id])->one();
+
+            return [
+                'data' => $userData,
+                'is_new_user' => $isNewUser,
+                'didox_auth_completed' => (bool)($user->didox_auth_completed ?? false),
+            ];
+        } catch (HttpException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            Yii::error('E-IMZO sign-in error: ' . $e->getMessage(), __METHOD__);
+            Yii::$app->response->statusCode = 500;
+            return ['errors' => ['service' => 'Sign-in error: ' . $e->getMessage()]];
         }
     }
 

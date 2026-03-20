@@ -42,7 +42,7 @@ class DidoxController extends Controller
         // Use HttpBearerAuth - requires 'Authorization: Bearer {token}' header
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
-            'optional' => ['options', 'test']
+            'optional' => ['options', 'test', 'timestamp']
         ];
 
         $auth = $behaviors['authenticator'];
@@ -937,11 +937,6 @@ class DidoxController extends Controller
      */
     public function actionTimestamp()
     {
-        $user = Yii::$app->user->identity;
-        if (!$user) {
-            throw new HttpException(401, 'Authentication required');
-        }
-
         $pkcs7 = Yii::$app->request->post('pkcs7');
         $signatureHex = Yii::$app->request->post('signature_hex');
 
