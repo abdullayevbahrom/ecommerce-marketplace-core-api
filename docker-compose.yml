@@ -27,6 +27,21 @@ services:
       - ./docker/supervisor:/etc/supervisor
     depends_on:
       - eimzo-server
+      - rabbitmq
+
+  rabbitmq:
+    container_name: app-rabbitmq
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:5672:5672
+      - 127.0.0.1:15672:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      TZ: Asia/Tashkent
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
 
   eimzo-server:
     container_name: eimzo-server
@@ -39,3 +54,6 @@ services:
       TZ: Asia/Tashkent
     volumes:
       - ./docker/eimzo-server:/opt/eimzo:rw
+
+volumes:
+  rabbitmq_data:
