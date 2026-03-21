@@ -52,6 +52,7 @@ $config = [
         'port' => $rabbitMqPort,
         'user' => $rabbitMqUser,
         'password' => $rabbitMqPassword,
+        'vhost' => getenv('RABBITMQ_VHOST') ?: '/',
         'exchange_sklad_to_market' => $rabbitMqExchangeSkladToMarket,
         'exchange_market_to_sklad' => $rabbitMqExchangeMarketToSklad,
         'exchange_sklad_to_market_retry' => $rabbitMqExchangeSkladToMarketRetry,
@@ -108,9 +109,14 @@ $config = [
 ];
 
 if (YII_ENV_DEV) {
-    $config['baseUrl'] = 'http://localhost:8001';
-    $config['warehouseApiUrl'] = 'http://sklad_app';
+    $config['baseUrl'] = 'http://localhost:8002';
+    $config['warehouseApiUrl'] = 'http://sklad';
     $config['operatorApiUrl'] = 'http://operator_app';
+}
+
+// Docker environment override (container-to-container)
+if (getenv('DB_HOST') === 'app-market-backend-db-1') {
+    $config['warehouseApiUrl'] = 'http://sklad';
 }
 
 return $config;
