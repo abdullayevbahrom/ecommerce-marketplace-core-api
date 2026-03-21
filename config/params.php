@@ -52,7 +52,6 @@ $config = [
         'port' => $rabbitMqPort,
         'user' => $rabbitMqUser,
         'password' => $rabbitMqPassword,
-        'vhost' => getenv('RABBITMQ_VHOST') ?: '/',
         'exchange_sklad_to_market' => $rabbitMqExchangeSkladToMarket,
         'exchange_market_to_sklad' => $rabbitMqExchangeMarketToSklad,
         'exchange_sklad_to_market_retry' => $rabbitMqExchangeSkladToMarketRetry,
@@ -63,7 +62,7 @@ $config = [
     // Base URL
     'baseUrl' => 'https://api.example.com',
     'operatorApiUrl' => 'https://api.operator.example.com', // Default operator API URL
-    'warehouseApiUrl' => 'https://api.warehouse.example.com', // Default warehouse API URL
+    'warehouseApiUrl' => getenv('WAREHOUSE_API_URL') ?: 'http://sklad', // Default warehouse API URL
     'apiSecretKey' => '123',
     'warehouseSyncEnabled' => false,
 
@@ -109,14 +108,9 @@ $config = [
 ];
 
 if (YII_ENV_DEV) {
-    $config['baseUrl'] = 'http://localhost:8002';
+    $config['baseUrl'] = 'http://localhost:8001';
     $config['warehouseApiUrl'] = 'http://sklad';
-    $config['operatorApiUrl'] = 'http://operator_app';
-}
-
-// Docker environment override (container-to-container)
-if (getenv('DB_HOST') === 'app-market-backend-db-1') {
-    $config['warehouseApiUrl'] = 'http://sklad';
+    $config['operatorApiUrl'] = 'http://operator_app';  // TODO: update when operator is running
 }
 
 return $config;

@@ -7,11 +7,16 @@ ini_set('error_log', 'php://stderr');
 error_reporting(E_ALL);
 
 // ── Global CORS ──
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
-header("Access-Control-Allow-Origin: $origin");
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin) {
+    header("Access-Control-Allow-Origin: $origin");
+    header('Access-Control-Allow-Credentials: true');
+} else {
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Credentials: false');
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, X-Auth-Token, Origin, Authorization, Accept, Content-Language');
-header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Allow-Headers: Content-Type, X-Auth-Token, X-Api-Token, Origin, Authorization, Accept, Content-Language');
 header('Access-Control-Max-Age: 86400');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
