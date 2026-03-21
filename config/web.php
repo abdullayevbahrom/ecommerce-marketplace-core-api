@@ -176,6 +176,7 @@ $config = [
                 'POST api/sync/user-delete' => 'api/sync/user-delete',
 
                 'POST /api/sync/product' => 'api/sync/product',
+                'PUT /api/sync/product' => 'api/sync/product',
                 'POST /api/sync/product-delete' => 'api/sync/product-delete',
 
                 'POST /api/sync/category' => 'api/sync/category',

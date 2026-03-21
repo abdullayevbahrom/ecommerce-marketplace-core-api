@@ -374,13 +374,22 @@ class SyncController extends Controller
         $product->description_uz = $request->post('description_uz');
 
         $product->price       = (float)$request->post('price', 0);
+        $product->amount      = $request->post('amount') !== null ? (float)$request->post('amount') : $product->amount;
+        $product->discount    = $request->post('discount') !== null ? (float)$request->post('discount') : $product->discount;
         $product->barcode     = $request->post('barcode');
         $product->sku         = $request->post('sku');
+        $product->ikpu_code   = $request->post('ikpu_code');
 
         $product->category_id = $category->id;
         $product->brand_id    = $brand->id;
-        // $product->color_id    = $color->id;
+        $colorId = $request->post('color_id');
+        if ($colorId) {
+            $product->color_id = (int)$colorId;
+        }
         $product->sync_status = 1;
+        if ($request->post('sklad_product_id')) {
+            $product->sklad_product_id = (int)$request->post('sklad_product_id');
+        }
 
         // $product->status      = (int)$request->post('status', 1);
 
@@ -392,7 +401,7 @@ class SyncController extends Controller
             ];
         }
 
-        $colors = (array)$request->post('color', []);
+        $colors = (array)($request->post('colors') ?: $request->post('color', []));
         ProductColor::deleteAll(['product_id' => $product->id]);
 
         foreach ($colors as $color_id) {
