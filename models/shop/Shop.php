@@ -43,6 +43,7 @@ class Shop extends \yii\db\ActiveRecord
     const SHOP_CREATE = 'create';
     const SHOP_UPDATE = 'update';
 
+    public bool $suppressSyncEvents = false;
     public $imageFiles = [];
     public $imageFilesBanner = [];
 
@@ -637,6 +638,10 @@ class Shop extends \yii\db\ActiveRecord
     {
         parent::afterSave($insert, $changedAttributes);
 
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
         $eventType = $insert ? 'shop.created' : 'shop.updated';
 
         $message = MessageFactory::make(
@@ -663,6 +668,10 @@ class Shop extends \yii\db\ActiveRecord
     public function afterDelete()
     {
         parent::afterDelete();
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
 
         $message = MessageFactory::make(
             eventType: 'shop.deleted',

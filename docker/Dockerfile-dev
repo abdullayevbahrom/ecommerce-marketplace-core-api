@@ -37,6 +37,8 @@ RUN apk add --no-cache \
   pcntl \
   opcache \
   zip \
+  sockets \
+  bcmath \
   && groupmod -o -g ${PGID} www-data \
   && usermod -o -u ${PUID} -g www-data www-data \
   && apk del .build-deps \

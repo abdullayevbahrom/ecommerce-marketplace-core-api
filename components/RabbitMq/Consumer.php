@@ -40,6 +40,13 @@ class Consumer
 
                     match ($validated['event_type']) {
                         'branch.created' => (new \app\components\RabbitMq\Handlers\BranchCreatedHandler())->handle($validated),
+                        'branch.deleted' => (new \app\components\RabbitMq\Handlers\BranchDeletedHandler())->handle($validated),
+                        'shop.created' => (new \app\components\RabbitMq\Handlers\ShopCreatedHandler())->handle($validated),
+                        'shop.updated' => (new \app\components\RabbitMq\Handlers\ShopUpdatedHandler())->handle($validated),
+                        'shop.deleted' => (new \app\components\RabbitMq\Handlers\ShopDeletedHandler())->handle($validated),
+                        'stock.created' => (new \app\components\RabbitMq\Handlers\StockCreatedHandler())->handle($validated),
+                        'stock.updated' => (new \app\components\RabbitMq\Handlers\StockUpdatedHandler())->handle($validated),
+                        'stock.deleted' => (new \app\components\RabbitMq\Handlers\StockDeletedHandler())->handle($validated),
                         default => throw new \RuntimeException('Unsupported event: ' . $body['event_type']),
                     };
 
