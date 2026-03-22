@@ -62,7 +62,7 @@ $config = [
     // Base URL
     'baseUrl' => 'https://api.example.com',
     'operatorApiUrl' => 'https://api.operator.example.com', // Default operator API URL
-    'warehouseApiUrl' => getenv('WAREHOUSE_API_URL') ?: 'http://sklad', // Default warehouse API URL
+    'warehouseApiUrl' => 'https://api.warehouse.example.com', // Default warehouse API URL
     'apiSecretKey' => '123',
     'warehouseSyncEnabled' => false,
 
