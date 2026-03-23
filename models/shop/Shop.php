@@ -209,9 +209,11 @@ class Shop extends \yii\db\ActiveRecord
             // $this->syncStockToWarehouse($stock, $user);
 
             $transaction->commit();
-
-            $this->suppressSyncEvents = false;
-            $this->queueCreatedSyncEvent();
+            
+            if ($this->scenario === Shop::SHOP_CREATE) {
+                $this->suppressSyncEvents = false;
+                $this->queueCreatedSyncEvent();
+            }
 
             return true;
         } catch (\Throwable $e) {
