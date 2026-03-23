@@ -96,6 +96,13 @@ class SessionController extends Controller
             return ['success' => false, 'message' => 'Forbidden'];
         }
 
+        // Find shop_id for shop/merchant users
+        $shopId = null;
+        if ($user->role === User::ROLE_SHOP) {
+            $shop = \app\models\shop\Shop::findOne(['user_id' => $user->id]);
+            $shopId = $shop ? (int)$shop->id : null;
+        }
+
         $payload = [
             'id' => (int)$user->id,
             'yii_id' => (int)$user->id,
@@ -103,6 +110,7 @@ class SessionController extends Controller
             'name' => trim($user->name . ' ' . $user->lastname . ' ' . $user->middlename),
             'role' => (int)$user->role,
             'is_active' => $user->status === User::STATUS_ACTIVE,
+            'shop_id' => $shopId,
         ];
 
         $token = md5($user->id . Yii::$app->params['apiSecretKey']);
