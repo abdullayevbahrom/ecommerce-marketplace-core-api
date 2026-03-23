@@ -39,9 +39,9 @@ class Consumer
                     }
 
                     match ($validated['event_type']) {
-                        'stock.created' => (new \app\components\RabbitMq\Handlers\StockCreatedHandler())->handle($validated),
-                        'stock.updated' => (new \app\components\RabbitMq\Handlers\StockUpdatedHandler())->handle($validated),
-                        'stock.deleted' => (new \app\components\RabbitMq\Handlers\StockDeletedHandler())->handle($validated),
+                        'branch.created' => (new \app\components\RabbitMq\Handlers\StockCreatedHandler())->handle($validated),
+                        'branch.updated' => (new \app\components\RabbitMq\Handlers\StockUpdatedHandler())->handle($validated),
+                        'branch.deleted' => (new \app\components\RabbitMq\Handlers\StockDeletedHandler())->handle($validated),
                         default => throw new \RuntimeException('Unsupported event: ' . $body['event_type']),
                     };
 
