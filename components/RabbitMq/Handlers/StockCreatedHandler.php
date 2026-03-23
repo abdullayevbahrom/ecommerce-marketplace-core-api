@@ -10,16 +10,12 @@ class StockCreatedHandler
     public function handle(array $message): void
     {
         $payload = $message['payload'];
+        $warehouseBranchId = $message['entity_id'];
 
         $tx = Yii::$app->db->beginTransaction();
 
         try {
-            $stock = Stock::findOne(['id' => $payload['id']]);
-
-            if (!$stock) {
-                $stock = new Stock();
-            }
-
+            $stock = new Stock();
             $stock->suppressSyncEvents = true;
             $stock->shop_id = $payload['yii_shop_id'] ?? $payload['shop_id'] ?? null;
             $stock->name_uz = $payload['name_uz'] ?? null;
@@ -35,6 +31,30 @@ class StockCreatedHandler
             $stock->save(false);
 
             $tx->commit();
+
+            $token = md5($stock->id . Yii::$app->params['apiSecretKey']);
+            $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
+
+            /** @var \GuzzleHttp\Client $client */
+            $client = Yii::$app->httpClient;
+            $response = $client->post(
+                $warehouseApiUrl . "/sync-webhook/branches/{$warehouseBranchId}/set-stock-id",
+                [
+                    'json' => ['id' => $warehouseBranchId, 'yii_stock_id' => $stock->id],
+                    'headers' => [
+                        'X-Api-Token' => $token,
+                        'Content-Type' => 'application/json',
+                    ],
+                ]
+            );
+
+            $status = $response->getStatusCode();
+            $body = (string) $response->getBody();
+
+            if ($status >= 400) {
+                Yii::warning("Warehouse sync failed: HTTP {$status} Body: {$body}", __METHOD__);
+            }
+
         } catch (\Throwable $e) {
             $tx->rollBack();
             throw $e;
