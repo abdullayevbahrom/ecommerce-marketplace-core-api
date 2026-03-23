@@ -52,6 +52,7 @@ $config = [
         'port' => $rabbitMqPort,
         'user' => $rabbitMqUser,
         'password' => $rabbitMqPassword,
+        'vhost' => '/',
         'exchange_sklad_to_market' => $rabbitMqExchangeSkladToMarket,
         'exchange_market_to_sklad' => $rabbitMqExchangeMarketToSklad,
         'exchange_sklad_to_market_retry' => $rabbitMqExchangeSkladToMarketRetry,
