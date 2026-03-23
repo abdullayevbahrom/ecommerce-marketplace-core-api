@@ -199,7 +199,7 @@ class Shop extends \yii\db\ActiveRecord
                 $image->uploadPhoto($this->id, 'shop', 3);
             }
 
-            $stock = $this->createDefaultStock();
+            $stock = $this->upsertDefaultStock();
             if (!$stock || !$stock->id) {
                 throw new DbException('Default stock creation failed');
             }
@@ -209,7 +209,7 @@ class Shop extends \yii\db\ActiveRecord
             // $this->syncStockToWarehouse($stock, $user);
 
             $transaction->commit();
-            
+
             if ($this->scenario === Shop::SHOP_CREATE) {
                 $this->suppressSyncEvents = false;
                 $this->queueCreatedSyncEvent();
@@ -319,9 +319,13 @@ class Shop extends \yii\db\ActiveRecord
         }
     }
 
-    public function createDefaultStock()
+    public function upsertDefaultStock()
     {
-        $stock = new Stock();
+        $stock = Stock::findOne(['shop_id' => $this->id]);
+        if (!$stock) {
+            $stock = new Stock();
+        }
+
         $stock->name_ru = 'Ваше витрина';
         $stock->description_ru = 'Склад по умолчанию';
         $stock->status = 1;
