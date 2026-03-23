@@ -622,6 +622,8 @@ class Shop extends \yii\db\ActiveRecord
                 'bts_region_id' => $this->stock->bts_region_id,
                 'bts_city_id' => $this->stock->bts_city_id,
                 'address' => $this->stock->getFullAddress(),
+                'responsible_person' => $this->contact_user,
+                'phone' => $this->contact_phone,
             ]
         ];
     }
