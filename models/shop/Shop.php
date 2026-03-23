@@ -121,7 +121,6 @@ class Shop extends \yii\db\ActiveRecord
         }
 
         $user->password = !$this->password ? $current_password : $user->generatePassword($this->password);
-
         $user->status = 1;
         $user->role = User::ROLE_SHOP;
         $user->name = $this->name;
@@ -129,7 +128,16 @@ class Shop extends \yii\db\ActiveRecord
         $user->email = $this->email;
         $user->login = $this->login;
         $user->shop_id = $this->id;
-        $user->save();
+
+        if (!$user->save()) {
+            Yii::error([
+                'message' => 'Shop user save failed',
+                'errors' => $user->errors,
+                'shop_id' => $this->id,
+            ], 'warehouse_sync');
+
+            throw new DbException('Shop user creation failed');
+        }
 
         return $user;
     }
@@ -201,6 +209,9 @@ class Shop extends \yii\db\ActiveRecord
             // $this->syncStockToWarehouse($stock, $user);
 
             $transaction->commit();
+
+            $this->suppressSyncEvents = false;
+            $this->queueCreatedSyncEvent();
 
             return true;
         } catch (\Throwable $e) {
@@ -642,7 +653,11 @@ class Shop extends \yii\db\ActiveRecord
             return;
         }
 
-        $eventType = $insert ? 'shop.created' : 'shop.updated';
+        if ($insert) {
+            return;
+        }
+
+        $eventType = 'shop.updated';
 
         $message = MessageFactory::make(
             eventType: $eventType,
@@ -686,6 +701,31 @@ class Shop extends \yii\db\ActiveRecord
             exchange: 'market_to_sklad',
             routingKey: 'shop.deleted',
             eventType: 'shop.deleted',
+            entityType: 'shop',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
+    }
+
+    private function queueCreatedSyncEvent(): void
+    {
+        $this->refresh();
+
+        $message = MessageFactory::make(
+            eventType: 'shop.created',
+            source: 'market',
+            entityType: 'shop',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->syncCreatedPayloadToWarehouse(),
+        );
+
+        (new OutboxService)->queue(
+            exchange: 'market_to_sklad',
+            routingKey: 'shop.created',
+            eventType: 'shop.created',
             entityType: 'shop',
             entityId: $this->id,
             source: 'market',
