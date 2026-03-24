@@ -130,7 +130,7 @@ class ColorController extends Controller{
 
         $this->sendToWarehouse([
             'id' => $model->id,
-            'entity_type'  => 'filter',
+            'entity_type'  => 'color',
             'entity_id'    => $model->id,
             'action'       => $model->status == Color::STATUS_ACTIVE  ? 'approve' : 'reject',
             'status_after' => $model->status == Color::STATUS_ACTIVE  ? 'approved' : 'rejected',

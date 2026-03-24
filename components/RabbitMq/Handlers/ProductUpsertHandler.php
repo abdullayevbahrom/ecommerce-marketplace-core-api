@@ -2,6 +2,7 @@
 
 namespace app\components\RabbitMq\Handlers;
 
+use app\models\Images;
 use app\models\brand\CategoryBrand;
 use app\models\color\Color;
 use app\models\filter\Filter;
@@ -57,6 +58,7 @@ class ProductUpsertHandler
             $this->syncColors($product, $payload['colors'] ?? []);
             $this->syncFilters($product, $payload['filters'] ?? []);
             $this->syncProductTypes($product, $payload['product_types'] ?? []);
+            $this->syncImages($product, $payload['images'] ?? []);
 
             $tx->commit();
         } catch (\Throwable $e) {
@@ -173,6 +175,34 @@ class ProductUpsertHandler
                 $productType->product_type_value_id = $typeValue->id;
                 $productType->save(false);
             }
+        }
+    }
+
+    protected function syncImages(Product $product, array $images): void
+    {
+        $existingImages = Images::find()
+            ->where(['object_id' => $product->id, 'type' => 'product'])
+            ->all();
+
+        foreach ($existingImages as $existingImage) {
+            $existingImage->removeImageSize();
+        }
+
+        foreach ($images as $index => $image) {
+            if (empty($image['photo'])) {
+                continue;
+            }
+
+            $item = new Images();
+            $item->object_id = $product->id;
+            $item->type = 'product';
+            $item->photo = $image['photo'];
+            $item->main = !empty($image['main']) ? 1 : 2;
+            $item->sort = $index;
+            $item->status = 1;
+            $item->web = 1;
+            $item->token_key = $image['token_key'] ?? $product->token_key;
+            $item->save(false);
         }
     }
 

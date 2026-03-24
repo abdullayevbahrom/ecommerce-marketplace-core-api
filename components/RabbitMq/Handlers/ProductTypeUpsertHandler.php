@@ -61,7 +61,7 @@ class ProductTypeUpsertHandler
             $productType->suppressSyncEvents = false;
             $tx->commit();
 
-            if ($isNew || empty($payload['yii_product_type_id'])) {
+            if ($isNew || empty($payload['yii_product_type_id']) || !empty($valueMappings)) {
                 $this->notifyWarehouse($message['entity_id'], $productType->id, $valueMappings);
             }
         } catch (\Throwable $e) {
