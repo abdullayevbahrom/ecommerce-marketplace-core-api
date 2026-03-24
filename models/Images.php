@@ -233,6 +233,10 @@ class Images extends \yii\db\ActiveRecord
     public function removeImageSize()
     {
         if ((int)$this->web === 1) {
+            if (filter_var($this->photo, FILTER_VALIDATE_URL)) {
+                return (bool)$this->delete();
+            }
+
             if (!$this->object_id || !$this->type || !$this->photo) {
                 return (bool)$this->delete();
             }
@@ -299,6 +303,10 @@ class Images extends \yii\db\ActiveRecord
         parent::afterDelete();
 
         if ((int)$this->web !== 1) {
+            return;
+        }
+
+        if (filter_var($this->photo, FILTER_VALIDATE_URL)) {
             return;
         }
 
