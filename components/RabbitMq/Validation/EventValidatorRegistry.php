@@ -27,6 +27,45 @@ class EventValidatorRegistry
             'brand.created' => (new BrandCreatedEventValidator())->validate($message),
             'brand.updated' => (new BrandUpdatedEventValidator())->validate($message),
             'brand.deleted' => (new BrandDeletedEventValidator())->validate($message),
+            'ikpu.created' => (new PayloadEventValidator(
+                ['ikpu.created'],
+                ['ikpu'],
+                [
+                    [['id', 'yii_ikpu_id', 'status'], 'integer'],
+                    [['code', 'name_ru', 'name_uz', 'name_en', 'parent_code'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['code']) || empty($payload['name_ru'])) {
+                        throw new EventValidationException('Create payload must contain IKPU code and name_ru');
+                    }
+                }
+            ))->validate($message),
+            'ikpu.updated' => (new PayloadEventValidator(
+                ['ikpu.updated'],
+                ['ikpu'],
+                [
+                    [['id', 'yii_ikpu_id', 'status'], 'integer'],
+                    [['code', 'name_ru', 'name_uz', 'name_en', 'parent_code'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['code']) || empty($payload['name_ru'])) {
+                        throw new EventValidationException('Update payload must contain IKPU code and name_ru');
+                    }
+                }
+            ))->validate($message),
+            'ikpu.deleted' => (new PayloadEventValidator(
+                ['ikpu.deleted'],
+                ['ikpu'],
+                [
+                    [['id', 'yii_ikpu_id'], 'integer'],
+                    [['code'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['code']) && empty($payload['id']) && empty($payload['yii_ikpu_id'])) {
+                        throw new EventValidationException('Delete payload must contain IKPU identifier');
+                    }
+                }
+            ))->validate($message),
             'moderation.created' => (new PayloadEventValidator(
                 ['moderation.created'],
                 ['moderation'],
