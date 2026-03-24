@@ -53,6 +53,7 @@ $config = [
         'user' => $rabbitMqUser,
         'password' => $rabbitMqPassword,
         'vhost' => '/',
+        'enable_reference_events' => filter_var(getenv('RABBITMQ_ENABLE_REFERENCE_EVENTS') ?: false, FILTER_VALIDATE_BOOL),
         'enable_moderation_events' => filter_var(getenv('RABBITMQ_ENABLE_MODERATION_EVENTS') ?: false, FILTER_VALIDATE_BOOL),
         'exchange_sklad_to_market' => $rabbitMqExchangeSkladToMarket,
         'exchange_market_to_sklad' => $rabbitMqExchangeMarketToSklad,
