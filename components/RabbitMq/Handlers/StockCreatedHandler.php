@@ -33,7 +33,7 @@ class StockCreatedHandler
 
             $tx->commit();
 
-            $token = md5($stock->id . Yii::$app->params['apiSecretKey']);
+            $token = md5($warehouseBranchId . Yii::$app->params['apiSecretKey']);
             $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
 
             /** @var \GuzzleHttp\Client $client */
