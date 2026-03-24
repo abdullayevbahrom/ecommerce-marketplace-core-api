@@ -27,6 +27,8 @@ use app\models\Category;
  */
 class ProductType extends \yii\db\ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
+
     const TYPE_INPUT = 'input';
     const TYPE_SELECT = 'select';
     const TYPE_CHECKBOX = 'checkbox';
