@@ -276,7 +276,7 @@ class ProductController extends Controller {
         $product_type_values = [];
 
         $view = $id ? 'update' : 'create';
-        
+        $this->normalizePropertiesDataForForm($model);
 
         return $this->render($view, [
             'model' => $model,
@@ -299,6 +299,30 @@ class ProductController extends Controller {
             'product_types' => $product_types,
             'product_type_values' => $product_type_values
         ]);
+    }
+
+    private function normalizePropertiesDataForForm(Product $model): void
+    {
+        if (!is_array($model->properties_data)) {
+            return;
+        }
+
+        $keys = $model->properties_data['key_name'] ?? [];
+        $values = $model->properties_data['value_name'] ?? [];
+
+        if (!is_array($keys) || !is_array($values)) {
+            $model->properties_data = [];
+            return;
+        }
+
+        foreach ($keys as $index => $key) {
+            $value = $values[$index] ?? null;
+            if (trim((string) $key) !== '' || trim((string) $value) !== '') {
+                return;
+            }
+        }
+
+        $model->properties_data = [];
     }
 
     public function actionLock($id)
