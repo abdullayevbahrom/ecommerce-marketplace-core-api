@@ -28,17 +28,18 @@ class StockCreatedHandler
             $stock->sort = $payload['sort'] ?? null;
             $stock->bts_region_id = $payload['bts_region_id'] ?? null;
             $stock->bts_city_id = $payload['bts_city_id'] ?? null;
+            $stock->address = $payload['address'] ?? null;
             $stock->save(false);
 
             $tx->commit();
 
-            $token = md5($stock->id . Yii::$app->params['apiSecretKey']);
+            $token = md5($warehouseBranchId . Yii::$app->params['apiSecretKey']);
             $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
 
             /** @var \GuzzleHttp\Client $client */
             $client = Yii::$app->httpClient;
             $response = $client->post(
-                $warehouseApiUrl . "/sync-webhook/branches/{$warehouseBranchId}/set-stock-id",
+                $warehouseApiUrl . "/api/sync-webhook/branches/{$warehouseBranchId}/set-stock-id",
                 [
                     'json' => ['id' => $warehouseBranchId, 'yii_stock_id' => $stock->id],
                     'headers' => [

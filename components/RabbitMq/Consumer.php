@@ -39,9 +39,28 @@ class Consumer
                     }
 
                     match ($validated['event_type']) {
-                        'branch.created' => (new \app\components\RabbitMq\Handlers\StockCreatedHandler())->handle($validated),
-                        'branch.updated' => (new \app\components\RabbitMq\Handlers\StockUpdatedHandler())->handle($validated),
-                        'branch.deleted' => (new \app\components\RabbitMq\Handlers\StockDeletedHandler())->handle($validated),
+                        'moderation.created' => (new \app\components\RabbitMq\Handlers\ModerationCreatedHandler())->handle($validated),
+                        'product.created' => (new \app\components\RabbitMq\Handlers\ProductCreatedHandler())->handle($validated),
+                        'product.updated' => (new \app\components\RabbitMq\Handlers\ProductUpdatedHandler())->handle($validated),
+                        'product.deleted' => (new \app\components\RabbitMq\Handlers\ProductDeletedHandler())->handle($validated),
+                        'category.created' => (new \app\components\RabbitMq\Handlers\CategoryCreatedHandler())->handle($validated),
+                        'category.updated' => (new \app\components\RabbitMq\Handlers\CategoryUpdatedHandler())->handle($validated),
+                        'category.deleted' => (new \app\components\RabbitMq\Handlers\CategoryDeletedHandler())->handle($validated),
+                        'filter.created' => (new \app\components\RabbitMq\Handlers\FilterCreatedHandler())->handle($validated),
+                        'filter.updated' => (new \app\components\RabbitMq\Handlers\FilterUpdatedHandler())->handle($validated),
+                        'filter.deleted' => (new \app\components\RabbitMq\Handlers\FilterDeletedHandler())->handle($validated),
+                        'product_type.created' => (new \app\components\RabbitMq\Handlers\ProductTypeCreatedHandler())->handle($validated),
+                        'product_type.updated' => (new \app\components\RabbitMq\Handlers\ProductTypeUpdatedHandler())->handle($validated),
+                        'product_type.deleted' => (new \app\components\RabbitMq\Handlers\ProductTypeDeletedHandler())->handle($validated),
+                        'color.created' => (new \app\components\RabbitMq\Handlers\ColorCreatedHandler())->handle($validated),
+                        'color.updated' => (new \app\components\RabbitMq\Handlers\ColorUpdatedHandler())->handle($validated),
+                        'color.deleted' => (new \app\components\RabbitMq\Handlers\ColorDeletedHandler())->handle($validated),
+                        'brand.created' => (new \app\components\RabbitMq\Handlers\BrandCreatedHandler())->handle($validated),
+                        'brand.updated' => (new \app\components\RabbitMq\Handlers\BrandUpdatedHandler())->handle($validated),
+                        'brand.deleted' => (new \app\components\RabbitMq\Handlers\BrandDeletedHandler())->handle($validated),
+                        'stock.created', 'branch.created' => (new \app\components\RabbitMq\Handlers\StockCreatedHandler())->handle($validated),
+                        'stock.updated', 'branch.updated' => (new \app\components\RabbitMq\Handlers\StockUpdatedHandler())->handle($validated),
+                        'stock.deleted', 'branch.deleted' => (new \app\components\RabbitMq\Handlers\StockDeletedHandler())->handle($validated),
                         default => throw new \RuntimeException('Unsupported event: ' . $body['event_type']),
                     };
 

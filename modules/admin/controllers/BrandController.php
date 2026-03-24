@@ -149,6 +149,15 @@ class BrandController extends Controller{
         $model->status = ($model->status == CategoryBrand::STATUS_INACTIVE) ? CategoryBrand::STATUS_ACTIVE : CategoryBrand::STATUS_INACTIVE;
         $model->save(false);
 
+        $comment = new ModerationComment();
+        $comment->entity_type  = 'brand';
+        $comment->entity_id    = $model->id;
+        $comment->action       = $model->status == CategoryBrand::STATUS_ACTIVE ? 'approve' : 'reject';
+        $comment->comment      = 'Ваша бренд разблокирован';
+        $comment->moderator_id = $user->id;
+        $comment->is_sent_to_warehouse = (bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false);
+        $comment->save(false);
+
         $this->sendToWarehouse([
             'id' => $model->id,
             'entity_type'  => 'brand',
@@ -170,6 +179,10 @@ class BrandController extends Controller{
 
     protected function sendToWarehouse(array $payload)
     {
+        if ((bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false)) {
+            return;
+        }
+
         try {
             $client = new Client(['timeout' => 5.0]);
 
@@ -229,6 +242,7 @@ class BrandController extends Controller{
         $comment->comment      = $commentText;
         $comment->moderator_id = $user->id;
         $comment->is_sent_to_warehouse = 1;
+        $comment->status_after = 'rejected';
         $comment->save(false);
 
         $this->sendToWarehouse([

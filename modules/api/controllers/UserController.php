@@ -7,6 +7,7 @@ use yii\rest\Controller;
 use yii\web\HttpException;
 use yii\web\UploadedFile;
 use yii\data\ActiveDataProvider;
+use yii\db\Expression;
 use yii\filters\auth\HttpBearerAuth;
 use app\models\user\User;
 use app\models\user\SmsCode;
@@ -99,12 +100,22 @@ class UserController extends Controller
                 return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Заполните поле', ['phone' => ['Заполните поле']]);
             }
 
-            $model = User::find()->where(['phone' => $phone])->one();
+            $model = User::find()
+                ->where(new Expression("REPLACE(phone, '+', '') = :phone", [':phone' => $phone]))
+                ->orderBy([
+                    'shop_id' => SORT_DESC,
+                    'role' => SORT_DESC,
+                    'id' => SORT_ASC,
+                ])
+                ->one();
+
+            $isNewUser = false;
 
             if (!$model) {
                 $model = new User();
                 $model->role = User::ROLE_USER;
                 $model->type = 'fiz';
+                $isNewUser = true;
                 Yii::info('Creating new user for phone: ' . $phone, 'app');
             } else {
                 Yii::info('Found existing user: ' . $model->id, 'app');
@@ -112,7 +123,9 @@ class UserController extends Controller
 
             $model->status = 1;
             $model->phone_code = '123456';
-            $model->phone = $phone;
+            if ($isNewUser) {
+                $model->phone = $phone;
+            }
             $model->token = '';
             $model->sms_live = strtotime('+3 minute');
 

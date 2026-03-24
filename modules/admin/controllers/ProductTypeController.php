@@ -160,6 +160,15 @@ class ProductTypeController extends Controller {
         $model->status = ($model->status == ProductType::STATUS_ACTIVE) ? ProductType::STATUS_INACTIVE : ProductType::STATUS_ACTIVE;
         $model->save(false);
 
+        $comment = new ModerationComment();
+        $comment->entity_type  = 'product-type';
+        $comment->entity_id    = $model->id;
+        $comment->action       = $model->status == 1 ? 'approve' : 'block';
+        $comment->comment      = 'Ваш тип товара разблокирован';
+        $comment->moderator_id = $user->id;
+        $comment->is_sent_to_warehouse = (bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false);
+        $comment->save(false);
+
         $this->sendToWarehouse([
             'id' => $model->id,
             'entity_type'  => 'product-type',
@@ -184,6 +193,10 @@ class ProductTypeController extends Controller {
 
     protected function sendToWarehouse(array $payload)
     {
+        if ((bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false)) {
+            return;
+        }
+
         try {
             $client = new Client(['timeout' => 5.0]);
 
@@ -242,6 +255,7 @@ class ProductTypeController extends Controller {
         $comment->comment      = $commentText;
         $comment->moderator_id = $user->id;
         $comment->is_sent_to_warehouse = 0;
+        $comment->status_after = 'rejected';
         $comment->save(false);
 
         $this->sendToWarehouse([

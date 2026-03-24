@@ -10,8 +10,68 @@ class EventValidatorRegistry
 
         return match ($eventType) {
             'product.created' => (new ProductCreatedEventValidator())->validate($message),
-            default => $message,
-            // default => throw new EventValidationException("Validator topilmadi: {$eventType}"),
+            'product.updated' => (new ProductUpdatedEventValidator())->validate($message),
+            'product.deleted' => (new ProductDeletedEventValidator())->validate($message),
+            'category.created' => (new CategoryCreatedEventValidator())->validate($message),
+            'category.updated' => (new CategoryUpdatedEventValidator())->validate($message),
+            'category.deleted' => (new CategoryDeletedEventValidator())->validate($message),
+            'filter.created' => (new FilterCreatedEventValidator())->validate($message),
+            'filter.updated' => (new FilterUpdatedEventValidator())->validate($message),
+            'filter.deleted' => (new FilterDeletedEventValidator())->validate($message),
+            'product_type.created' => (new ProductTypeCreatedEventValidator())->validate($message),
+            'product_type.updated' => (new ProductTypeUpdatedEventValidator())->validate($message),
+            'product_type.deleted' => (new ProductTypeDeletedEventValidator())->validate($message),
+            'color.created' => (new ColorCreatedEventValidator())->validate($message),
+            'color.updated' => (new ColorUpdatedEventValidator())->validate($message),
+            'color.deleted' => (new ColorDeletedEventValidator())->validate($message),
+            'brand.created' => (new BrandCreatedEventValidator())->validate($message),
+            'brand.updated' => (new BrandUpdatedEventValidator())->validate($message),
+            'brand.deleted' => (new BrandDeletedEventValidator())->validate($message),
+            'moderation.created' => (new PayloadEventValidator(
+                ['moderation.created'],
+                ['moderation'],
+                [
+                    [['id', 'entity_id', 'moderator_id'], 'required'],
+                    [['id', 'entity_id', 'moderator_id'], 'integer'],
+                    [['entity_type', 'action', 'status_after'], 'required'],
+                    [['entity_type'], 'in', 'range' => ['product', 'category', 'brand', 'color', 'filter', 'product-type']],
+                    [['action'], 'in', 'range' => ['approve', 'reject', 'block']],
+                    [['status_after'], 'in', 'range' => ['approved', 'rejected', 'pending']],
+                    [['comment'], 'safe'],
+                    [['metadata'], 'safe'],
+                ]
+            ))->validate($message),
+            'stock.created', 'branch.created' => (new PayloadEventValidator(
+                ['stock.created', 'branch.created'],
+                ['stock', 'branch'],
+                [
+                    [['id'], 'required'],
+                    [['id', 'shop_id', 'status', 'sort'], 'integer'],
+                    [['name_ru', 'name_uz', 'name_en', 'address', 'phone', 'responsible_person'], 'safe'],
+                ]
+            ))->validate($message),
+            'stock.updated', 'branch.updated' => (new PayloadEventValidator(
+                ['stock.updated', 'branch.updated'],
+                ['stock', 'branch'],
+                [
+                    [['id'], 'required'],
+                    [['id', 'shop_id', 'status', 'sort'], 'integer'],
+                    [['name_ru', 'name_uz', 'name_en', 'address', 'phone', 'responsible_person'], 'safe'],
+                ]
+            ))->validate($message),
+            'stock.deleted', 'branch.deleted' => (new PayloadEventValidator(
+                ['stock.deleted', 'branch.deleted'],
+                ['stock', 'branch'],
+                [
+                    [['id'], 'integer'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['id']) && empty($payload['yii_stock_id'])) {
+                        throw new EventValidationException('Delete payload must contain stock identifier');
+                    }
+                }
+            ))->validate($message),
+            default => throw new EventValidationException("Validator topilmadi: {$eventType}"),
         };
     }
 }
