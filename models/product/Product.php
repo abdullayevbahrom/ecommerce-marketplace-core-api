@@ -344,6 +344,10 @@ class Product extends \yii\db\ActiveRecord
             }
         }
 
+        if ($product->min_order === null || $product->min_order === '') {
+            $product->min_order = 0;
+        }
+
         /** @var User|null $user */
         $user = Yii::$app->user->identity;
         $product->user_id = $product->user_id ? $product->user_id : ($user ? $user->id : null);
