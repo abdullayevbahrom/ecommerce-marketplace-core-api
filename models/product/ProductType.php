@@ -147,6 +147,19 @@ class ProductType extends \yii\db\ActiveRecord
         return $this->hasMany(ProductProductType::className(), ['product_type_id' => 'id']);
     }
 
+    public function beforeSave($insert)
+    {
+        if (!parent::beforeSave($insert)) {
+            return false;
+        }
+
+        if ($this->sort === null || $this->sort === '') {
+            $this->sort = 0;
+        }
+
+        return true;
+    }
+
     public function afterSave($insert, $changedAttributes)
     {
         parent::afterSave($insert, $changedAttributes);
