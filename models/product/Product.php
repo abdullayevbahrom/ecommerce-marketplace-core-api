@@ -1681,7 +1681,18 @@ class Product extends \yii\db\ActiveRecord
         }
 
         if ($this->shouldPublishSyncEvent()) {
-            $this->sendEvent($insert ? 'product.created' : 'product.updated');
+            $eventType = $insert ? 'product.created' : 'product.updated';
+
+            if (
+                !$insert
+                && array_key_exists('deleted_at', $changedAttributes)
+                && $changedAttributes['deleted_at'] !== $this->deleted_at
+                && !empty($this->deleted_at)
+            ) {
+                $eventType = 'product.deleted';
+            }
+
+            $this->sendEvent($eventType);
         }
     }
 

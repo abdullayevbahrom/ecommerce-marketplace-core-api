@@ -576,7 +576,7 @@ class ProductController extends Controller {
         }
         $model->button_id = 1;
         $model->save();
-        $model->removeObject();
+        $model->softDelete();
     }
 
     if ($this->user->role == User::ROLE_MODERATOR) {
