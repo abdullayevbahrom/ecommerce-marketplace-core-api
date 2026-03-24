@@ -4,6 +4,7 @@ namespace app\models\moderator;
 
 use app\components\RabbitMq\MessageFactory;
 use app\components\RabbitMq\OutboxService;
+use app\models\product\Product;
 use yii\db\ActiveRecord;
 use app\models\user\User;
 use Yii;
@@ -102,18 +103,35 @@ class ModerationComment extends ActiveRecord
 
     protected function toSyncPayload(): array
     {
+        $targetEntityId = $this->resolveTargetEntityId();
+
         return [
-            'id' => $this->entity_id,
+            'id' => $targetEntityId,
             'entity_type' => $this->entity_type,
-            'entity_id' => $this->entity_id,
+            'entity_id' => $targetEntityId,
             'action' => $this->action,
             'status_after' => $this->status_after ?? $this->resolveStatusAfter(),
             'comment' => $this->comment,
             'moderator_id' => $this->moderator_id,
             'metadata' => [
                 'source' => 'yii2',
+                'shop_entity_id' => $this->entity_id,
             ],
         ];
+    }
+
+    protected function resolveTargetEntityId(): int
+    {
+        if ($this->entity_type !== 'product') {
+            return (int) $this->entity_id;
+        }
+
+        $product = Product::findOne((int) $this->entity_id);
+        if ($product && !empty($product->sklad_product_id)) {
+            return (int) $product->sklad_product_id;
+        }
+
+        return (int) $this->entity_id;
     }
 
     protected function resolveStatusAfter(): string
