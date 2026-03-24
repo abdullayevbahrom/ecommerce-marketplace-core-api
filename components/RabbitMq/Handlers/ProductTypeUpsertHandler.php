@@ -83,6 +83,22 @@ class ProductTypeUpsertHandler
             return ProductType::findOne((int) $payload['id']);
         }
 
+        $categoryId = $this->resolveCategoryId($payload['category_id'] ?? null);
+        if ($categoryId && !empty($payload['name_ru']) && !empty($payload['type'])) {
+            $query = ProductType::find()
+                ->where([
+                    'category_id' => $categoryId,
+                    'name_ru' => $payload['name_ru'],
+                    'type' => $payload['type'],
+                ])
+                ->orderBy(['id' => SORT_DESC]);
+
+            $model = $query->one();
+            if ($model) {
+                return $model;
+            }
+        }
+
         return null;
     }
 
