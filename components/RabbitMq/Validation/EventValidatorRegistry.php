@@ -66,6 +66,160 @@ class EventValidatorRegistry
                     }
                 }
             ))->validate($message),
+            'tag.created' => (new PayloadEventValidator(
+                ['tag.created'],
+                ['tag'],
+                [
+                    [['id', 'yii_tag_id', 'status'], 'integer'],
+                    [['name_ru', 'name_uz', 'name_en'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['name_ru'])) {
+                        throw new EventValidationException('Create payload must contain tag name_ru');
+                    }
+                }
+            ))->validate($message),
+            'tag.updated' => (new PayloadEventValidator(
+                ['tag.updated'],
+                ['tag'],
+                [
+                    [['id', 'yii_tag_id', 'status'], 'integer'],
+                    [['name_ru', 'name_uz', 'name_en'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['name_ru'])) {
+                        throw new EventValidationException('Update payload must contain tag name_ru');
+                    }
+                }
+            ))->validate($message),
+            'tag.deleted' => (new PayloadEventValidator(
+                ['tag.deleted'],
+                ['tag'],
+                [
+                    [['id', 'yii_tag_id'], 'integer'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['id']) && empty($payload['yii_tag_id'])) {
+                        throw new EventValidationException('Delete payload must contain tag identifier');
+                    }
+                }
+            ))->validate($message),
+            'region.created' => (new PayloadEventValidator(
+                ['region.created'],
+                ['region'],
+                [
+                    [['id', 'yii_region_id', 'bts_id', 'status', 'selecting'], 'integer'],
+                    [['name', 'name_ru', 'name_uz', 'name_en', 'img'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['name']) && empty($payload['name_ru'])) {
+                        throw new EventValidationException('Create payload must contain region name');
+                    }
+                }
+            ))->validate($message),
+            'region.updated' => (new PayloadEventValidator(
+                ['region.updated'],
+                ['region'],
+                [
+                    [['id', 'yii_region_id', 'bts_id', 'status', 'selecting'], 'integer'],
+                    [['name', 'name_ru', 'name_uz', 'name_en', 'img'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['name']) && empty($payload['name_ru'])) {
+                        throw new EventValidationException('Update payload must contain region name');
+                    }
+                }
+            ))->validate($message),
+            'region.deleted' => (new PayloadEventValidator(
+                ['region.deleted'],
+                ['region'],
+                [
+                    [['id', 'yii_region_id', 'bts_id'], 'integer'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['id']) && empty($payload['yii_region_id']) && empty($payload['bts_id'])) {
+                        throw new EventValidationException('Delete payload must contain region identifier');
+                    }
+                }
+            ))->validate($message),
+            'delivery.created' => (new PayloadEventValidator(
+                ['delivery.created'],
+                ['delivery'],
+                [
+                    [['id', 'yii_delivery_id', 'status', 'sort'], 'integer'],
+                    [['name_ru', 'name_uz', 'name_en', 'description_ru', 'description_uz', 'description_en'], 'safe'],
+                    [['price'], 'number'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['name_ru'])) {
+                        throw new EventValidationException('Create payload must contain delivery name_ru');
+                    }
+                }
+            ))->validate($message),
+            'delivery.updated' => (new PayloadEventValidator(
+                ['delivery.updated'],
+                ['delivery'],
+                [
+                    [['id', 'yii_delivery_id', 'status', 'sort'], 'integer'],
+                    [['name_ru', 'name_uz', 'name_en', 'description_ru', 'description_uz', 'description_en'], 'safe'],
+                    [['price'], 'number'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['name_ru'])) {
+                        throw new EventValidationException('Update payload must contain delivery name_ru');
+                    }
+                }
+            ))->validate($message),
+            'delivery.deleted' => (new PayloadEventValidator(
+                ['delivery.deleted'],
+                ['delivery'],
+                [
+                    [['id', 'yii_delivery_id'], 'integer'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['id']) && empty($payload['yii_delivery_id'])) {
+                        throw new EventValidationException('Delete payload must contain delivery identifier');
+                    }
+                }
+            ))->validate($message),
+            'office.created' => (new PayloadEventValidator(
+                ['office.created'],
+                ['office'],
+                [
+                    [['id', 'yii_office_id', 'status'], 'integer'],
+                    [['name', 'address'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['name'])) {
+                        throw new EventValidationException('Create payload must contain office name');
+                    }
+                }
+            ))->validate($message),
+            'office.updated' => (new PayloadEventValidator(
+                ['office.updated'],
+                ['office'],
+                [
+                    [['id', 'yii_office_id', 'status'], 'integer'],
+                    [['name', 'address'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['name'])) {
+                        throw new EventValidationException('Update payload must contain office name');
+                    }
+                }
+            ))->validate($message),
+            'office.deleted' => (new PayloadEventValidator(
+                ['office.deleted'],
+                ['office'],
+                [
+                    [['id', 'yii_office_id'], 'integer'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['id']) && empty($payload['yii_office_id'])) {
+                        throw new EventValidationException('Delete payload must contain office identifier');
+                    }
+                }
+            ))->validate($message),
             'moderation.created' => (new PayloadEventValidator(
                 ['moderation.created'],
                 ['moderation'],
