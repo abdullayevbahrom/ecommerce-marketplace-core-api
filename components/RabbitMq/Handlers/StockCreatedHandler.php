@@ -28,6 +28,7 @@ class StockCreatedHandler
             $stock->sort = $payload['sort'] ?? null;
             $stock->bts_region_id = $payload['bts_region_id'] ?? null;
             $stock->bts_city_id = $payload['bts_city_id'] ?? null;
+            $stock->address = $payload['address'] ?? null;
             $stock->save(false);
 
             $tx->commit();
