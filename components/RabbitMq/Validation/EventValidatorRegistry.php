@@ -45,19 +45,27 @@ class EventValidatorRegistry
                 ['stock.created', 'branch.created'],
                 ['stock', 'branch'],
                 [
-                    [['id'], 'required'],
-                    [['id', 'shop_id', 'status', 'sort'], 'integer'],
+                    [['id', 'shop_id', 'yii_shop_id', 'status', 'sort'], 'integer'],
                     [['name_ru', 'name_uz', 'name_en', 'address', 'phone', 'responsible_person'], 'safe'],
-                ]
+                ],
+                function (array $payload): void {
+                    if (empty($payload['shop_id']) && empty($payload['yii_shop_id'])) {
+                        throw new EventValidationException('Create payload must contain shop identifier');
+                    }
+                }
             ))->validate($message),
             'stock.updated', 'branch.updated' => (new PayloadEventValidator(
                 ['stock.updated', 'branch.updated'],
                 ['stock', 'branch'],
                 [
-                    [['id'], 'required'],
-                    [['id', 'shop_id', 'status', 'sort'], 'integer'],
+                    [['id', 'shop_id', 'yii_shop_id', 'status', 'sort'], 'integer'],
                     [['name_ru', 'name_uz', 'name_en', 'address', 'phone', 'responsible_person'], 'safe'],
-                ]
+                ],
+                function (array $payload): void {
+                    if (empty($payload['id']) && empty($payload['yii_stock_id'])) {
+                        throw new EventValidationException('Update payload must contain stock identifier');
+                    }
+                }
             ))->validate($message),
             'stock.deleted', 'branch.deleted' => (new PayloadEventValidator(
                 ['stock.deleted', 'branch.deleted'],
