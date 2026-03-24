@@ -134,6 +134,15 @@ class FilterController extends Controller{
         $model->status = ($model->status == 2) ? 1 : 2;
         $model->save(false);
 
+        $comment = new ModerationComment();
+        $comment->entity_type  = 'filter';
+        $comment->entity_id    = $model->id;
+        $comment->action       = $model->status == 1 ? 'approve' : 'reject';
+        $comment->comment      = 'Ваш филтр разблокирован';
+        $comment->moderator_id = $user->id;
+        $comment->is_sent_to_warehouse = (bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false);
+        $comment->save(false);
+
         $this->sendToWarehouse([
             'id' => $model->id,
             'entity_type'  => 'filter',
@@ -174,6 +183,10 @@ class FilterController extends Controller{
 
     protected function sendToWarehouse(array $payload)
     {
+        if ((bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false)) {
+            return;
+        }
+
         try {
             $client = new Client(['timeout' => 5.0]);
 
@@ -233,6 +246,7 @@ class FilterController extends Controller{
         $comment->comment      = $commentText;
         $comment->moderator_id = $user->id;
         $comment->is_sent_to_warehouse = 0;
+        $comment->status_after = 'rejected';
         $comment->save(false);
 
         $this->sendToWarehouse([
