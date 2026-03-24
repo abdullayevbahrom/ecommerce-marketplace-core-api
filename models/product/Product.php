@@ -2,6 +2,8 @@
 
 namespace app\models\product;
 
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use app\jobs\EsSyncProductJob;
 use app\models\brand\CategoryBrand;
 use app\models\Category;
@@ -1677,6 +1679,10 @@ class Product extends \yii\db\ActiveRecord
         } catch (\Throwable $e) {
             \Yii::error('ES sync queue push failed: ' . $e->getMessage(), 'product');
         }
+
+        if ($this->shouldPublishSyncEvent()) {
+            $this->sendEvent($insert ? 'product.created' : 'product.updated');
+        }
     }
 
     public function afterDelete()
@@ -1691,6 +1697,179 @@ class Product extends \yii\db\ActiveRecord
         } catch (\Throwable $e) {
             \Yii::error('ES sync queue push failed: ' . $e->getMessage(), 'product');
         }
+
+        if ($this->shouldPublishSyncEvent()) {
+            $this->sendEvent('product.deleted');
+        }
+    }
+
+    protected function shouldPublishSyncEvent(): bool
+    {
+        if ($this->suppressSyncEvents) {
+            return false;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_product_events'] ?? false)) {
+            return false;
+        }
+
+        return !empty($this->shop_id) && !empty($this->user_id);
+    }
+
+    protected function toSyncPayload(): array
+    {
+        $this->populateRelation('user', $this->user);
+        $this->populateRelation('stock', $this->stock);
+        $this->populateRelation('category', $this->category);
+        $this->populateRelation('brand', $this->brand);
+        $this->populateRelation('color', $this->color);
+        $this->populateRelation('productColors', $this->productColors);
+        $this->populateRelation('productFilters', $this->productFilters);
+        $this->populateRelation('productProductTypes', $this->productProductTypes);
+        $this->populateRelation('image', $this->image);
+        $this->populateRelation('gallery', $this->gallery);
+
+        return [
+            'id' => (int) $this->id,
+            'yii_product_id' => (int) $this->id,
+            'shop_id' => (int) $this->shop_id,
+            'user_id' => (int) $this->user_id,
+            'stock_id' => $this->stock_id ? (int) $this->stock_id : null,
+            'token_key' => $this->token_key,
+            'status' => (int) ($this->status ?? 2),
+            'name_ru' => $this->name_ru,
+            'name_en' => $this->name_en,
+            'name_uz' => $this->name_uz ?: $this->name_ru,
+            'description_ru' => $this->description_ru,
+            'description_en' => $this->description_en,
+            'description_uz' => $this->description_uz,
+            'price' => $this->price !== null ? (float) $this->price : 0,
+            'amount' => $this->amount !== null ? (float) $this->amount : 0,
+            'discount' => $this->discount !== null ? (float) $this->discount : null,
+            'sku' => $this->sku,
+            'barcode' => $this->barcode,
+            'ikpu_code' => $this->ikpu_code,
+            'category_id' => $this->category_id ? (int) $this->category_id : null,
+            'brand_id' => $this->brand_id ? (int) $this->brand_id : null,
+            'color_id' => $this->color_id ? (int) $this->color_id : null,
+            'colors' => $this->prepareColorPayload(),
+            'filters' => $this->prepareFilterPayload(),
+            'product_types' => $this->prepareProductTypePayload(),
+            'images' => $this->prepareImagePayload(),
+            'deleted_at' => $this->deleted_at ?? null,
+        ];
+    }
+
+    protected function prepareColorPayload(): array
+    {
+        $ids = [];
+
+        if ($this->color_id) {
+            $ids[] = (int) $this->color_id;
+        }
+
+        foreach ($this->productColors ?: [] as $productColor) {
+            if (!empty($productColor->color_id)) {
+                $ids[] = (int) $productColor->color_id;
+            }
+        }
+
+        return array_values(array_unique(array_filter($ids)));
+    }
+
+    protected function prepareFilterPayload(): array
+    {
+        $result = [];
+
+        foreach ($this->productFilters ?: [] as $productFilter) {
+            if (empty($productFilter->filter_id)) {
+                continue;
+            }
+
+            $value = $productFilter->value_id ?? null;
+            if ($value === null) {
+                $value = $productFilter->value_ru ?? $productFilter->value_uz ?? $productFilter->value_en;
+            }
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $result[(int) $productFilter->filter_id] = is_numeric($value) ? (int) $value : (string) $value;
+        }
+
+        return $result;
+    }
+
+    protected function prepareProductTypePayload(): array
+    {
+        $result = [];
+
+        foreach ($this->productProductTypes ?: [] as $productType) {
+            if (empty($productType->product_type_id)) {
+                continue;
+            }
+
+            $typeId = (int) $productType->product_type_id;
+            $value = $productType->custom_value ?: $productType->product_type_value_id;
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            if (!isset($result[$typeId])) {
+                $result[$typeId] = [];
+            }
+
+            $result[$typeId][] = is_numeric($value) ? (int) $value : (string) $value;
+        }
+
+        return $result;
+    }
+
+    protected function prepareImagePayload(): array
+    {
+        $items = [];
+
+        if ($this->image) {
+            $items[] = [
+                'photo' => $this->image->photo,
+                'main' => 1,
+                'token_key' => $this->token_key,
+            ];
+        }
+
+        foreach ($this->gallery ?: [] as $image) {
+            $items[] = [
+                'photo' => $image->photo,
+                'main' => 0,
+                'token_key' => $this->token_key,
+            ];
+        }
+
+        return $items;
+    }
+
+    protected function sendEvent(string $eventType): void
+    {
+        $message = MessageFactory::make(
+            eventType: $eventType,
+            source: 'market',
+            entityType: 'product',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->toSyncPayload(),
+        );
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'product',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
     }
 
     private function syncToWarehouse()
