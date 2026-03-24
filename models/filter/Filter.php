@@ -22,6 +22,8 @@ use app\models\filter\FilterUser;
  */
 class Filter extends \yii\db\ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
+
     public $property_key_ru = [];
     public $property_value_ru = [];
 
