@@ -20,6 +20,8 @@ use Yii;
  */
 class Color extends \yii\db\ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
+
     /**
      * {@inheritdoc}
      */

@@ -27,6 +27,8 @@ use app\models\Images;
  */
 class CategoryBrand extends \yii\db\ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
+
     public $imageFiles = [];
     public $sub_category_id = [];
 
