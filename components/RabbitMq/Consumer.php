@@ -39,6 +39,9 @@ class Consumer
                     }
 
                     match ($validated['event_type']) {
+                        'product.created' => (new \app\components\RabbitMq\Handlers\ProductCreatedHandler())->handle($validated),
+                        'product.updated' => (new \app\components\RabbitMq\Handlers\ProductUpdatedHandler())->handle($validated),
+                        'product.deleted' => (new \app\components\RabbitMq\Handlers\ProductDeletedHandler())->handle($validated),
                         'branch.created' => (new \app\components\RabbitMq\Handlers\StockCreatedHandler())->handle($validated),
                         'branch.updated' => (new \app\components\RabbitMq\Handlers\StockUpdatedHandler())->handle($validated),
                         'branch.deleted' => (new \app\components\RabbitMq\Handlers\StockDeletedHandler())->handle($validated),

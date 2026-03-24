@@ -10,6 +10,8 @@ class EventValidatorRegistry
 
         return match ($eventType) {
             'product.created' => (new ProductCreatedEventValidator())->validate($message),
+            'product.updated' => (new ProductUpdatedEventValidator())->validate($message),
+            'product.deleted' => (new ProductDeletedEventValidator())->validate($message),
             default => $message,
             // default => throw new EventValidationException("Validator topilmadi: {$eventType}"),
         };
