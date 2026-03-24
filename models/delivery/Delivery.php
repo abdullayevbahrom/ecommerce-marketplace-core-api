@@ -2,6 +2,8 @@
 
 namespace app\models\delivery;
 
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use Yii;
 use yii\web\UploadedFile;
 
@@ -27,6 +29,7 @@ use app\models\order\Order;
  */
 class Delivery extends \yii\db\ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
     public $imageFiles = [];
     /**
      * {@inheritdoc}
@@ -34,6 +37,70 @@ class Delivery extends \yii\db\ActiveRecord
     public static function tableName()
     {
         return 'delivery';
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $eventType = $insert ? 'delivery.created' : 'delivery.updated';
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'delivery',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: MessageFactory::make(
+                eventType: $eventType,
+                source: 'market',
+                entityType: 'delivery',
+                entityId: $this->id,
+                branchId: null,
+                payload: $this->toSyncPayload(),
+            )
+        );
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: 'delivery.deleted',
+            eventType: 'delivery.deleted',
+            entityType: 'delivery',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: MessageFactory::make(
+                eventType: 'delivery.deleted',
+                source: 'market',
+                entityType: 'delivery',
+                entityId: $this->id,
+                branchId: null,
+                payload: $this->toSyncPayload(),
+            )
+        );
     }
 
     /**
@@ -143,5 +210,18 @@ class Delivery extends \yii\db\ActiveRecord
     public function getImage()
     {
         return $this->hasOne(Images::className(), ['object_id' => 'id'])->andOnCondition(['type' => 'delivery']);
+    }
+
+    protected function toSyncPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'yii_delivery_id' => $this->id,
+            'name_ru' => $this->name_ru,
+            'name_uz' => $this->name_uz,
+            'name_en' => $this->name_en,
+            'price' => $this->price ?? 0,
+            'status' => $this->status ?? 1,
+        ];
     }
 }

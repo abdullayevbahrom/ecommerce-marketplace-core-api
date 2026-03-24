@@ -2,6 +2,8 @@
 
 namespace app\models;
 
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use Yii;
 use yii\db\ActiveRecord;
 use yii\behaviors\TimestampBehavior;
@@ -27,6 +29,8 @@ use yii\behaviors\TimestampBehavior;
  */
 class Ikpu extends ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
+
     const STATUS_INACTIVE = 0;
     const STATUS_ACTIVE = 1;
 
@@ -53,6 +57,36 @@ class Ikpu extends ActiveRecord
                 },
             ],
         ];
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $this->sendEvent($insert ? 'ikpu.created' : 'ikpu.updated');
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $this->sendEvent('ikpu.deleted');
     }
 
     /**
@@ -276,5 +310,42 @@ class Ikpu extends ActiveRecord
             return true;
         }
         return false;
+    }
+
+    protected function toSyncPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'yii_ikpu_id' => $this->id,
+            'code' => $this->code,
+            'name_ru' => $this->name_ru,
+            'name_uz' => $this->name_uz,
+            'name_en' => $this->name_en,
+            'parent_code' => $this->parent_code,
+            'status' => $this->status ?? self::STATUS_ACTIVE,
+        ];
+    }
+
+    protected function sendEvent(string $eventType): void
+    {
+        $message = MessageFactory::make(
+            eventType: $eventType,
+            source: 'market',
+            entityType: 'ikpu',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->toSyncPayload(),
+        );
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'ikpu',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
     }
 }

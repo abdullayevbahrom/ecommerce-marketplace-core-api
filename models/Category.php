@@ -335,12 +335,13 @@ class Category extends \yii\db\ActiveRecord
             return;
         }
 
-        $eventType = $insert ? 'category.created' : 'category.updated';
+        $eventType = $this->syncEventType($insert);
+        $entityType = $this->syncEntityType();
 
         $message = MessageFactory::make(
             eventType: $eventType,
             source: 'market',
-            entityType: 'category',
+            entityType: $entityType,
             entityId: $this->id,
             branchId: null,
             payload: $this->toSyncPayload(),
@@ -350,7 +351,7 @@ class Category extends \yii\db\ActiveRecord
             exchange: 'market_to_sklad',
             routingKey: $eventType,
             eventType: $eventType,
-            entityType: 'category',
+            entityType: $entityType,
             entityId: $this->id,
             source: 'market',
             branchId: null,
@@ -370,10 +371,13 @@ class Category extends \yii\db\ActiveRecord
             return;
         }
 
+        $eventType = $this->syncEventType(false, true);
+        $entityType = $this->syncEntityType();
+
         $message = MessageFactory::make(
-            eventType: 'category.deleted',
+            eventType: $eventType,
             source: 'market',
-            entityType: 'category',
+            entityType: $entityType,
             entityId: $this->id,
             branchId: null,
             payload: $this->toSyncPayload(),
@@ -381,9 +385,9 @@ class Category extends \yii\db\ActiveRecord
 
         (new OutboxService())->queue(
             exchange: 'market_to_sklad',
-            routingKey: 'category.deleted',
-            eventType: 'category.deleted',
-            entityType: 'category',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: $entityType,
             entityId: $this->id,
             source: 'market',
             branchId: null,
@@ -393,7 +397,7 @@ class Category extends \yii\db\ActiveRecord
 
     protected function toSyncPayload(): array
     {
-        return [
+        $payload = [
             'id' => $this->id,
             'yii_category_id' => $this->id,
             'parent_id' => $this->parent ? $this->parent->id : (int) $this->parent_id,
@@ -415,5 +419,27 @@ class Category extends \yii\db\ActiveRecord
             'popular' => $this->popular ?? 0,
             'deleted_at' => $this->deleted_at ?? null,
         ];
+
+        if ($this->type === 'tag') {
+            $payload['yii_tag_id'] = $this->id;
+        }
+
+        return $payload;
+    }
+
+    protected function syncEntityType(): string
+    {
+        return $this->type === 'tag' ? 'tag' : 'category';
+    }
+
+    protected function syncEventType(bool $insert, bool $deleted = false): string
+    {
+        $prefix = $this->type === 'tag' ? 'tag' : 'category';
+
+        if ($deleted) {
+            return $prefix . '.deleted';
+        }
+
+        return $prefix . ($insert ? '.created' : '.updated');
     }
 }

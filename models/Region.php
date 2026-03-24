@@ -2,6 +2,8 @@
 
 namespace app\models;
 
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use Yii;
 
 /**
@@ -20,12 +22,77 @@ use Yii;
  */
 class Region extends \yii\db\ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
     /**
      * {@inheritdoc}
      */
     public static function tableName()
     {
         return 'regions';
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $eventType = $insert ? 'region.created' : 'region.updated';
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'region',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: MessageFactory::make(
+                eventType: $eventType,
+                source: 'market',
+                entityType: 'region',
+                entityId: $this->id,
+                branchId: null,
+                payload: $this->toSyncPayload(),
+            )
+        );
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: 'region.deleted',
+            eventType: 'region.deleted',
+            entityType: 'region',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: MessageFactory::make(
+                eventType: 'region.deleted',
+                source: 'market',
+                entityType: 'region',
+                entityId: $this->id,
+                branchId: null,
+                payload: $this->toSyncPayload(),
+            )
+        );
     }
 
     /**
@@ -114,6 +181,22 @@ class Region extends \yii\db\ActiveRecord
             'name_uz', 
             'name_en',
             'status'
+        ];
+    }
+
+    protected function toSyncPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'yii_region_id' => $this->id,
+            'name' => $this->name_ru,
+            'name_ru' => $this->name_ru,
+            'name_uz' => $this->name_uz,
+            'name_en' => $this->name_en,
+            'status' => $this->status,
+            'selecting' => 0,
+            'img' => null,
+            'bts_id' => $this->bts_id,
         ];
     }
 }
