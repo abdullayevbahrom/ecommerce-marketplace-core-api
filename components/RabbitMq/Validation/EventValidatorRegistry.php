@@ -79,6 +79,44 @@ class EventValidatorRegistry
                     }
                 }
             ))->validate($message),
+            'user.created' => (new PayloadEventValidator(
+                ['user.created'],
+                ['user'],
+                [
+                    [['id', 'yii_shop_id', 'status', 'role'], 'integer'],
+                    [['name', 'phone', 'source'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['yii_shop_id']) || empty($payload['phone'])) {
+                        throw new EventValidationException('Create payload must contain yii_shop_id and phone');
+                    }
+                }
+            ))->validate($message),
+            'user.updated' => (new PayloadEventValidator(
+                ['user.updated'],
+                ['user'],
+                [
+                    [['id', 'yii_shop_id', 'status', 'role'], 'integer'],
+                    [['name', 'phone', 'source'], 'safe'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['id']) && empty($payload['phone'])) {
+                        throw new EventValidationException('Update payload must contain user identifier');
+                    }
+                }
+            ))->validate($message),
+            'user.deleted' => (new PayloadEventValidator(
+                ['user.deleted'],
+                ['user'],
+                [
+                    [['id'], 'integer'],
+                ],
+                function (array $payload): void {
+                    if (empty($payload['id'])) {
+                        throw new EventValidationException('Delete payload must contain user id');
+                    }
+                }
+            ))->validate($message),
             default => throw new EventValidationException("Validator topilmadi: {$eventType}"),
         };
     }
