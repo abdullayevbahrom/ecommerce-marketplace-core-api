@@ -1915,11 +1915,13 @@ class Product extends \yii\db\ActiveRecord
             return false;
         }
 
-        Yii::$app->db->createCommand()->insert('product_sync_log', [
-            'submission_id' => $this->id,
-            'action' => 'delete',
-            'created_at' => date('Y-m-d H:i:s'),
-        ])->execute();
+        if (Yii::$app->db->schema->getTableSchema('product_sync_log', true) !== null) {
+            Yii::$app->db->createCommand()->insert('product_sync_log', [
+                'submission_id' => $this->id,
+                'action' => 'delete',
+                'created_at' => date('Y-m-d H:i:s'),
+            ])->execute();
+        }
 
         return true;
     }
