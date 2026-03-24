@@ -23,6 +23,8 @@ use Yii;
 class Color extends \yii\db\ActiveRecord
 {
     public bool $suppressSyncEvents = false;
+    public int $status = self::STATUS_ACTIVE;
+    public $deleted_at = null;
 
     /**
      * {@inheritdoc}
@@ -63,6 +65,14 @@ class Color extends \yii\db\ActiveRecord
             'date' => 'Date',
 
         ];
+    }
+
+    public function afterFind()
+    {
+        parent::afterFind();
+
+        $this->status = $this->status ?? self::STATUS_ACTIVE;
+        $this->deleted_at = $this->deleted_at ?? null;
     }
 
     public function fields() {
