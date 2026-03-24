@@ -33,7 +33,9 @@ class ProductDeletedHandler
         }
 
         if ($product) {
+            $product->suppressSyncEvents = true;
             $product->softDelete();
+            $product->suppressSyncEvents = false;
         }
     }
 }

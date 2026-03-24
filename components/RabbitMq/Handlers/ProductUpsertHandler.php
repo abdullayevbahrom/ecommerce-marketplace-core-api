@@ -24,6 +24,7 @@ class ProductUpsertHandler
 
         try {
             $product = $this->findExistingProduct($payload) ?? new Product();
+            $product->suppressSyncEvents = true;
 
             $product->shop_id = $payload['shop_id'] ?? $product->shop_id;
             $product->user_id = $payload['user_id'] ?? $product->user_id;
@@ -61,6 +62,8 @@ class ProductUpsertHandler
         } catch (\Throwable $e) {
             $tx->rollBack();
             throw $e;
+        } finally {
+            $product->suppressSyncEvents = false;
         }
     }
 

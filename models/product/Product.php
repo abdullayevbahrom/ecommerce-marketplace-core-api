@@ -58,6 +58,8 @@ use yii\web\UploadedFile;
  */
 class Product extends \yii\db\ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
+
     public $imageFiles = [];
     public $imageGallery = [];
     public $galleryFiles = [];
