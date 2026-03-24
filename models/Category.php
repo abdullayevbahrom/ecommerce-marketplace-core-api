@@ -28,6 +28,8 @@ use app\models\product\ProductType;
  */
 class Category extends \yii\db\ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
+
     public $imageFiles = [];
     public $filters = [];
 
