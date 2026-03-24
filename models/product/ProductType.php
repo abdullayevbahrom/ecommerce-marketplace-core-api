@@ -2,6 +2,8 @@
 
 namespace app\models\product;
 
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use Yii;
 use app\models\Category;
 
@@ -143,5 +145,94 @@ class ProductType extends \yii\db\ActiveRecord
     public function getProductProductTypes()
     {
         return $this->hasMany(ProductProductType::className(), ['product_type_id' => 'id']);
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $eventType = $insert ? 'product_type.created' : 'product_type.updated';
+
+        $this->sendEvent($eventType);
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $this->sendEvent('product_type.deleted');
+    }
+
+    protected function toSyncPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'yii_product_type_id' => $this->id,
+            'category_id' => $this->category_id,
+            'name_ru' => $this->name_ru,
+            'name_en' => $this->name_en,
+            'name_uz' => $this->name_uz,
+            'type' => $this->type,
+            'description_ru' => $this->description_ru,
+            'description_en' => $this->description_en,
+            'description_uz' => $this->description_uz,
+            'status' => $this->status ?? self::STATUS_ACTIVE,
+            'sort' => $this->sort ?? 0,
+            'values' => array_map(
+                static fn ($value) => [
+                    'sklad_product_type_value_id' => null,
+                    'yii_product_type_value_id' => $value->id,
+                    'value_ru' => $value->value_ru,
+                    'value_en' => $value->value_en,
+                    'value_uz' => $value->value_uz,
+                    'display_value' => $value->display_value,
+                    'description_ru' => $value->description_ru,
+                    'description_en' => $value->description_en,
+                    'description_uz' => $value->description_uz,
+                    'status' => $value->status ?? 1,
+                    'sort' => $value->sort ?? 0,
+                ],
+                $this->productTypeValues ? $this->productTypeValues : []
+            ),
+        ];
+    }
+
+    public function sendEvent(string $eventType): void
+    {
+        $message = MessageFactory::make(
+            eventType: $eventType,
+            source: 'market',
+            entityType: 'product_type',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->toSyncPayload(),
+        );
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'product_type',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
     }
 } 

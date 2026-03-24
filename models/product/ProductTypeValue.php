@@ -25,6 +25,7 @@ use Yii;
  */
 class ProductTypeValue extends \yii\db\ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
     /**
      * {@inheritdoc}
      */
@@ -106,5 +107,35 @@ class ProductTypeValue extends \yii\db\ActiveRecord
     public function getProductProductTypes()
     {
         return $this->hasMany(ProductProductType::className(), ['product_type_value_id' => 'id']);
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+        $this->dispatchParentSync();
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+        $this->dispatchParentSync();
+    }
+
+    protected function dispatchParentSync(): void
+    {
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $productType = $this->productType;
+        if (!$productType || $productType->suppressSyncEvents) {
+            return;
+        }
+
+        $productType->sendEvent('product_type.updated');
     }
 } 

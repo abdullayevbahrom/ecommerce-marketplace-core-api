@@ -2,6 +2,8 @@
 
 namespace app\models;
 
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use Yii;
 use yii\helpers\Html;
 use yii\web\UploadedFile;
@@ -319,5 +321,99 @@ class Category extends \yii\db\ActiveRecord
             \app\models\moderator\ModerationComment::class,
             ['entity_id' => 'id']
         )->andWhere(['entity_type' => 'category']);
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $eventType = $insert ? 'category.created' : 'category.updated';
+
+        $message = MessageFactory::make(
+            eventType: $eventType,
+            source: 'market',
+            entityType: 'category',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->toSyncPayload(),
+        );
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'category',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $message = MessageFactory::make(
+            eventType: 'category.deleted',
+            source: 'market',
+            entityType: 'category',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->toSyncPayload(),
+        );
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: 'category.deleted',
+            eventType: 'category.deleted',
+            entityType: 'category',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
+    }
+
+    protected function toSyncPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'yii_category_id' => $this->id,
+            'parent_id' => $this->parent ? $this->parent->id : (int) $this->parent_id,
+            'type' => $this->type,
+            'name_mini' => $this->name_mini,
+            'name_ru' => $this->name_ru,
+            'name_uz' => $this->name_uz,
+            'name_en' => $this->name_en,
+            'description_ru' => $this->description_ru,
+            'description_uz' => $this->description_uz,
+            'description_en' => $this->description_en,
+            'option_ru' => $this->option_ru,
+            'option_uz' => $this->option_uz,
+            'option_en' => $this->option_en,
+            'sort' => $this->sort ?? 0,
+            'status' => $this->status ?? self::STATUS_ACTIVE,
+            'main' => $this->main ?? 0,
+            'is_filter' => $this->is_filter ?? 0,
+            'popular' => $this->popular ?? 0,
+            'deleted_at' => $this->deleted_at ?? null,
+        ];
     }
 }

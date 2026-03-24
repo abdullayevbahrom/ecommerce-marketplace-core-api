@@ -2,6 +2,8 @@
 
 namespace app\models\filter;
 
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use Yii;
 use app\models\Category;
 use app\models\category\CategoryFilter;
@@ -73,6 +75,15 @@ class Filter extends \yii\db\ActiveRecord
     }
 
     public function saveObject() {
+        $publishSyncEvent = !(bool) $this->suppressSyncEvents
+            && (int) $this->parent_id === 0
+            && (bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false);
+        $eventType = $this->isNewRecord ? 'filter.created' : 'filter.updated';
+
+        if ($publishSyncEvent) {
+            $this->suppressSyncEvents = true;
+        }
+
         $tree = [$this->category_id];
 
         if ($this->sub_category_id) {
@@ -146,7 +157,17 @@ class Filter extends \yii\db\ActiveRecord
                     Yii::$app->db->createCommand()->batchInsert('filter', $keys, $vals)->execute();
                 }
             }
+
+            if ($publishSyncEvent) {
+                $this->suppressSyncEvents = false;
+                $this->refresh();
+                $this->sendEvent($eventType);
+            }
             return true;
+        }
+
+        if ($publishSyncEvent) {
+            $this->suppressSyncEvents = false;
         }
 
         return false;
@@ -210,5 +231,83 @@ class Filter extends \yii\db\ActiveRecord
         return $this->hasMany(\app\models\moderator\ModerationComment::class,
             ['entity_id' => 'id']
         )->andWhere(['entity_type' => 'filter']);
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        if ($this->suppressSyncEvents || (int) $this->parent_id !== 0) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $eventType = $insert ? 'filter.created' : 'filter.updated';
+
+        $this->sendEvent($eventType);
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        if ($this->suppressSyncEvents || (int) $this->parent_id !== 0) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $this->sendEvent('filter.deleted');
+    }
+
+    protected function toSyncPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'yii_filter_id' => $this->id,
+            'category_id' => $this->category_id,
+            'type' => $this->type,
+            'name_ru' => $this->name_ru,
+            'name_uz' => $this->name_uz,
+            'name_en' => $this->name_en,
+            'status' => $this->status ?? 1,
+            'values' => array_map(
+                static fn ($child) => [
+                    'name_ru' => $child->name_ru,
+                    'name_uz' => $child->name_uz,
+                    'name_en' => $child->name_en,
+                ],
+                $this->childs ? $this->childs : []
+            ),
+            'deleted_at' => $this->deleted_at ?? null,
+        ];
+    }
+
+    public function sendEvent(string $eventType): void
+    {
+        $message = MessageFactory::make(
+            eventType: $eventType,
+            source: 'market',
+            entityType: 'filter',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->toSyncPayload(),
+        );
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'filter',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
     }
 }
