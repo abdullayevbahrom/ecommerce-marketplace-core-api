@@ -79,7 +79,11 @@ class ModerationCreatedHandler
             return;
         }
 
-        if ($model instanceof CategoryBrand || $model instanceof Color || $model instanceof Filter || $model instanceof ProductType) {
+        if ($model instanceof Color) {
+            return;
+        }
+
+        if ($model instanceof CategoryBrand || $model instanceof Filter || $model instanceof ProductType) {
             $model->status = $status === 'approved' ? 1 : 2;
             $model->save(false);
         }

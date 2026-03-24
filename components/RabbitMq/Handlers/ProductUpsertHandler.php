@@ -25,6 +25,7 @@ class ProductUpsertHandler
 
         try {
             $product = $this->findExistingProduct($payload) ?? new Product();
+            $isNew = $product->isNewRecord;
             $product->suppressSyncEvents = true;
 
             $product->shop_id = $payload['shop_id'] ?? $product->shop_id;
@@ -61,6 +62,10 @@ class ProductUpsertHandler
             $this->syncImages($product, $payload['images'] ?? []);
 
             $tx->commit();
+
+            if (!empty($payload['sklad_product_id']) && ($isNew || empty($payload['yii_product_id']))) {
+                $this->notifyWarehouse((int) $payload['sklad_product_id'], (int) $product->id);
+            }
         } catch (\Throwable $e) {
             $tx->rollBack();
             throw $e;
@@ -98,6 +103,23 @@ class ProductUpsertHandler
         }
 
         return null;
+    }
+
+    protected function notifyWarehouse(int $warehouseProductId, int $yiiProductId): void
+    {
+        $token = md5($warehouseProductId . Yii::$app->params['apiSecretKey']);
+        $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
+
+        Yii::$app->httpClient->post(
+            $warehouseApiUrl . "/api/sync-webhook/products/{$warehouseProductId}/set-product-id",
+            [
+                'json' => ['id' => $warehouseProductId, 'yii_product_id' => $yiiProductId],
+                'headers' => [
+                    'X-Api-Token' => $token,
+                    'Content-Type' => 'application/json',
+                ],
+            ]
+        );
     }
 
     protected function syncColors(Product $product, array $colors): void
