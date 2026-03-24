@@ -2,6 +2,8 @@
 
 namespace app\models\color;
 
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use app\models\product\ProductColor;
 use Yii;
 
@@ -85,5 +87,87 @@ class Color extends \yii\db\ActiveRecord
     public function getProductColors()
     {
         return $this->hasMany(ProductColor::className(), ['color_id' => 'id']);
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $eventType = $insert ? 'color.created' : 'color.updated';
+
+        $message = MessageFactory::make(
+            eventType: $eventType,
+            source: 'market',
+            entityType: 'color',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->toSyncPayload(),
+        );
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'color',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
+    }
+
+    public function afterDelete()
+    {
+        parent::afterDelete();
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_reference_events'] ?? false)) {
+            return;
+        }
+
+        $message = MessageFactory::make(
+            eventType: 'color.deleted',
+            source: 'market',
+            entityType: 'color',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->toSyncPayload(),
+        );
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: 'color.deleted',
+            eventType: 'color.deleted',
+            entityType: 'color',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
+    }
+
+    protected function toSyncPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'yii_color_id' => $this->id,
+            'name_ru' => $this->name_ru,
+            'name_en' => $this->name_en,
+            'name_uz' => $this->name_uz,
+            'color' => $this->color,
+            'status' => $this->status ?? self::STATUS_ACTIVE,
+            'deleted_at' => $this->deleted_at ?? null,
+        ];
     }
 }
