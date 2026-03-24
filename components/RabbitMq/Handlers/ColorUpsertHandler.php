@@ -21,8 +21,6 @@ class ColorUpsertHandler
             $color->name_en = $payload['name_en'] ?? null;
             $color->name_uz = $payload['name_uz'] ?? null;
             $color->color = $payload['color'] ?? null;
-            $color->status = $payload['status'] ?? $color->status ?? Color::STATUS_ACTIVE;
-            $color->deleted_at = $payload['deleted_at'] ?? null;
             $color->save(false);
             $color->suppressSyncEvents = false;
 
