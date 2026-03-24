@@ -89,7 +89,7 @@ class FilterUpsertHandler
         $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
 
         Yii::$app->httpClient->post(
-            $warehouseApiUrl . "/sync-webhook/filters/{$warehouseFilterId}/set-filter-id",
+            $warehouseApiUrl . "/api/sync-webhook/filters/{$warehouseFilterId}/set-filter-id",
             [
                 'json' => ['id' => $warehouseFilterId, 'yii_filter_id' => $yiiFilterId],
                 'headers' => [

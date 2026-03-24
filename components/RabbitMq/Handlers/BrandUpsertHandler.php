@@ -73,7 +73,7 @@ class BrandUpsertHandler
         $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
 
         Yii::$app->httpClient->post(
-            $warehouseApiUrl . "/sync-webhook/brands/{$warehouseBrandId}/set-brand-id",
+            $warehouseApiUrl . "/api/sync-webhook/brands/{$warehouseBrandId}/set-brand-id",
             [
                 'json' => ['id' => $warehouseBrandId, 'yii_brand_id' => $yiiBrandId],
                 'headers' => [

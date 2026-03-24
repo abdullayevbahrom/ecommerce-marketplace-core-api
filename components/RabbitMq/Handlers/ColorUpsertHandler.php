@@ -59,7 +59,7 @@ class ColorUpsertHandler
         $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
 
         Yii::$app->httpClient->post(
-            $warehouseApiUrl . "/sync-webhook/colors/{$warehouseColorId}/set-color-id",
+            $warehouseApiUrl . "/api/sync-webhook/colors/{$warehouseColorId}/set-color-id",
             [
                 'json' => ['id' => $warehouseColorId, 'yii_color_id' => $yiiColorId],
                 'headers' => [

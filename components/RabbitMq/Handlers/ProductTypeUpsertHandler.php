@@ -101,7 +101,7 @@ class ProductTypeUpsertHandler
         $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
 
         Yii::$app->httpClient->post(
-            $warehouseApiUrl . "/sync-webhook/product-types/{$warehouseProductTypeId}/set-product-type-id",
+            $warehouseApiUrl . "/api/sync-webhook/product-types/{$warehouseProductTypeId}/set-product-type-id",
             [
                 'json' => [
                     'id' => $warehouseProductTypeId,

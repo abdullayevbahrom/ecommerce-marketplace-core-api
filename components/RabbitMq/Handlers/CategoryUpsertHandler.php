@@ -79,7 +79,7 @@ class CategoryUpsertHandler
         $warehouseApiUrl = rtrim(Yii::$app->params['warehouseApiUrl'], '/');
 
         Yii::$app->httpClient->post(
-            $warehouseApiUrl . "/sync-webhook/categories/{$warehouseCategoryId}/set-category-id",
+            $warehouseApiUrl . "/api/sync-webhook/categories/{$warehouseCategoryId}/set-category-id",
             [
                 'json' => ['id' => $warehouseCategoryId, 'yii_category_id' => $yiiCategoryId],
                 'headers' => [

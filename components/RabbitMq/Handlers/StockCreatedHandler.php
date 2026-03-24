@@ -38,7 +38,7 @@ class StockCreatedHandler
             /** @var \GuzzleHttp\Client $client */
             $client = Yii::$app->httpClient;
             $response = $client->post(
-                $warehouseApiUrl . "/sync-webhook/branches/{$warehouseBranchId}/set-stock-id",
+                $warehouseApiUrl . "/api/sync-webhook/branches/{$warehouseBranchId}/set-stock-id",
                 [
                     'json' => ['id' => $warehouseBranchId, 'yii_stock_id' => $stock->id],
                     'headers' => [
