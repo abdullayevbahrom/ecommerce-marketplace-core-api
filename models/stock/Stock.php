@@ -315,39 +315,6 @@ class Stock extends \yii\db\ActiveRecord
         return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'stock', 'main' => 1]);
     }
 
-    private function syncToWarehouse()
-    {
-        $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com';
-        $apiUrl = $baseUrl . '/api/sync/branch';
-
-        $client = new Client(['timeout' => 5.0]);
-
-        $dataToSend = [
-            'id' => $this->id,
-            'name_ru' => $this->name_ru,
-            'address' => $this->getFullAddress(),
-        ];
-
-        $secretKey = isset(Yii::$app->params['apiSecretKey']) ? Yii::$app->params['apiSecretKey'] : null;
-        if (!$secretKey) {
-            Yii::error('apiSecretKey is not set in params for warehouse sync.', 'warehouse_sync');
-            return;
-        }
-        $token = md5($this->id . $secretKey);
-
-        try {
-            $client->post($apiUrl, [
-                'json' => $dataToSend,
-                'headers' => [
-                    'X-Api-Token' => $token,
-                ],
-            ]);
-            Yii::info('Successfully synced stock ID ' . $this->id . ' to warehouse.', 'warehouse_sync');
-        } catch (RequestException $e) {
-            Yii::error('Failed to sync stock ID ' . $this->id . ' to warehouse. Error: ' . $e->getMessage(), 'warehouse_sync');
-        }
-    }
-
     public function syncPayloadToWarehouse(): array
     {
         return [

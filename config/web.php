@@ -167,39 +167,6 @@ $config = [
                 'PUT  /api/brand-category/update' => 'api/brand-category/update',
                 'POST /api/brand-category/delete' => 'api/brand-category/delete',
 
-                // Sync Controller Routes
-                'GET api/sync/products/pending' => 'api/sync/pending',
-                'POST api/sync/products/confirm' => 'api/sync/confirm',
-                'POST api/sync/stock' => 'api/sync/stock',
-                'POST api/sync/stock-delete' => 'api/sync/stock-delete',
-                'POST api/sync/user' => 'api/sync/user',
-                'POST api/sync/user-delete' => 'api/sync/user-delete',
-
-                'POST /api/sync/product' => 'api/sync/product',
-                'PUT /api/sync/product' => 'api/sync/product',
-                'POST /api/sync/product-delete' => 'api/sync/product-delete',
-
-                'POST /api/sync/category' => 'api/sync/category',
-                'POST /api/sync/category-delete' => 'api/sync/category-delete',
-
-                'POST /api/sync/brand' => 'api/sync/brand',
-                'POST /api/sync/brand-delete' => 'api/sync/brand-delete',
-
-                'POST /api/sync/ikpu' => 'api/sync/ikpu',
-                'POST /api/sync/ikpu-delete' => 'api/sync/ikpu-delete',
-
-                'POST /api/sync/product-type' => 'api/sync/product-type',
-                'POST /api/sync/product-type-delete' => 'api/sync/product-type-delete',
-
-                'POST /api/sync/filter' => 'api/sync/filter',
-                'POST /api/sync/filter-delete' => 'api/sync/filter-delete',
-
-                'POST /api/sync/color' => 'api/sync/color',
-                'POST /api/sync/color-delete' => 'api/sync/color-delete',
-
-                'POST api/sync/moderation' => 'api/sync/moderation',
-                'POST api/sync/moderation-comment' => 'api/sync/moderation-comment',
-
                 'POST /api/merchant/question/create' => 'api/merchant-question/create',
                 'POST api/warehouse/ticket/reply-from-warehouse' => 'api/warehouse-ticket/reply-from-warehouse',
                 'POST api/merchant/question/<id:\d+>/close' => 'api/merchant-question/close',

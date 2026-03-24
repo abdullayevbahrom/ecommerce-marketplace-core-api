@@ -1887,43 +1887,6 @@ class Product extends \yii\db\ActiveRecord
         );
     }
 
-    private function syncToWarehouse()
-    {
-        $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com';
-        $apiUrl = $baseUrl . '/api/sync/product';
-
-        $client = new Client(['timeout' => 5.0]);
-
-        $dataToSend = [
-            'id' => $this->id,
-            'yii_product_id' => $this->id,
-            'name_ru' => $this->name_ru,
-            'name_en' => $this->name_en,
-            'name_uz' => $this->name_uz,
-            'price' => $this->price,
-            'sku' => $this->sku,
-            'barcode' => $this->barcode,
-        ];
-
-        $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
-        if (!$secretKey) {
-            return;
-        }
-
-        $token = md5($this->id . $secretKey);
-
-        try {
-            $client->post($apiUrl, [
-                'json' => $dataToSend,
-                'headers' => [
-                    'X-Api-Token' => $token,
-                ],
-            ]);
-        } catch (RequestException $e) {
-            Yii::error('Failed to sync product to warehouse: ' . $e->getMessage(), 'warehouse_sync');
-        }
-    }
-
     public function beforeDelete()
     {
         if (!parent::beforeDelete()) {
