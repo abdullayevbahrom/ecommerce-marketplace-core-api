@@ -832,7 +832,7 @@ class UserController extends Controller
             $user->eimzo_didox_token = $post['didox_token'];
             $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+350 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
-            $user->didox_auth_completed = 1;
+            $user->markDidoxAuthCompleted();
 
             if (!empty($profileData)) {
                 $user->eimzo_certificate_info = json_encode($profileData);
@@ -1134,7 +1134,7 @@ class UserController extends Controller
             $user->eimzo_didox_token = $post['didox_token'];
             $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+350 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
-            $user->didox_auth_completed = 1;
+            $user->markDidoxAuthCompleted();
 
             $user->token = $user->generateToken();
 
@@ -1222,7 +1222,7 @@ class UserController extends Controller
 
             // Update auth metadata
             $user->eimzo_last_login = date('Y-m-d H:i:s');
-            $user->eimzo_auth_completed = 1;
+            $user->markEimzoAuthCompleted();
 
             // Generate auth token
             $user->token = $user->generateToken();
@@ -1237,7 +1237,7 @@ class UserController extends Controller
             return [
                 'data' => $userData,
                 'is_new_user' => $isNewUser,
-                'didox_auth_completed' => (bool)($user->didox_auth_completed ?? false),
+                'didox_auth_completed' => $user->isDidoxAuthCompleted(),
             ];
         } catch (HttpException $e) {
             throw $e;
