@@ -80,6 +80,20 @@ class Product extends \yii\db\ActiveRecord
         return 'product';
     }
 
+    public static function find()
+    {
+        return new ProductQuery(static::class);
+    }
+
+    public function isAvailableForMarketplace(): bool
+    {
+        if ($this->stock_id === null) {
+            return true;
+        }
+
+        return $this->stock !== null && $this->stock->isAvailableForMarketplace();
+    }
+
     public function rules()
     {
         return [

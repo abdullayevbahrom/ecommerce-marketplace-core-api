@@ -142,6 +142,13 @@ class OrderController extends Controller
             return ['errors' => ['cart' => 'Your cart is empty']];
         }
 
+        foreach ($cart as $item) {
+            if (!$item->product || !$item->product->isAvailableForMarketplace()) {
+                Yii::$app->response->statusCode = 422;
+                return ['errors' => ['cart' => 'One or more products are no longer available for marketplace purchase']];
+            }
+        }
+
         $model = new Order;
         $model->load($post, '');
 
@@ -731,8 +738,9 @@ class OrderController extends Controller
         
         try {
             $product = \app\models\product\Product::find()
+                ->marketplaceVisible()
                 ->with(['shop.stock', 'stock'])
-                ->where(['id' => $post['product_id']])
+                ->where(['product.id' => $post['product_id']])
                 ->one();
                 
             if (!$product) {

@@ -106,7 +106,11 @@ class BtsController extends Controller {
         }
 
         // Validate product exists and has stock
-        $product = Product::find()->with('stock')->where(['id' => $post['product_id'], 'status' => 1])->one();
+        $product = Product::find()
+            ->marketplaceVisible()
+            ->with('stock')
+            ->where(['product.id' => $post['product_id'], 'product.status' => 1])
+            ->one();
         if (!$product) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['product_id' => ['Продукт не найден или неактивен']]];
