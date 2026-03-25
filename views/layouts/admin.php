@@ -319,19 +319,6 @@ $product_request_count = ProductRequest::find()->where(['status'=>ProductRequest
                         </li>
                     <?php }?>
 
-                    <?php if($user && (($user->role == User::ROLE_ADMIN) || in_array('feedback', $accesses))) {?>
-                        <li <?=($controller == 'feedback') ? 'class="active"' : '';?>>
-                            <a href="<?=Yii::$app->urlManager->createUrl(['/admin/feedback'])?>">
-                                <i class="fa fa-phone"></i> <span>Поддержка</span>
-                                <?php if ($feedback_count > 0) {?>
-                                    <span class="pull-right-container">
-                                        <small class="label pull-right bg-red"><?=$feedback_count;?></small>
-                                    </span>
-                                <?php }?>
-                            </a>
-                        </li>
-                    <?php }?>
-
                     <?php if($user && (($user->role == User::ROLE_ADMIN) || in_array('seller-application', $accesses))) {?>
                         <li <?=($controller == 'seller-application') ? 'class="active"' : '';?>>
                             <a href="<?=Yii::$app->urlManager->createUrl(['/admin/seller-application'])?>">
