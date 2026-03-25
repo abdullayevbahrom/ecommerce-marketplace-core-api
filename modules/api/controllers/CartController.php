@@ -248,7 +248,7 @@ class CartController extends Controller {
             return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Amount must be at least 1', ['amount' => 'Amount must be at least 1']);
         }
     
-        $product = Product::find()->marketplaceVisible()->with(['stock', 'shop.stock'])->where(['product.id' => $post['product_id']])->one();
+        $product = Product::find()->with(['stock', 'shop.stock'])->where(['product.id' => $post['product_id']])->marketplaceVisible()->one();
         if (!$product) {
             return $this->sendError(ErrorCodes::ERROR_PRODUCT_NOT_FOUND, 'Product not found', ['product_id' => 'Product not found']);
         }
@@ -371,9 +371,9 @@ class CartController extends Controller {
         
         // Batch load products for performance
         $productModels = Product::find()
-            ->marketplaceVisible()
             ->with(['stock', 'shop.stock'])
             ->where(['product.id' => $productIds])
+            ->marketplaceVisible()
             ->indexBy('id')
             ->all();
         
@@ -551,7 +551,7 @@ class CartController extends Controller {
             return ['errors'=>['amount'=>'Amount must be at least 1']];
         }
 
-        $product = Product::find()->marketplaceVisible()->with(['stock', 'shop.stock'])->where(['product.id' => $post['product_id']])->one();
+        $product = Product::find()->with(['stock', 'shop.stock'])->where(['product.id' => $post['product_id']])->marketplaceVisible()->one();
         if (!$product) {
             Yii::$app->response->statusCode = 404;
             return ['errors'=>['product_id'=>'Product not found']];
