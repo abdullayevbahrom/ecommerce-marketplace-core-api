@@ -86,6 +86,8 @@ class CartController extends Controller {
             ->where(['user_id'=>$user->getId()])
             ->all();
 
+        $this->refreshCartDeliveryCosts($cartItems, $user);
+
         $groups = [];
 
         foreach ($cartItems as $item) {
@@ -1005,6 +1007,27 @@ class CartController extends Controller {
         }
 
         return $weightInGrams / 1000;
+    }
+
+    private function refreshCartDeliveryCosts(array $cartItems, $user): void
+    {
+        if (!$user || empty($user->bts_city_id)) {
+            return;
+        }
+
+        foreach ($cartItems as $item) {
+            if (!$item->product || !$item->product->isAvailableForMarketplace()) {
+                continue;
+            }
+
+            $recalculatedCost = $item->calculateBtsDeliveryCost($item->product, $user, $item->amount);
+            if ((float)$item->delivery_cost === (float)$recalculatedCost) {
+                continue;
+            }
+
+            $item->delivery_cost = $recalculatedCost;
+            $item->save(false, ['delivery_cost']);
+        }
     }
 }
 ?>
