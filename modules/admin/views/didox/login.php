@@ -5,7 +5,9 @@ $this->title = 'DIDOX - E-IMZO Authentication';
 $this->params['breadcrumbs'][] = ['label' => 'DIDOX Documents', 'url' => ['index']];
 $this->params['breadcrumbs'][] = $this->title;
 
-// Register E-IMZO JavaScript module
+// Register E-IMZO JavaScript modules
+$this->registerJsFile('https://test.e-imzo.uz/demo/e-imzo.js', ['position' => \yii\web\View::POS_HEAD]);
+$this->registerJsFile('https://test.e-imzo.uz/demo/e-imzo-client.js', ['position' => \yii\web\View::POS_HEAD]);
 $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD]);
 ?>
 
@@ -489,6 +491,14 @@ $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD])
 <script>
 let eimzoAuth = null;
 let mobileAuthInFlight = false;
+let desktopEimzoConnected = false;
+let desktopCertificates = {};
+
+const DESKTOP_EIMZO_API_KEYS = [
+    'null', 'E0A205EC4E7B78BBB56AFF83A733A1BB9FD39D562E67978CC5E7D73B0951DB1954595A20672A63332535E13CC6EC1E1FC8857BB09E0855D7E76E411B6FA16E9D',
+    'localhost', '96D0C1491615C82B9A54D9989779DF825B690748224C2B04F500F370D51827CE2644D8D4A82C18184D73AB8530BB8ED537269603F61DB0D03D2104ABF789970B',
+    '127.0.0.1', 'A7BCFA5D490B351BE0754130DF03A068F855DB4333D43921125B9CF2670EF6A40370C646B90401955E1F7BC9CDBF59CE0B2C5467D820BE189C845D0B79CFC96F',
+];
 
 // Initialize page interactions
 document.addEventListener('DOMContentLoaded', function() {
@@ -517,7 +527,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (this.value === 'eimzo_didox' || this.value === 'eimzo_direct') {
                 eimzoSection.style.display = 'block';
                 passwordGroup.style.display = 'none';
-                loginBtn.disabled = true; // Will be enabled when E-IMZO connects
+                loginBtn.disabled = !desktopEimzoConnected;
                 mobileLoginBtn.style.display = this.value === 'eimzo_direct' ? 'inline-block' : 'none';
             } else {
                 eimzoSection.style.display = 'none';
@@ -577,28 +587,21 @@ function updateLoginButtonText() {
     loginBtnText.textContent = text;
 }
 
-function connectToEIMZO() {
-    const authMethod = document.querySelector('input[name="authMethod"]:checked').value;
+function createAuthClient(authMethod) {
     const isDirectFlow = authMethod === 'eimzo_direct';
     const apiBaseUrl = isDirectFlow
         ? window.location.origin
         : <?= json_encode(Yii::$app->params['didoxApiUrl'] ?? 'https://stage.goodsign.biz') ?>;
-    
-    eimzoAuth = isDirectFlow
+
+    const client = isDirectFlow
         ? new EIMZOYii2Auth(apiBaseUrl)
         : new EIMZOAuth(apiBaseUrl, { provider: 'didox' });
 
-    // Set up callbacks
-    eimzoAuth.onStatusUpdate = (message, type) => {
+    client.onStatusUpdate = (message, type) => {
         updateStatus(message, type);
     };
 
-    eimzoAuth.onCertificatesLoaded = (certificates) => {
-        populateCertificates(certificates);
-        document.getElementById('loginBtn').disabled = false;
-    };
-
-    eimzoAuth.onAuthSuccess = (token, userData) => {
+    client.onAuthSuccess = (token, userData) => {
         const currentAuthMethod = document.querySelector('input[name="authMethod"]:checked').value;
 
         if (currentAuthMethod === 'eimzo_direct') {
@@ -609,87 +612,157 @@ function connectToEIMZO() {
         console.log('=== E-IMZO AUTH SUCCESS ===');
         console.log('DIDOX token received:', token ? token.substring(0, 20) + '...' : 'null');
         console.log('User data from E-IMZO:', userData);
-        
+
         const connectionType = document.querySelector('input[name="connectionType"]:checked').value;
         const taxIdFromField = document.getElementById('taxIdInput').value;
-        
+
         console.log('Connection type:', connectionType);
         console.log('TaxId from field:', taxIdFromField);
-        
+
         if (connectionType === 'yur') {
-            console.log('=== COMPANY LOGIN FLOW ===');
-            // For company login: taxIdFromField = company INN, need individual INN from certificate
-            
-            // Extract individual INN from certificate
             const selectedOption = document.getElementById('certificateSelect').options[document.getElementById('certificateSelect').selectedIndex];
-            const individualInn = selectedOption.getAttribute('data-inn') || 
-                                 extractInnFromAlias(selectedOption.getAttribute('data-alias'));
-            
-            console.log('Individual INN from certificate:', individualInn);
-            console.log('Company INN from field:', taxIdFromField);
-            
+            const individualInn = selectedOption.getAttribute('data-inn') ||
+                extractInnFromAlias(selectedOption.getAttribute('data-alias'));
+
             if (!individualInn) {
-                console.error('No individual INN found in certificate');
-                console.error('Certificate data:', selectedOption.getAttribute('data-cert'));
                 updateStatus('Could not extract individual INN from certificate. Please check certificate data.', 'danger');
                 return;
             }
-            
-            // Validate that we have different INNs (individual vs company)
-            if (individualInn === taxIdFromField) {
-                console.warn('Individual and company INN are the same. This might be intended.');
-            }
-            
-            console.log('Step 1 complete: Individual authenticated with token');
-            console.log('Step 2: Now logging into company...');
-            
+
             updateStatus(`Company login: Step 2 - Logging individual into company (${taxIdFromField})...`, 'info');
-            
-            // The token we received is for the individual, now login to company
             authenticateWithServerForCompany(individualInn, token, taxIdFromField);
         } else {
-            console.log('=== INDIVIDUAL LOGIN FLOW ===');
-            // For individual login, save token directly
-            // The individual INN should match what's in the field and what was used for E-IMZO auth
-            const selectedOption = document.getElementById('certificateSelect').options[document.getElementById('certificateSelect').selectedIndex];
-            const individualInnFromCert = selectedOption.getAttribute('data-inn') || 
-                                         extractInnFromAlias(selectedOption.getAttribute('data-alias'));
-            
-            console.log('Individual INN from certificate:', individualInnFromCert);
-            console.log('Individual INN from field:', taxIdFromField);
-            
-            if (individualInnFromCert !== taxIdFromField) {
-                console.warn('INN mismatch between certificate and field:', {
-                    fromCert: individualInnFromCert,
-                    fromField: taxIdFromField
-                });
-            }
-            
             authenticateWithServer(taxIdFromField, token);
         }
     };
 
-    eimzoAuth.onAuthError = (error) => {
+    client.onAuthError = (error) => {
         updateStatus('Error: ' + error, 'danger');
     };
 
-    eimzoAuth.onStepUpdate = (stepNumber, completed) => {
+    client.onStepUpdate = (stepNumber, completed) => {
         updateStep(stepNumber, completed);
     };
 
-    // Initialize connection
-    eimzoAuth.initialize();
+    return client;
+}
 
-    // Update UI
-    document.getElementById('connectBtn').disabled = true;
-    document.getElementById('disconnectBtn').disabled = false;
+function installDesktopApiKeys() {
+    return new Promise((resolve, reject) => {
+        if (typeof EIMZOClient === 'undefined') {
+            reject(new Error('Official E-IMZO client script is not loaded'));
+            return;
+        }
+
+        EIMZOClient.API_KEYS = DESKTOP_EIMZO_API_KEYS.slice();
+        EIMZOClient.checkVersion(function () {
+            EIMZOClient.installApiKeys(function () {
+                resolve();
+            }, function (e, reason) {
+                reject(new Error(reason || ('API key install failed: ' + (e || 'unknown error'))));
+            });
+        }, function (e, reason) {
+            reject(new Error(reason || ('Version check failed: ' + (e || 'unknown error'))));
+        });
+    });
+}
+
+function loadDesktopCertificates() {
+    return new Promise((resolve, reject) => {
+        EIMZOClient.listAllUserKeys(
+            function (cert, idx) {
+                return `itm-${cert.serialNumber || 'cert'}-${idx}`;
+            },
+            function (itemId, cert) {
+                return {
+                    id: itemId,
+                    type: cert.type,
+                    disk: cert.disk,
+                    path: cert.path,
+                    name: cert.name,
+                    alias: cert.alias,
+                    cardUID: cert.cardUID,
+                    serialNumber: cert.serialNumber,
+                    validFrom: cert.validFrom,
+                    validTo: cert.validTo,
+                    CN: cert.CN,
+                    TIN: cert.TIN,
+                    UID: cert.UID,
+                    PINFL: cert.PINFL,
+                    O: cert.O,
+                    T: cert.T,
+                };
+            },
+            function (items) {
+                resolve(items);
+            },
+            function (e, reason) {
+                reject(new Error(reason || ('Certificate list failed: ' + (e || 'unknown error'))));
+            }
+        );
+    });
+}
+
+function normalizeDesktopCertificate(cert) {
+    const inn = cert.TIN || cert.UID || extractInnFromAlias(cert.alias);
+    const validTo = cert.validTo instanceof Date
+        ? cert.validTo.toISOString().slice(0, 19).replace('T', ' ')
+        : cert.validTo;
+
+    return {
+        id: cert.id,
+        index: cert.id,
+        type: cert.type,
+        disk: cert.disk,
+        path: cert.path,
+        name: cert.name,
+        alias: cert.alias,
+        cardUID: cert.cardUID,
+        serialNumber: cert.serialNumber,
+        inn,
+        taxId: inn,
+        uid: cert.UID || inn,
+        validTo,
+        displayName: `${cert.CN || cert.O || 'E-IMZO Certificate'}${validTo ? ` - ${validTo}` : ''}${inn ? ` ИНН: ${inn}` : ''}`,
+        raw: cert,
+    };
+}
+
+async function connectToEIMZO() {
+    const authMethod = document.querySelector('input[name="authMethod"]:checked').value;
+    eimzoAuth = createAuthClient(authMethod);
+
+    try {
+        updateStatus('Checking E-IMZO desktop client...', 'info');
+        await installDesktopApiKeys();
+        updateStatus('Loading certificates from E-IMZO...', 'info');
+
+        const certificates = (await loadDesktopCertificates()).map(normalizeDesktopCertificate);
+        desktopCertificates = {};
+        certificates.forEach((cert) => {
+            desktopCertificates[String(cert.id)] = cert;
+        });
+
+        populateCertificates(certificates);
+        desktopEimzoConnected = true;
+        document.getElementById('connectBtn').disabled = true;
+        document.getElementById('disconnectBtn').disabled = false;
+        document.getElementById('loginBtn').disabled = false;
+        updateStatus(`Найдено сертификатов: ${certificates.length}`, 'success');
+        updateStep(1, true);
+    } catch (error) {
+        desktopEimzoConnected = false;
+        updateStatus('Error: ' + error.message, 'danger');
+        document.getElementById('connectBtn').disabled = false;
+        document.getElementById('disconnectBtn').disabled = true;
+        document.getElementById('loginBtn').disabled = true;
+    }
 }
 
 function disconnectFromEIMZO() {
-    if (eimzoAuth) {
-        eimzoAuth.disconnect();
-        eimzoAuth = null;
-    }
+    eimzoAuth = null;
+    desktopEimzoConnected = false;
+    desktopCertificates = {};
 
     // Reset UI
     document.getElementById('connectBtn').disabled = false;
@@ -714,15 +787,15 @@ function populateCertificates(certificates) {
     
     certificates.forEach(cert => {
         const option = document.createElement('option');
-        option.value = cert.index;
+        option.value = cert.id || cert.index;
         option.textContent = cert.displayName;
         
         // Store certificate data for auto-fill - extract INN from various sources
         let extractedInn = null;
         
         // Try to get INN from cert.inn property
-        if (cert.inn) {
-            extractedInn = cert.inn;
+        if (cert.inn || cert.taxId || cert.TIN) {
+            extractedInn = cert.inn || cert.taxId || cert.TIN;
         }
         // Try to extract from alias
         else if (cert.alias) {
@@ -881,7 +954,7 @@ function performAuthentication() {
             authenticateWithPassword(taxId, password, connectionType);
         }
     } else if (authMethod === 'eimzo_didox' || authMethod === 'eimzo_direct') {
-    if (!eimzoAuth) {
+    if (!desktopEimzoConnected) {
         updateStatus('Please connect to E-IMZO first', 'danger');
         return;
     }
@@ -891,6 +964,12 @@ function performAuthentication() {
         updateStatus('Please select a certificate', 'warning');
         return;
     }
+
+        const selectedCertificate = desktopCertificates[String(selectedIndex)];
+        if (!selectedCertificate) {
+            updateStatus('Selected certificate is no longer available. Please reconnect to E-IMZO.', 'danger');
+            return;
+        }
 
         console.log('Selected certificate index:', selectedIndex);
         
@@ -933,7 +1012,49 @@ function performAuthentication() {
         // Store in localStorage for cross-page access
         localStorage.setItem('didox_selected_certificate', JSON.stringify(certificateInfo));
         
-        eimzoAuth.loginWithCertificate(parseInt(selectedIndex), taxId, connectionType);
+        eimzoAuth = createAuthClient(authMethod);
+        eimzoAuth.loginData = {
+            taxId,
+            certificateIndex: selectedIndex,
+            certificate: selectedCertificate,
+            connectionType,
+            extra: {},
+        };
+
+        const payloadPromise = authMethod === 'eimzo_direct'
+            ? eimzoAuth.fetchDirectChallenge().then((challengeData) => {
+                eimzoAuth.loginData.challenge = challengeData.challenge;
+                eimzoAuth.loginData.challengeTtl = challengeData.ttl;
+                return challengeData.challenge;
+            })
+            : Promise.resolve(taxId);
+
+        payloadPromise.then((payloadToSign) => {
+            updateStatus('Loading certificate key from E-IMZO...', 'info');
+            updateStep(2, false);
+
+            EIMZOClient.loadKey(selectedCertificate.raw || selectedCertificate, function (keyId) {
+                eimzoAuth.loginData.keyId = keyId;
+                updateStatus('Создание цифровой подписи...', 'info');
+
+                EIMZOClient.createPkcs7(keyId, payloadToSign, null, async function (pkcs7) {
+                    eimzoAuth.loginData.pkcs7_64 = pkcs7;
+                    eimzoAuth.updateStep(3, true);
+
+                    if (authMethod === 'eimzo_direct') {
+                        await eimzoAuth.performDirectAuthentication();
+                    } else {
+                        await eimzoAuth.addDidoxTimestamp();
+                    }
+                }, function (e, reason) {
+                    eimzoAuth.handleError(reason || ('PKCS#7 creation failed: ' + (e || 'unknown error')));
+                }, false, false);
+            }, function (e, reason) {
+                eimzoAuth.handleError(reason || ('Key load failed: ' + (e || 'unknown error')));
+            }, false);
+        }).catch((error) => {
+            eimzoAuth.handleError(error.message || String(error));
+        });
     }
 }
 

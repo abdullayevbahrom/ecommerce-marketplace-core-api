@@ -171,7 +171,7 @@ class EIMZOAuth {
             this.updateStep(3, true);
 
             if (this.provider === "direct") {
-                this.addDirectTimestamp();
+                this.performDirectAuthentication();
             } else {
                 this.addDidoxTimestamp();
             }
@@ -334,7 +334,7 @@ class EIMZOAuth {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    pkcs7b64: this.loginData.timestampedSignature || this.loginData.pkcs7_64,
+                    pkcs7b64: this.loginData.pkcs7_64,
                     user_type: userType,
                 }),
             });
@@ -346,6 +346,7 @@ class EIMZOAuth {
 
             this.loginData.directAuthResult = data;
             this.updateStatus("Авторизация через E-IMZO успешна!", "success");
+            this.updateStep(4, true);
             if (this.onAuthSuccess) {
                 this.onAuthSuccess(data.token, data);
             }
