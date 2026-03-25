@@ -755,8 +755,8 @@ class OrderController extends Controller
                 return ['errors' => ['product' => 'Product location (BTS city) not configured. Please contact seller.']];
             }
 
-            // Calculate total weight for the amount of products (in kg)
-            $unitWeight = $product->weight && $product->weight > 0 ? (float)$product->weight : 1.0;
+            // Product weight is stored in grams in admin/shop forms.
+            $unitWeight = $this->normalizeProductWeightToKg($product->weight ?? null);
             $totalWeight = $unitWeight * $amount;
             $totalWeight = max(1.0, $totalWeight); // Minimum 1kg
 
@@ -1035,6 +1035,16 @@ class OrderController extends Controller
         } catch (Exception $e) {
             return ['success' => false, 'data' => null, 'error' => $e->getMessage()];
         }
+    }
+
+    private function normalizeProductWeightToKg($rawWeight): float
+    {
+        $weightInGrams = (float)$rawWeight;
+        if ($weightInGrams <= 0) {
+            return 1.0;
+        }
+
+        return $weightInGrams / 1000;
     }
 }
 ?>

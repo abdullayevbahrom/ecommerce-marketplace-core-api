@@ -10,6 +10,10 @@ class ProductQuery extends ActiveQuery
     public function marketplaceVisible(string $productAlias = 'product'): self
     {
         return $this->andWhere([
+            '>',
+            "{$productAlias}.amount",
+            0,
+        ])->andWhere([
             'or',
             ["{$productAlias}.stock_id" => null],
             [

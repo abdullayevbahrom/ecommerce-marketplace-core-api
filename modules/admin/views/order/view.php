@@ -221,7 +221,7 @@ $location = $model->map_location ? explode(', ', $model->map_location) : [];
                     </tr>
                     <tr>
                         <td>Оформитель заказа:</td>
-                        <td><?=$model->user->name ? '<a href="'.Yii::$app->urlManager->createUrl(['/admin/user/view', 'id'=>$model->user->id]).'" target="_blank">'.$model->user->name.'</a>' : '-';?></td>
+                        <td><?=$model->user && $model->user->name ? '<a href="'.Yii::$app->urlManager->createUrl(['/admin/user/view', 'id'=>$model->user->id]).'" target="_blank">'.$model->user->name.'</a>' : '-';?></td>
                     </tr>
                     <tr>
                         <td>Адрес:</td>

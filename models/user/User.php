@@ -19,6 +19,40 @@ use app\models\user\address\UserAddress;
 
 class User extends ActiveRecord implements IdentityInterface
 {
+    private const LEGACY_REGION_ID_TO_CODE = [
+        '2' => '60',
+        '3' => '50',
+        '4' => '90',
+        '5' => '10',
+        '6' => '01',
+        '7' => '80',
+        '8' => '30',
+        '9' => '25',
+        '10' => '85',
+        '11' => '95',
+        '12' => '20',
+        '13' => '75',
+        '14' => '70',
+        '15' => '40',
+    ];
+
+    private const REGION_CODE_TO_LEGACY_ID = [
+        '60' => '2',
+        '50' => '3',
+        '90' => '4',
+        '10' => '5',
+        '01' => '6',
+        '80' => '7',
+        '30' => '8',
+        '25' => '9',
+        '85' => '10',
+        '95' => '11',
+        '20' => '12',
+        '75' => '13',
+        '70' => '14',
+        '40' => '15',
+    ];
+
     // user
     const USER_SIGNUP = 'signup';
     const USER_SIGNIN = 'signin';
@@ -160,7 +194,7 @@ class User extends ActiveRecord implements IdentityInterface
             [['bts_region_id', 'bts_city_id'], 'string', 'max' => 10],
 
             // BTS region and city validation
-            // ['bts_city_id', 'validateCityRegion'],
+            ['bts_city_id', 'validateCityRegion', 'on' => [self::USER_UPDATE, self::SIGNUP_ADMIN_USER, self::UPDATE_ADMIN_USER]],
 
             ['source', 'in', 'range' => [self::SOURCE_YII, self::SOURCE_SKLAD]],
         ];
@@ -321,20 +355,73 @@ class User extends ActiveRecord implements IdentityInterface
      */
     public function validateCityRegion($attribute, $params)
     {
-        if (!$this->hasErrors()) {
-            // Only validate if both region and city are set
-            if (!empty($this->bts_region_id) && !empty($this->bts_city_id)) {
-                // Import BTS service to access city data
-                $cityData = \yii\services\BTS::getCitiesDetailed($this->bts_region_id);
+        if ($this->hasErrors()) {
+            return false;
+        }
 
-                // Check if the city exists in the specified region
-                if (!isset($cityData[$this->bts_city_id])) {
-                    return $this->addError($attribute, 'Выбранный город не принадлежит указанному региону');
-                }
+        $regionId = trim((string)$this->bts_region_id);
+        $cityId = trim((string)$this->bts_city_id);
+
+        if ($regionId === '' || $cityId === '') {
+            return false;
+        }
+
+        $regionCode = $this->normalizeRegionCode($regionId);
+        $legacyRegionId = $this->normalizeLegacyRegionId($regionId);
+
+        // New BTS format: region code "50", city code "5005".
+        if ($regionCode !== null && preg_match('/^\d{4,}$/', $cityId)) {
+            if (!str_starts_with($cityId, $regionCode)) {
+                return $this->addError($attribute, 'Выбранный город не принадлежит указанному региону');
+            }
+
+            return false;
+        }
+
+        // Legacy internal IDs: region "3", city "93".
+        if ($legacyRegionId !== null && preg_match('/^\d+$/', $cityId)) {
+            $cityData = \yii\services\BTS::getCitiesDetailed($legacyRegionId);
+
+            if (!isset($cityData[$cityId])) {
+                return $this->addError($attribute, 'Выбранный город не принадлежит указанному региону');
             }
         }
 
         return false;
+    }
+
+    private function normalizeRegionCode(string $regionId): ?string
+    {
+        if ($regionId === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{2}$/', $regionId)) {
+            return $regionId;
+        }
+
+        if ($regionId === '1') {
+            return '01';
+        }
+
+        return self::LEGACY_REGION_ID_TO_CODE[$regionId] ?? null;
+    }
+
+    private function normalizeLegacyRegionId(string $regionId): ?string
+    {
+        if ($regionId === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{2}$/', $regionId)) {
+            return self::REGION_CODE_TO_LEGACY_ID[$regionId] ?? null;
+        }
+
+        if (preg_match('/^\d+$/', $regionId)) {
+            return $regionId;
+        }
+
+        return null;
     }
 
     public static function findIdentity($id)

@@ -9,6 +9,26 @@ use yii\services\BTS;
 use app\models\product\Product;
 
 class BtsController extends Controller {
+    /**
+     * Legacy internal region IDs to new BTS region codes.
+     * This keeps old frontend builds working while the API expects regionCode.
+     */
+    private const LEGACY_REGION_ID_TO_CODE = [
+        '2' => '60',
+        '3' => '50',
+        '4' => '90',
+        '5' => '10',
+        '6' => '01',
+        '7' => '80',
+        '8' => '30',
+        '9' => '25',
+        '10' => '85',
+        '11' => '95',
+        '12' => '20',
+        '13' => '75',
+        '14' => '70',
+        '15' => '40',
+    ];
     
     public function beforeAction($action) {
         $this->enableCsrfValidation = false;
@@ -129,8 +149,8 @@ class BtsController extends Controller {
         // Get sender city code from product stock (stored as BTS city code string, e.g. "0101")
         $senderCityCode = (string)$product->stock->bts_city_id;
 
-        // Calculate total weight for the amount of products (in kg)
-        $unitWeight = $product->weight && $product->weight > 0 ? $product->weight : 1.0;
+        // Product weight is stored in grams in admin/shop forms.
+        $unitWeight = $this->normalizeProductWeightToKg($product->weight ?? null);
         $totalWeight = $unitWeight * $amount;
         $totalWeight = max(1.0, $totalWeight); // Minimum 1kg
 
@@ -268,10 +288,20 @@ class BtsController extends Controller {
     public function actionCities() {
         try {
             $regionCode = Yii::$app->request->get('regionCode');
+            $regionId = Yii::$app->request->get('regionId');
+
+            if (!$regionCode && $regionId !== null && $regionId !== '') {
+                $regionCode = $this->resolveRegionCode($regionId);
+            }
 
             if (!$regionCode) {
                 Yii::$app->response->statusCode = 422;
-                return ['errors' => ['regionCode' => ['Код региона обязателен (например: 01, 10, 60)']]];
+                return [
+                    'errors' => [
+                        'regionCode' => ['Код региона обязателен (например: 01, 10, 60)'],
+                        'regionId' => ['Дополнительно поддерживается legacy regionId, если frontend еще не перешел на regionCode'],
+                    ]
+                ];
             }
 
             $bts = new BTS();
@@ -280,7 +310,12 @@ class BtsController extends Controller {
             if ($result['success'] && isset($result['data']['items'])) {
                 return [
                     'data' => $result['data']['items'],
-                    '_meta' => $result['data']['_meta'] ?? null,
+                    '_meta' => array_filter([
+                        'bts_meta' => $result['data']['_meta'] ?? null,
+                        'resolved_region_code' => $regionCode,
+                        'requested_region_id' => $regionId,
+                        'requested_region_code' => Yii::$app->request->get('regionCode'),
+                    ], static fn($value) => $value !== null && $value !== ''),
                 ];
             }
 
@@ -292,6 +327,37 @@ class BtsController extends Controller {
             Yii::$app->response->statusCode = 500;
             return ['errors' => ['general' => ['Ошибка при получении списка городов']]];
         }
+    }
+
+    private function resolveRegionCode($regionId): ?string
+    {
+        $regionId = trim((string)$regionId);
+
+        if ($regionId === '') {
+            return null;
+        }
+
+        // Already in new BTS code format.
+        if (preg_match('/^\d{2}$/', $regionId)) {
+            return $regionId;
+        }
+
+        // Common fallback if someone sends "1" instead of "01".
+        if ($regionId === '1') {
+            return '01';
+        }
+
+        return self::LEGACY_REGION_ID_TO_CODE[$regionId] ?? null;
+    }
+
+    private function normalizeProductWeightToKg($rawWeight): float
+    {
+        $weightInGrams = (float)$rawWeight;
+        if ($weightInGrams <= 0) {
+            return 1.0;
+        }
+
+        return $weightInGrams / 1000;
     }
 
     /**

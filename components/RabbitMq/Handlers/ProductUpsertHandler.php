@@ -43,7 +43,7 @@ class ProductUpsertHandler
             $product->description_en = $payload['description_en'] ?? null;
             $product->description_uz = $payload['description_uz'] ?? null;
             $product->price = $payload['price'] ?? 0;
-            $product->amount = $payload['amount'] ?? 0;
+            $product->amount = max(0, (float) ($payload['amount'] ?? 0));
             $product->discount = $payload['discount'] ?? null;
             $product->sku = $payload['sku'] ?? null;
             $product->barcode = $payload['barcode'] ?? null;
