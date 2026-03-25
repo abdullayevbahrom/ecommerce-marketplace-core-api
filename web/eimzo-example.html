@@ -235,7 +235,7 @@
     <div class="container">
         <div class="header">
             <h1>🔐 E-IMZO Authentication</h1>
-            <p>Интеграция с Yii2 Backend через Didox API</p>
+            <p>Интеграция с Yii2 backend через direct E-IMZO API</p>
         </div>
 
         <div id="status" class="status info">
@@ -244,10 +244,10 @@
 
         <div class="step-indicator">
             <div class="step" id="step1">1. Подключение</div>
-            <div class="step" id="step2">2. Подпись</div>
-            <div class="step" id="step3">3. Timestamp</div>
-            <div class="step" id="step4">4. Didox</div>
-            <div class="step" id="step5">5. Приложение</div>
+            <div class="step" id="step2">2. Challenge</div>
+            <div class="step" id="step3">3. Подпись</div>
+            <div class="step" id="step4">4. Timestamp</div>
+            <div class="step" id="step5">5. Backend Auth</div>
         </div>
 
         <div class="btn-group">
@@ -301,7 +301,7 @@
         let selectedCertificateIndex = null;
 
         // Configuration - Update these URLs for your setup
-        const YII_API_BASE = 'http://localhost/api/user'; // Your Yii2 API URL
+        const YII_API_BASE = window.location.origin;
         
         function connectToEIMZO() {
             const connectBtn = document.getElementById('connectBtn');
@@ -325,8 +325,8 @@
                 document.getElementById('eimzoStatus').className = 'status success';
             };
 
-            eimzoAuth.onAuthSuccess = (user, appToken) => {
-                showResult(user, appToken);
+            eimzoAuth.onAuthSuccess = (token, authData) => {
+                showResult(authData.user || authData, token);
             };
 
             eimzoAuth.onAuthError = (error) => {
@@ -334,7 +334,7 @@
                 resetInterface();
             };
 
-            eimzoAuth.onStepUpdate = (stepNumber, stepName, completed) => {
+            eimzoAuth.onStepUpdate = (stepNumber, completed) => {
                 updateStep(stepNumber, completed);
             };
 
