@@ -1330,16 +1330,27 @@ class Product extends \yii\db\ActiveRecord
         if (($controller == 'product') && in_array($action, $exception)) {
             $detail = [
                 'description' => function () use ($language) {
-                    return $this->{'description_' . $language} ? strip_tags(html_entity_decode(htmlspecialchars_decode($this->{'description_' . $language}))) : $this->description_ru;
+                    $description = $this->{'description_' . $language};
+                    $fallback = $this->description_ru;
+
+                    return !empty($description)
+                        ? strip_tags(html_entity_decode(htmlspecialchars_decode((string) $description)))
+                        : (!empty($fallback) ? strip_tags(html_entity_decode(htmlspecialchars_decode((string) $fallback))) : '');
                 },
                 'description_ru' => function () {
-                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_ru)));
+                    return !empty($this->description_ru)
+                        ? strip_tags(html_entity_decode(htmlspecialchars_decode((string) $this->description_ru)))
+                        : '';
                 },
                 'description_en' => function () {
-                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_en)));
+                    return !empty($this->description_en)
+                        ? strip_tags(html_entity_decode(htmlspecialchars_decode((string) $this->description_en)))
+                        : '';
                 },
                 'description_uz' => function () {
-                    return strip_tags(html_entity_decode(htmlspecialchars_decode($this->description_uz)));
+                    return !empty($this->description_uz)
+                        ? strip_tags(html_entity_decode(htmlspecialchars_decode((string) $this->description_uz)))
+                        : '';
                 },
                 'filters' => function () {
                     return $this->getFilter();
@@ -1531,7 +1542,10 @@ class Product extends \yii\db\ActiveRecord
 
     public function getProducts()
     {
-        return $this->hasMany(Product::class, ['token_key' => 'token_key'])->andOnCondition(['!=', 'id', $this->id]);
+        return $this->hasMany(Product::class, ['token_key' => 'token_key'])
+            ->andOnCondition(['!=', 'id', $this->id])
+            ->andWhere(['product.status' => 1, 'product.deleted_at' => null])
+            ->marketplaceVisible();
     }
 
     // delivery

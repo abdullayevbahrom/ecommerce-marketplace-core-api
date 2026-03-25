@@ -707,6 +707,7 @@ class ProductController extends Controller
         }
         $filters = [];
         $filters[] = ['term' => ['status' => 1]];
+        $filters[] = ['range' => ['amount' => ['gt' => 0]]];
         $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
         if ($brandId) $filters[] = ['term' => ['brand_id' => (int)$brandId]];
         if ($shopId)  $filters[] = ['term' => ['shop_id' => (int)$shopId]];
@@ -878,6 +879,7 @@ class ProductController extends Controller
         }
 
         $filters[] = ['term' => ['status' => 1]];
+        $filters[] = ['range' => ['amount' => ['gt' => 0]]];
         $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
         if ($brandId) $filters[] = ['term' => ['brand_id' => (int)$brandId]];
         if ($shopId)  $filters[] = ['term' => ['shop_id' => (int)$shopId]];
@@ -1869,6 +1871,7 @@ class ProductController extends Controller
                         ],
                         'filter' => [
                             ['term' => ['status' => 1]],
+                            ['range' => ['amount' => ['gt' => 0]]],
                             ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]],
                         ],
                     ],

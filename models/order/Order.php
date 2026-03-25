@@ -207,7 +207,7 @@ class Order extends \yii\db\ActiveRecord
                     
                     $shop_product = Product::findOne($order_product->product_id);
                     if ($shop_product) {
-                        $shop_product->amount = $shop_product->amount - $order_product->amount;
+                        $shop_product->amount = max(0, (float) $shop_product->amount - (float) $order_product->amount);
                         $shop_product->save(false);
     
                         if ($product->cartFilter) {
