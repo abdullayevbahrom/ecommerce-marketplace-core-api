@@ -304,12 +304,17 @@ class Product extends \yii\db\ActiveRecord
 
     public function saveObject($dashboard = false, $color = null, $token_key = null, $category_tree = null, $product_types = null, $price_data = null)
     {
+        $postedAttributes = $dashboard === false
+            ? (Yii::$app->request->post()['Product'] ?? [])
+            : Yii::$app->request->post();
+        unset($postedAttributes['sku']);
+
         if ($color || $product_types) {
             $product = new Product;
             if ($dashboard === false) {
-                $product->setAttributes(Yii::$app->request->post()['Product']);
+                $product->setAttributes($postedAttributes);
             } else {
-                $product->setAttributes(Yii::$app->request->post());
+                $product->setAttributes($postedAttributes);
                 $product->token_key = $token_key;
             }
             if ($color) {
@@ -318,7 +323,7 @@ class Product extends \yii\db\ActiveRecord
         }
         else if (!$color && $dashboard == true) {
             $product = new Product;
-            $product->setAttributes(Yii::$app->request->post());
+            $product->setAttributes($postedAttributes);
             $product->token_key = $token_key;
         }
         else if (!$color && !$dashboard && !$product_types) {
@@ -327,9 +332,9 @@ class Product extends \yii\db\ActiveRecord
         else {
             $product = new Product;
             if ($dashboard === false) {
-                $product->setAttributes(Yii::$app->request->post()['Product']);
+                $product->setAttributes($postedAttributes);
             } else {
-                $product->setAttributes(Yii::$app->request->post());
+                $product->setAttributes($postedAttributes);
                 $product->token_key = $token_key;
             }
         }
@@ -341,6 +346,9 @@ class Product extends \yii\db\ActiveRecord
         } else if (($color || $product_types) && !$product->token_key) {
             $product->token_key = $this->token_key ?: Yii::$app->security->generateRandomString();
         }
+
+        // SKU belongs to warehouse batches and must not be authored from the shop admin form.
+        $product->sku = $product->isNewRecord ? null : $product->getOldAttribute('sku');
 
         if ($price_data) {
             if (!empty($price_data['price'])) {
@@ -680,6 +688,9 @@ class Product extends \yii\db\ActiveRecord
 
     public function updateObject($dashboard = false, $status = 2)
     {
+        // SKU is owned by warehouse sync and should not be changed from the shop admin form.
+        $this->sku = $this->getOldAttribute('sku');
+
         /** @var User|null $user */
         $user = Yii::$app->user->identity;
         $this->user_id = $this->user_id ? $this->user_id : ($user ? $user->id : null);
@@ -1775,7 +1786,7 @@ class Product extends \yii\db\ActiveRecord
             'price' => $this->price !== null ? (float) $this->price : 0,
             'amount' => $this->amount !== null ? (float) $this->amount : 0,
             'discount' => $this->discount !== null ? (float) $this->discount : null,
-            'sku' => $this->sku,
+            'sku' => null,
             'barcode' => $this->barcode,
             'ikpu_code' => $this->ikpu_code,
             'category_id' => $this->category_id ? (int) $this->category_id : null,

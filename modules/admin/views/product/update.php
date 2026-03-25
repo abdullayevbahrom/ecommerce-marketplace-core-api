@@ -251,11 +251,6 @@ $this->params['breadcrumbs'][] = $this->title;
                                 ]
                             )->label('Тег');?>
                         </div>
-                        <div class="col-sm-6">
-                            <?=$form->field($model, 'sku')->textInput([
-                                'placeholder' => 'Введите SKU товара'
-                            ])->label('SKU');?>
-                        </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-6">
