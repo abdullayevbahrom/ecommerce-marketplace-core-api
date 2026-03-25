@@ -4,6 +4,8 @@ namespace app\models\product;
 
 use Yii;
 use yii\db\ActiveRecord;
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 
 /**
  * ProductAslBelgisi — ASL Belgisi registry entries.
@@ -24,6 +26,7 @@ use yii\db\ActiveRecord;
  */
 class ProductAslBelgisi extends ActiveRecord
 {
+    public bool $suppressSyncEvents = false;
     public static function tableName()
     {
         return '{{%product_asl_belgisi}}';
@@ -101,5 +104,71 @@ class ProductAslBelgisi extends ActiveRecord
 
         Yii::error('Failed to save ProductAslBelgisi: ' . json_encode($model->errors), __METHOD__);
         return null;
+    }
+
+    /**
+     * Publish RabbitMQ event to sklad after ASL Belgisi entry is saved.
+     */
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+
+        if ($this->suppressSyncEvents) {
+            return;
+        }
+
+        if (!(bool) (Yii::$app->params['rabbitmq']['enable_asl_belgisi_events'] ?? false)) {
+            return;
+        }
+
+        try {
+            $eventType = 'product.asl_belgisi.updated';
+
+            $message = MessageFactory::make(
+                eventType: $eventType,
+                source: 'market',
+                entityType: 'product_asl_belgisi',
+                entityId: $this->id,
+                branchId: null,
+                payload: $this->toSyncPayload(),
+            );
+
+            (new OutboxService())->queue(
+                exchange: 'market_to_sklad',
+                routingKey: $eventType,
+                eventType: $eventType,
+                entityType: 'product_asl_belgisi',
+                entityId: $this->id,
+                source: 'market',
+                branchId: null,
+                message: $message
+            );
+        } catch (\Throwable $e) {
+            Yii::error('Failed to queue ASL Belgisi sync event: ' . $e->getMessage(), __METHOD__);
+        }
+    }
+
+    /**
+     * Payload sent to sklad via RabbitMQ when ASL Belgisi entry is created/updated.
+     */
+    public function toSyncPayload(): array
+    {
+        $productIds = Product::find()
+            ->select(['id'])
+            ->where(['barcode' => $this->gtin])
+            ->column();
+
+        return [
+            'id' => $this->id,
+            'gtin' => $this->gtin,
+            'asl_product_id' => $this->asl_product_id,
+            'product_name_ru' => $this->product_name_ru,
+            'product_name_uz' => $this->product_name_uz,
+            'inn' => $this->inn,
+            'product_group' => $this->product_group,
+            'status' => $this->status,
+            'checked_at' => $this->checked_at,
+            'product_ids' => $productIds,
+        ];
     }
 }

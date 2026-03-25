@@ -1786,6 +1786,34 @@ class Product extends \yii\db\ActiveRecord
             'product_types' => $this->prepareProductTypePayload(),
             'images' => $this->prepareImagePayload(),
             'deleted_at' => $this->deleted_at ?? null,
+            'asl_belgisi' => $this->prepareAslBelgisiPayload(),
+        ];
+    }
+
+    /**
+     * ASL Belgisi data for product sync payload to sklad.
+     */
+    protected function prepareAslBelgisiPayload(): ?array
+    {
+        if (empty($this->barcode)) {
+            return null;
+        }
+
+        $asl = ProductAslBelgisi::findByProductBarcode($this->barcode);
+        if (!$asl) {
+            return null;
+        }
+
+        return [
+            'id' => $asl->id,
+            'gtin' => $asl->gtin,
+            'asl_product_id' => $asl->asl_product_id,
+            'product_name_ru' => $asl->product_name_ru,
+            'product_name_uz' => $asl->product_name_uz,
+            'inn' => $asl->inn,
+            'product_group' => $asl->product_group,
+            'status' => $asl->status,
+            'checked_at' => $asl->checked_at,
         ];
     }
 
