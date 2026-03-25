@@ -69,6 +69,18 @@ $sellerProfile = $model->shopSeller;
                                 <td>Date</td>
                                 <td><?=$model->date ? $model->date : '-';?></td>
                             </tr>
+                            <?php if ($model->user) {?>
+                            <tr>
+                                <td>Пользователь</td>
+                                <td>
+                                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/view', 'id' => $model->user->id])?>" class="btn btn-sm btn-primary">
+                                        <i class="fa fa-user"></i>
+                                        <?=\yii\helpers\Html::encode($model->user->name ?: $model->user->phone ?: "User #{$model->user->id}")?>
+                                        (ID: <?=$model->user->id?>)
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php }?>
                         </table>
                     </div>
                 </div>
@@ -102,7 +114,14 @@ $sellerProfile = $model->shopSeller;
                         <table class="table table-striped">
                             <tr>
                                 <td>Name</td>
-                                <td><?=$seller && $seller->name ? $seller->name : '-';?></td>
+                                <td>
+                                    <?php if ($seller) {?>
+                                        <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/view', 'id' => $seller->id])?>" class="text-primary">
+                                            <i class="fa fa-external-link"></i>
+                                            <?=$seller->name ? $seller->name : '-';?>
+                                        </a>
+                                    <?php } else { echo '-'; } ?>
+                                </td>
                             </tr>
                             <tr>
                                 <td>Phone</td>

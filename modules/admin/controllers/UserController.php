@@ -160,6 +160,26 @@ class UserController extends Controller {
         ]);
     }
 
+    /**
+     * Магазины — только ROLE_SHOP, с отображением связанного магазина
+     */
+    public function actionShops() {
+        $searchModel = new UserSearch();
+        $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
+        $dataProvider->query->with(['image'])->andWhere(['role' => User::ROLE_SHOP])->andWhere(['!=', 'status', 0]);
+
+        $dataProvider->setSort([
+            'defaultOrder' => [
+                'id' => 'desc'
+            ]
+        ]);
+
+        return $this->render('shops', [
+            'searchModel' => $searchModel,
+            'dataProvider' => $dataProvider
+        ]);
+    }
+
     public function actionLock($id) {
         $model = User::findOne($id);
 

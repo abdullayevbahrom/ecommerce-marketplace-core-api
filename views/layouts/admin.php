@@ -156,6 +156,9 @@ $product_request_count = ProductRequest::find()->where(['status'=>ProductRequest
                                 <li <?=($controller == 'user' && $action == 'operators') ? 'class="active"' : '';?>>
                                     <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/operators'])?>"><i class="fa fa-circle-o"></i> Операторы</a>
                                 </li>
+                                <li <?=($controller == 'user' && $action == 'shops') ? 'class="active"' : '';?>>
+                                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/shops'])?>"><i class="fa fa-circle-o"></i> Магазины</a>
+                                </li>
                             </ul>
                         </li>
                     <?php }?>
