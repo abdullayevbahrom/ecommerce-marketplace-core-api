@@ -235,7 +235,7 @@ class EimzoController extends Controller
         // Update E-IMZO metadata
         $user->eimzo_certificate_info = json_encode($certificate);
         $user->eimzo_last_login = date('Y-m-d H:i:s');
-        $user->eimzo_auth_completed = 1;
+        $user->markEimzoAuthCompleted();
 
         // Generate auth token
         $user->token = $user->generateToken();
@@ -254,8 +254,8 @@ class EimzoController extends Controller
                 'phone' => $user->phone,
                 'eimzo_tax_id' => $user->eimzo_tax_id,
                 'type' => $user->type,
-                'eimzo_auth_completed' => (bool)$user->eimzo_auth_completed,
-                'didox_auth_completed' => (bool)($user->didox_auth_completed ?? false),
+                'eimzo_auth_completed' => $user->isEimzoAuthCompleted(),
+                'didox_auth_completed' => $user->isDidoxAuthCompleted(),
             ],
             'certificate' => $certificate,
         ]);
@@ -498,7 +498,7 @@ class EimzoController extends Controller
         // Update E-IMZO metadata
         $user->eimzo_certificate_info = json_encode($certificate);
         $user->eimzo_last_login = date('Y-m-d H:i:s');
-        $user->eimzo_auth_completed = 1;
+        $user->markEimzoAuthCompleted();
 
         // Generate auth token
         $user->token = $user->generateToken();
@@ -516,8 +516,8 @@ class EimzoController extends Controller
                 'lastname' => $user->lastname,
                 'eimzo_tax_id' => $user->eimzo_tax_id,
                 'type' => $user->type,
-                'eimzo_auth_completed' => (bool)$user->eimzo_auth_completed,
-                'didox_auth_completed' => (bool)($user->didox_auth_completed ?? false),
+                'eimzo_auth_completed' => $user->isEimzoAuthCompleted(),
+                'didox_auth_completed' => $user->isDidoxAuthCompleted(),
             ],
             'certificate' => $certificate,
         ]);

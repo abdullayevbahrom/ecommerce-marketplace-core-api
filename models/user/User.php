@@ -121,6 +121,43 @@ class User extends ActiveRecord implements IdentityInterface
         return 'user';
     }
 
+    public static function hasColumn(string $name): bool
+    {
+        return static::getTableSchema()->getColumn($name) !== null;
+    }
+
+    public function markEimzoAuthCompleted(): void
+    {
+        if (static::hasColumn('eimzo_auth_completed')) {
+            $this->setAttribute('eimzo_auth_completed', 1);
+        }
+    }
+
+    public function markDidoxAuthCompleted(): void
+    {
+        if (static::hasColumn('didox_auth_completed')) {
+            $this->setAttribute('didox_auth_completed', 1);
+        }
+    }
+
+    public function isEimzoAuthCompleted(): bool
+    {
+        if (static::hasColumn('eimzo_auth_completed')) {
+            return (bool) $this->getAttribute('eimzo_auth_completed');
+        }
+
+        return !empty($this->eimzo_tax_id);
+    }
+
+    public function isDidoxAuthCompleted(): bool
+    {
+        if (static::hasColumn('didox_auth_completed')) {
+            return (bool) $this->getAttribute('didox_auth_completed');
+        }
+
+        return !empty($this->eimzo_didox_token);
+    }
+
     public function rules()
     {
         return [
