@@ -72,7 +72,7 @@ class ShopController extends Controller
         ]);
     }
 
-    public function actionCreate($id = null)
+    public function actionCreate($id = null, $user_id = null)
     {
         $model = new Shop;
 
@@ -85,6 +85,19 @@ class ShopController extends Controller
             }
         } else {
             $model->scenario = Shop::SHOP_CREATE;
+
+            // Pre-fill from existing user when creating from user profile
+            if ($user_id) {
+                $existingUser = \app\models\user\User::findOne($user_id);
+                if ($existingUser) {
+                    $model->user_id = $existingUser->id;
+                    $model->name = $existingUser->name;
+                    $model->phone = $existingUser->phone;
+                    $model->email = $existingUser->email;
+                    $model->contact_user = trim($existingUser->lastname . ' ' . $existingUser->name);
+                    $model->contact_phone = $existingUser->phone;
+                }
+            }
         }
         // end edit
 

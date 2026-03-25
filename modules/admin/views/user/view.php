@@ -258,6 +258,64 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                     </div>
                     <?php endif; ?>
 
+                    <!-- Shop Section (for ROLE_SHOP users) -->
+                    <?php if ($model->role == User::ROLE_SHOP): ?>
+                    <?php $userShop = \app\models\shop\Shop::findOne(['user_id' => $model->id]); ?>
+                    <div class="box box-success">
+                        <div class="box-header with-border">
+                            <h3 class="box-title"><i class="fa fa-shopping-bag"></i> Магазин</h3>
+                        </div>
+                        <div class="box-body">
+                            <?php if ($userShop): ?>
+                                <table class="table table-striped">
+                                    <tr>
+                                        <td style="width:150px"><strong>ID магазина</strong></td>
+                                        <td><?= $userShop->id ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Название</strong></td>
+                                        <td><?= Html::encode($userShop->name_ru ?: '—') ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Статус</strong></td>
+                                        <td>
+                                            <?php if ($userShop->status == 1): ?>
+                                                <small class="label bg-green">Активен</small>
+                                            <?php elseif ($userShop->status == 2): ?>
+                                                <small class="label bg-red">Заблокирован</small>
+                                            <?php else: ?>
+                                                <small class="label bg-yellow">Ожидает</small>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Контактное лицо</strong></td>
+                                        <td><?= Html::encode($userShop->contact_user ?: '—') ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Контактный телефон</strong></td>
+                                        <td><?= Html::encode($userShop->contact_phone ?: '—') ?></td>
+                                    </tr>
+                                </table>
+                                <a href="<?= Yii::$app->urlManager->createUrl(['/admin/shop/view', 'id' => $userShop->id]) ?>" class="btn btn-primary">
+                                    <i class="fa fa-external-link"></i> Перейти к магазину
+                                </a>
+                                <a href="<?= Yii::$app->urlManager->createUrl(['/admin/shop/create', 'id' => $userShop->id]) ?>" class="btn btn-warning">
+                                    <i class="fa fa-pencil"></i> Редактировать магазин
+                                </a>
+                            <?php else: ?>
+                                <div class="callout callout-warning">
+                                    <h4><i class="fa fa-warning"></i> Магазин не создан</h4>
+                                    <p>У этого пользователя роль «Магазин», но магазин ещё не привязан.</p>
+                                </div>
+                                <a href="<?= Yii::$app->urlManager->createUrl(['/admin/shop/create', 'user_id' => $model->id]) ?>" class="btn btn-success btn-lg">
+                                    <i class="fa fa-plus"></i> Создать магазин для этого пользователя
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <!-- Tabbed Content -->
                     <div class="nav-tabs-custom shadow-sm">
                         <ul class="nav nav-tabs">
