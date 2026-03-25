@@ -69,11 +69,22 @@ $type = Yii::$app->request->get('type');
                         ],
                         [
                             'attribute'=>'user_id',
-                            'label'=>'<i class="fa fa-sort"></i> Seller ',
+                            'label'=>'<i class="fa fa-sort"></i> Продавец',
                             'encodeLabel' => false,
                             'format' => 'html',
                             'value' => function ($model, $key, $index, $column) {
-                                return ($model->user && $model->user->name) ? $model->user->name : 'No data';
+                                if (!$model->user) {
+                                    return '<span class="text-muted">Нет данных</span>';
+                                }
+                                $user = $model->user;
+                                $parts = array_filter([$user->lastname, $user->name, $user->middlename]);
+                                $name = $parts ? implode(' ', $parts) : ($user->phone ?: "User #{$user->id}");
+                                $url = Yii::$app->urlManager->createUrl(['/admin/user/view', 'id' => $user->id]);
+                                return Html::a(
+                                    '<i class="fa fa-user"></i> ' . Html::encode($name),
+                                    $url,
+                                    ['class' => 'text-primary', 'title' => 'Перейти к профилю пользователя']
+                                );
                             },
                         ],
                         [
