@@ -8,8 +8,8 @@ use app\models\elasticsearch\ProductEs;
 use yii\base\BaseObject;
 use yii\queue\JobInterface;
 use yii\helpers\Json;
-use app\models\Product;
-use app\models\ProductFilter;
+use app\models\product\Product;
+use app\models\product\ProductFilter;
 
 class EsSyncProductJob extends BaseObject implements JobInterface
 {

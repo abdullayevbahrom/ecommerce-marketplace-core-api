@@ -1636,55 +1636,44 @@ class ProductController extends Controller
         $suggestions = [];
         $limit = Yii::$app->request->get('limit', 10);
 
-        $products = Product::find()
-            ->select(['name_ru', 'name_uz', 'name_en'])
-            ->where(['product.status' => 1])
-            ->andWhere([
-                'or',
-                ['like', 'product.name_ru', $query],
-                ['like', 'product.name_uz', $query],
-                ['like', 'product.name_en', $query],
-            ])
-            ->marketplaceVisible()
-            ->limit($limit * 3)
-            ->asArray()
-            ->all();
+        $products = $this->fetchProductSuggestionNames($query, $limit);
+
+        if (empty($products)) {
+            $products = Product::find()
+                ->select(['name_ru', 'name_uz', 'name_en'])
+                ->where(['product.status' => 1])
+                ->andWhere([
+                    'or',
+                    ['like', 'product.name_ru', $query],
+                    ['like', 'product.name_uz', $query],
+                    ['like', 'product.name_en', $query],
+                ])
+                ->marketplaceVisible()
+                ->limit($limit * 3)
+                ->asArray()
+                ->all();
+        }
 
         $seen = [];
 
         foreach ($products as $product) {
             if (!empty($product['name_ru'])) {
-                $key = strtolower($product['name_ru']);
-                if (!isset($seen[$key])) {
-                    $seen[$key] = true;
-                    $suggestions[] = [
-                        'text' => $product['name_ru'],
-                        'type' => 'product',
-                        'lang' => 'ru'
-                    ];
+                foreach ($this->buildProductPhraseSuggestions($product['name_ru'], $query) as $text) {
+                    $this->appendSuggestion($suggestions, $seen, $text, 'product', 'ru');
                 }
+                $this->appendSuggestion($suggestions, $seen, $product['name_ru'], 'product', 'ru');
             }
             if (!empty($product['name_uz'])) {
-                $key = strtolower($product['name_uz']);
-                if (!isset($seen[$key])) {
-                    $seen[$key] = true;
-                    $suggestions[] = [
-                        'text' => $product['name_uz'],
-                        'type' => 'product',
-                        'lang' => 'uz'
-                    ];
+                foreach ($this->buildProductPhraseSuggestions($product['name_uz'], $query) as $text) {
+                    $this->appendSuggestion($suggestions, $seen, $text, 'product', 'uz');
                 }
+                $this->appendSuggestion($suggestions, $seen, $product['name_uz'], 'product', 'uz');
             }
             if (!empty($product['name_en'])) {
-                $key = strtolower($product['name_en']);
-                if (!isset($seen[$key])) {
-                    $seen[$key] = true;
-                    $suggestions[] = [
-                        'text' => $product['name_en'],
-                        'type' => 'product',
-                        'lang' => 'en'
-                    ];
+                foreach ($this->buildProductPhraseSuggestions($product['name_en'], $query) as $text) {
+                    $this->appendSuggestion($suggestions, $seen, $text, 'product', 'en');
                 }
+                $this->appendSuggestion($suggestions, $seen, $product['name_en'], 'product', 'en');
             }
         }
 
@@ -1702,37 +1691,13 @@ class ProductController extends Controller
 
         foreach ($categories as $category) {
             if (!empty($category['name_ru'])) {
-                $key = strtolower($category['name_ru']);
-                if (!isset($seen[$key])) {
-                    $seen[$key] = true;
-                    $suggestions[] = [
-                        'text' => $category['name_ru'],
-                        'type' => 'category',
-                        'lang' => 'ru'
-                    ];
-                }
+                $this->appendSuggestion($suggestions, $seen, $category['name_ru'], 'category', 'ru');
             }
             if (!empty($category['name_uz'])) {
-                $key = strtolower($category['name_uz']);
-                if (!isset($seen[$key])) {
-                    $seen[$key] = true;
-                    $suggestions[] = [
-                        'text' => $category['name_uz'],
-                        'type' => 'category',
-                        'lang' => 'uz'
-                    ];
-                }
+                $this->appendSuggestion($suggestions, $seen, $category['name_uz'], 'category', 'uz');
             }
             if (!empty($category['name_en'])) {
-                $key = strtolower($category['name_en']);
-                if (!isset($seen[$key])) {
-                    $seen[$key] = true;
-                    $suggestions[] = [
-                        'text' => $category['name_en'],
-                        'type' => 'category',
-                        'lang' => 'en'
-                    ];
-                }
+                $this->appendSuggestion($suggestions, $seen, $category['name_en'], 'category', 'en');
             }
         }
 
@@ -1750,37 +1715,13 @@ class ProductController extends Controller
 
         foreach ($brands as $brand) {
             if (!empty($brand['name_ru'])) {
-                $key = strtolower($brand['name_ru']);
-                if (!isset($seen[$key])) {
-                    $seen[$key] = true;
-                    $suggestions[] = [
-                        'text' => $brand['name_ru'],
-                        'type' => 'brand',
-                        'lang' => 'ru'
-                    ];
-                }
+                $this->appendSuggestion($suggestions, $seen, $brand['name_ru'], 'brand', 'ru');
             }
             if (!empty($brand['name_uz'])) {
-                $key = strtolower($brand['name_uz']);
-                if (!isset($seen[$key])) {
-                    $seen[$key] = true;
-                    $suggestions[] = [
-                        'text' => $brand['name_uz'],
-                        'type' => 'brand',
-                        'lang' => 'uz'
-                    ];
-                }
+                $this->appendSuggestion($suggestions, $seen, $brand['name_uz'], 'brand', 'uz');
             }
             if (!empty($brand['name_en'])) {
-                $key = strtolower($brand['name_en']);
-                if (!isset($seen[$key])) {
-                    $seen[$key] = true;
-                    $suggestions[] = [
-                        'text' => $brand['name_en'],
-                        'type' => 'brand',
-                        'lang' => 'en'
-                    ];
-                }
+                $this->appendSuggestion($suggestions, $seen, $brand['name_en'], 'brand', 'en');
             }
         }
 
@@ -1791,10 +1732,183 @@ class ProductController extends Controller
             if ($aPos === 0 && $bPos !== 0) return -1;
             if ($bPos === 0 && $aPos !== 0) return 1;
 
+             $lengthCompare = mb_strlen($a['text']) <=> mb_strlen($b['text']);
+             if ($lengthCompare !== 0) return $lengthCompare;
+
             return strcmp($a['text'], $b['text']);
         });
 
         return ['data' => array_slice($suggestions, 0, $limit)];
+    }
+
+    private function appendSuggestion(array &$suggestions, array &$seen, string $text, string $type, string $lang): void
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', strip_tags($text)));
+        if ($text === '') {
+            return;
+        }
+
+        $key = mb_strtolower($text, 'UTF-8');
+        if (isset($seen[$key])) {
+            return;
+        }
+
+        $seen[$key] = true;
+        $suggestions[] = [
+            'text' => $text,
+            'type' => $type,
+            'lang' => $lang,
+        ];
+    }
+
+    private function buildProductPhraseSuggestions(string $name, string $query): array
+    {
+        $name = trim(preg_replace('/\s+/u', ' ', strip_tags($name)));
+        $query = trim($query);
+
+        if ($name === '' || $query === '') {
+            return [];
+        }
+
+        $tokens = preg_split('/[^\p{L}\p{N}]+/u', $name, -1, PREG_SPLIT_NO_EMPTY);
+        if (empty($tokens)) {
+            return [];
+        }
+
+        $startIndex = null;
+        foreach ($tokens as $index => $token) {
+            if (mb_stripos($token, $query, 0, 'UTF-8') === 0) {
+                $startIndex = $index;
+                break;
+            }
+        }
+
+        if ($startIndex === null) {
+            return [];
+        }
+
+        $tail = array_slice($tokens, $startIndex);
+        $current = [];
+        $suggestions = [];
+
+        foreach ($tail as $index => $token) {
+            $tokenLower = mb_strtolower($token, 'UTF-8');
+
+            if ($index === 0) {
+                $current[] = $token;
+            } elseif ($index === 1) {
+                if (!$this->isSearchSuggestionSecondToken($tokenLower)) {
+                    break;
+                }
+                $current[] = $token;
+            } else {
+                if (!$this->isSearchSuggestionQualifier($tokenLower)) {
+                    break;
+                }
+                $current[] = $token;
+            }
+
+            $phrase = implode(' ', $current);
+            if (mb_stripos($phrase, $query, 0, 'UTF-8') === 0) {
+                $suggestions[] = $phrase;
+            }
+
+            if (count($current) >= 4) {
+                break;
+            }
+        }
+
+        return $suggestions;
+    }
+
+    private function fetchProductSuggestionNames(string $query, int $limit): array
+    {
+        try {
+            $body = [
+                '_source' => ['name_ru', 'name_uz', 'name_en', 'search_name'],
+                'size' => max(10, min(50, $limit * 5)),
+                'query' => [
+                    'bool' => [
+                        'must' => [
+                            [
+                                'bool' => [
+                                    'should' => [
+                                        ['prefix' => ['name_ru' => mb_strtolower($query, 'UTF-8')]],
+                                        ['prefix' => ['name_uz' => mb_strtolower($query, 'UTF-8')]],
+                                        ['prefix' => ['name_en' => mb_strtolower($query, 'UTF-8')]],
+                                        ['prefix' => ['search_name' => mb_strtolower($query, 'UTF-8')]],
+                                        [
+                                            'multi_match' => [
+                                                'query' => $query,
+                                                'fields' => [
+                                                    'search_name^5',
+                                                    'name_ru^4',
+                                                    'name_uz^4',
+                                                    'name_en^4',
+                                                ],
+                                                'type' => 'bool_prefix',
+                                            ],
+                                        ],
+                                        [
+                                            'multi_match' => [
+                                                'query' => $query,
+                                                'fields' => [
+                                                    'search_name^5',
+                                                    'name_ru^4',
+                                                    'name_uz^4',
+                                                    'name_en^4',
+                                                ],
+                                                'type' => 'best_fields',
+                                                'fuzziness' => 'AUTO',
+                                            ],
+                                        ],
+                                    ],
+                                    'minimum_should_match' => 1,
+                                ],
+                            ],
+                        ],
+                        'filter' => [
+                            ['term' => ['status' => 1]],
+                            ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]],
+                        ],
+                    ],
+                ],
+            ];
+
+            $esRes = Yii::$app->elasticsearch->post('products/_search', [], Json::encode($body));
+            $hits = $esRes['hits']['hits'] ?? [];
+
+            $products = [];
+            foreach ($hits as $hit) {
+                if (!empty($hit['_source']) && is_array($hit['_source'])) {
+                    $products[] = $hit['_source'];
+                }
+            }
+
+            return $products;
+        } catch (\Throwable $e) {
+            Yii::warning('Product search suggestions ES fallback: ' . $e->getMessage(), __METHOD__);
+            return [];
+        }
+    }
+
+    private function isSearchSuggestionSecondToken(string $token): bool
+    {
+        if ((bool) preg_match('/^\p{N}{1,4}$/u', $token)) {
+            return true;
+        }
+
+        return (bool) preg_match('/^\p{L}[\p{L}\p{N}-]{0,19}$/u', $token);
+    }
+
+    private function isSearchSuggestionQualifier(string $token): bool
+    {
+        static $qualifiers = [
+            'pro', 'max', 'plus', 'mini', 'ultra', 'air', 'se', 'fe',
+            'note', 'lite', 'fold', 'flip', 'prime', 'edge', 'core',
+        ];
+
+        return in_array($token, $qualifiers, true);
     }
 
     public function actionByPhoto()
