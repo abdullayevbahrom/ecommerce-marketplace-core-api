@@ -239,10 +239,20 @@ class Category extends \yii\db\ActiveRecord
                 return $this->{'name_' . $language} ? $this->{'name_' . $language} : $this->name_ru;
             },
             'description' => function () use ($language) {
-                return $this->{'description_' . $language} ? strip_tags(html_entity_decode(htmlspecialchars_decode($this->{'description_' . $language}))) : $this->description_ru;
+                $description = $this->{'description_' . $language};
+                $fallback = $this->description_ru;
+
+                return !empty($description)
+                    ? strip_tags(html_entity_decode(htmlspecialchars_decode((string) $description)))
+                    : (!empty($fallback) ? strip_tags(html_entity_decode(htmlspecialchars_decode((string) $fallback))) : '');
             },
             'option' => function () use ($language) {
-                return $this->{'option_' . $language} ? strip_tags(html_entity_decode(htmlspecialchars_decode($this->{'option_' . $language}))) : $this->option_ru;
+                $option = $this->{'option_' . $language};
+                $fallback = $this->option_ru;
+
+                return !empty($option)
+                    ? strip_tags(html_entity_decode(htmlspecialchars_decode((string) $option)))
+                    : (!empty($fallback) ? strip_tags(html_entity_decode(htmlspecialchars_decode((string) $fallback))) : '');
             },
             'photo' => function () {
                 return $this->getPhoto();

@@ -5,7 +5,9 @@ $this->title = 'DIDOX - E-IMZO Authentication';
 $this->params['breadcrumbs'][] = ['label' => 'DIDOX Documents', 'url' => ['index']];
 $this->params['breadcrumbs'][] = $this->title;
 
-// Register E-IMZO JavaScript module
+// Register E-IMZO JavaScript modules
+$this->registerJsFile('https://test.e-imzo.uz/demo/e-imzo.js', ['position' => \yii\web\View::POS_HEAD]);
+$this->registerJsFile('https://test.e-imzo.uz/demo/e-imzo-client.js', ['position' => \yii\web\View::POS_HEAD]);
 $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD]);
 ?>
 
@@ -45,8 +47,8 @@ $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD])
             <div class="box-body">
                 <div class="callout callout-info">
                     <h4><i class="icon fa fa-info"></i> About DIDOX Authentication</h4>
-                    To access DIDOX document management system, you need to authenticate using your digital certificate or login credentials.
-                    Choose your authentication method and connection type below.
+                    You can authenticate into DIDOX with E-IMZO or password, or test direct backend E-IMZO login separately.
+                    Choose the required flow and connection type below.
                 </div>
 
                 <!-- Authentication Status -->
@@ -106,9 +108,16 @@ $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD])
                                     <label>Choose Authentication Method <span class="text-red">*</span></label>
                                     <div class="radio">
                                         <label>
-                                            <input type="radio" name="authMethod" value="eimzo" checked>
-                                            <strong>E-IMZO Digital Signature</strong>
-                                            <br><small class="text-muted">Authenticate using your digital certificate</small>
+                                            <input type="radio" name="authMethod" value="eimzo_didox" checked>
+                                            <strong>E-IMZO -> DIDOX</strong>
+                                            <br><small class="text-muted">Authenticate in DIDOX using your digital certificate</small>
+                                        </label>
+                                    </div>
+                                    <div class="radio">
+                                        <label>
+                                            <input type="radio" name="authMethod" value="eimzo_direct">
+                                            <strong>Direct E-IMZO</strong>
+                                            <br><small class="text-muted">Authenticate in the shop backend without DIDOX token exchange</small>
                                         </label>
                                     </div>
                                     <div class="radio">
@@ -199,6 +208,9 @@ $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD])
                     <button id="loginBtn" class="btn btn-success btn-lg" onclick="performAuthentication()">
                         <i class="fa fa-sign-in"></i> <span id="loginBtnText">Authenticate</span>
                     </button>
+                    <button id="mobileLoginBtn" class="btn btn-info btn-lg" onclick="startMobileAuthentication()" style="display: none;">
+                        <i class="fa fa-mobile"></i> Direct Mobile E-IMZO
+                    </button>
                 </div>
 
                 <!-- Result Display -->
@@ -209,6 +221,47 @@ $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD])
                         </div>
                         <div class="box-body">
                             <div id="resultContent"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="mobileAuthModal" class="eimzo-mobile-modal" style="display: none;">
+                    <div class="eimzo-mobile-backdrop" onclick="closeMobileAuthModal()"></div>
+                    <div class="eimzo-mobile-dialog">
+                        <div class="eimzo-mobile-header">
+                            <h3><i class="fa fa-mobile"></i> Direct Mobile E-IMZO</h3>
+                            <button type="button" class="close" onclick="closeMobileAuthModal()">&times;</button>
+                        </div>
+                        <div class="eimzo-mobile-body">
+                            <div class="row">
+                                <div class="col-sm-5">
+                                    <img id="mobileQrImage" alt="E-IMZO QR" class="img-responsive img-thumbnail" style="width: 100%;">
+                                </div>
+                                <div class="col-sm-7">
+                                    <p>Scan the QR code in the E-IMZO mobile app or open the deeplink on the same device.</p>
+                                    <p><strong>Document ID:</strong> <span id="mobileDocumentId">-</span></p>
+                                    <p><strong>Site ID:</strong> <span id="mobileSiteId">-</span></p>
+                                    <div class="form-group">
+                                        <label>Deep link</label>
+                                        <input type="text" id="mobileDeepLink" class="form-control" readonly>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>QR payload</label>
+                                        <textarea id="mobileQrPayload" class="form-control" rows="4" readonly></textarea>
+                                    </div>
+                                    <div class="btn-group">
+                                        <a id="mobileOpenLink" href="#" class="btn btn-success" target="_blank" rel="noopener">
+                                            <i class="fa fa-external-link"></i> Open E-IMZO App
+                                        </a>
+                                        <button type="button" class="btn btn-default" onclick="copyMobilePayload()">
+                                            <i class="fa fa-copy"></i> Copy Payload
+                                        </button>
+                                    </div>
+                                    <div id="mobileAuthStatus" class="callout callout-info" style="margin-top: 15px;">
+                                        <i class="fa fa-clock-o"></i> Waiting for mobile confirmation...
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -368,9 +421,53 @@ $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD])
     transition: all 0.3s ease;
 }
 
+#mobileLoginBtn {
+    min-width: 220px;
+}
+
 #loginBtn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.eimzo-mobile-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+}
+
+.eimzo-mobile-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.eimzo-mobile-dialog {
+    position: relative;
+    z-index: 1051;
+    width: min(900px, calc(100% - 40px));
+    margin: 40px auto;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.eimzo-mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.eimzo-mobile-header h3 {
+    margin: 0;
+    font-size: 22px;
+}
+
+.eimzo-mobile-body {
+    padding: 20px;
 }
 
 /* Progress steps responsive */
@@ -393,6 +490,15 @@ $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD])
 
 <script>
 let eimzoAuth = null;
+let mobileAuthInFlight = false;
+let desktopEimzoConnected = false;
+let desktopCertificates = {};
+
+const DESKTOP_EIMZO_API_KEYS = [
+    'null', 'E0A205EC4E7B78BBB56AFF83A733A1BB9FD39D562E67978CC5E7D73B0951DB1954595A20672A63332535E13CC6EC1E1FC8857BB09E0855D7E76E411B6FA16E9D',
+    'localhost', '96D0C1491615C82B9A54D9989779DF825B690748224C2B04F500F370D51827CE2644D8D4A82C18184D73AB8530BB8ED537269603F61DB0D03D2104ABF789970B',
+    '127.0.0.1', 'A7BCFA5D490B351BE0754130DF03A068F855DB4333D43921125B9CF2670EF6A40370C646B90401955E1F7BC9CDBF59CE0B2C5467D820BE189C845D0B79CFC96F',
+];
 
 // Initialize page interactions
 document.addEventListener('DOMContentLoaded', function() {
@@ -416,15 +522,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const eimzoSection = document.getElementById('eimzoSection');
             const passwordGroup = document.getElementById('passwordGroup');
             const loginBtn = document.getElementById('loginBtn');
+            const mobileLoginBtn = document.getElementById('mobileLoginBtn');
             
-            if (this.value === 'eimzo') {
+            if (this.value === 'eimzo_didox' || this.value === 'eimzo_direct') {
                 eimzoSection.style.display = 'block';
                 passwordGroup.style.display = 'none';
-                loginBtn.disabled = true; // Will be enabled when E-IMZO connects
+                loginBtn.disabled = !desktopEimzoConnected;
+                mobileLoginBtn.style.display = this.value === 'eimzo_direct' ? 'inline-block' : 'none';
             } else {
                 eimzoSection.style.display = 'none';
                 passwordGroup.style.display = 'block';
                 loginBtn.disabled = false;
+                mobileLoginBtn.style.display = 'none';
             }
             updateLoginButtonText();
         });
@@ -438,6 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize labels
     updateTaxIdFieldLabels();
+    updateLoginButtonText();
     
     // Check if user is already authenticated
     checkAuthenticationStatus();
@@ -466,8 +576,10 @@ function updateLoginButtonText() {
     const loginBtnText = document.getElementById('loginBtnText');
     
     let text = 'Authenticate';
-    if (authMethod === 'eimzo') {
-        text = connectionType === 'yur' ? 'Authenticate with E-IMZO for Company' : 'Authenticate with E-IMZO';
+    if (authMethod === 'eimzo_didox') {
+        text = connectionType === 'yur' ? 'Authenticate in DIDOX for Company' : 'Authenticate in DIDOX';
+    } else if (authMethod === 'eimzo_direct') {
+        text = connectionType === 'yur' ? 'Direct E-IMZO Login (Company Type)' : 'Direct E-IMZO Login';
     } else {
         text = connectionType === 'yur' ? 'Login to Company with Password' : 'Login with Password';
     }
@@ -475,108 +587,182 @@ function updateLoginButtonText() {
     loginBtnText.textContent = text;
 }
 
-function connectToEIMZO() {
-    // Get the API base URL from PHP configuration
-    const apiBaseUrl = <?= json_encode(Yii::$app->params['didoxApiUrl'] ?? 'https://stage.goodsign.biz') ?>;
-    
-    // Create new instance
-    eimzoAuth = new EIMZOAuth(apiBaseUrl);
+function createAuthClient(authMethod) {
+    const isDirectFlow = authMethod === 'eimzo_direct';
+    const apiBaseUrl = isDirectFlow
+        ? window.location.origin
+        : <?= json_encode(Yii::$app->params['didoxApiUrl'] ?? 'https://stage.goodsign.biz') ?>;
 
-    // Set up callbacks
-    eimzoAuth.onStatusUpdate = (message, type) => {
+    const client = isDirectFlow
+        ? new EIMZOYii2Auth(apiBaseUrl)
+        : new EIMZOAuth(apiBaseUrl, { provider: 'didox' });
+
+    client.onStatusUpdate = (message, type) => {
         updateStatus(message, type);
     };
 
-    eimzoAuth.onCertificatesLoaded = (certificates) => {
-        populateCertificates(certificates);
-        document.getElementById('loginBtn').disabled = false;
-    };
+    client.onAuthSuccess = (token, userData) => {
+        const currentAuthMethod = document.querySelector('input[name="authMethod"]:checked').value;
 
-    eimzoAuth.onAuthSuccess = (token, userData) => {
+        if (currentAuthMethod === 'eimzo_direct') {
+            handleDirectAuthSuccess(token, userData);
+            return;
+        }
+
         console.log('=== E-IMZO AUTH SUCCESS ===');
         console.log('DIDOX token received:', token ? token.substring(0, 20) + '...' : 'null');
         console.log('User data from E-IMZO:', userData);
-        
+
         const connectionType = document.querySelector('input[name="connectionType"]:checked').value;
         const taxIdFromField = document.getElementById('taxIdInput').value;
-        
+
         console.log('Connection type:', connectionType);
         console.log('TaxId from field:', taxIdFromField);
-        
+
         if (connectionType === 'yur') {
-            console.log('=== COMPANY LOGIN FLOW ===');
-            // For company login: taxIdFromField = company INN, need individual INN from certificate
-            
-            // Extract individual INN from certificate
             const selectedOption = document.getElementById('certificateSelect').options[document.getElementById('certificateSelect').selectedIndex];
-            const individualInn = selectedOption.getAttribute('data-inn') || 
-                                 extractInnFromAlias(selectedOption.getAttribute('data-alias'));
-            
-            console.log('Individual INN from certificate:', individualInn);
-            console.log('Company INN from field:', taxIdFromField);
-            
+            const individualInn = selectedOption.getAttribute('data-inn') ||
+                extractInnFromAlias(selectedOption.getAttribute('data-alias'));
+
             if (!individualInn) {
-                console.error('No individual INN found in certificate');
-                console.error('Certificate data:', selectedOption.getAttribute('data-cert'));
                 updateStatus('Could not extract individual INN from certificate. Please check certificate data.', 'danger');
                 return;
             }
-            
-            // Validate that we have different INNs (individual vs company)
-            if (individualInn === taxIdFromField) {
-                console.warn('Individual and company INN are the same. This might be intended.');
-            }
-            
-            console.log('Step 1 complete: Individual authenticated with token');
-            console.log('Step 2: Now logging into company...');
-            
+
             updateStatus(`Company login: Step 2 - Logging individual into company (${taxIdFromField})...`, 'info');
-            
-            // The token we received is for the individual, now login to company
             authenticateWithServerForCompany(individualInn, token, taxIdFromField);
         } else {
-            console.log('=== INDIVIDUAL LOGIN FLOW ===');
-            // For individual login, save token directly
-            // The individual INN should match what's in the field and what was used for E-IMZO auth
-            const selectedOption = document.getElementById('certificateSelect').options[document.getElementById('certificateSelect').selectedIndex];
-            const individualInnFromCert = selectedOption.getAttribute('data-inn') || 
-                                         extractInnFromAlias(selectedOption.getAttribute('data-alias'));
-            
-            console.log('Individual INN from certificate:', individualInnFromCert);
-            console.log('Individual INN from field:', taxIdFromField);
-            
-            if (individualInnFromCert !== taxIdFromField) {
-                console.warn('INN mismatch between certificate and field:', {
-                    fromCert: individualInnFromCert,
-                    fromField: taxIdFromField
-                });
-            }
-            
             authenticateWithServer(taxIdFromField, token);
         }
     };
 
-    eimzoAuth.onAuthError = (error) => {
+    client.onAuthError = (error) => {
         updateStatus('Error: ' + error, 'danger');
     };
 
-    eimzoAuth.onStepUpdate = (stepNumber, completed) => {
+    client.onStepUpdate = (stepNumber, completed) => {
         updateStep(stepNumber, completed);
     };
 
-    // Initialize connection
-    eimzoAuth.initialize();
+    return client;
+}
 
-    // Update UI
-    document.getElementById('connectBtn').disabled = true;
-    document.getElementById('disconnectBtn').disabled = false;
+function installDesktopApiKeys() {
+    return new Promise((resolve, reject) => {
+        if (typeof EIMZOClient === 'undefined') {
+            reject(new Error('Official E-IMZO client script is not loaded'));
+            return;
+        }
+
+        EIMZOClient.API_KEYS = DESKTOP_EIMZO_API_KEYS.slice();
+        EIMZOClient.checkVersion(function () {
+            EIMZOClient.installApiKeys(function () {
+                resolve();
+            }, function (e, reason) {
+                reject(new Error(reason || ('API key install failed: ' + (e || 'unknown error'))));
+            });
+        }, function (e, reason) {
+            reject(new Error(reason || ('Version check failed: ' + (e || 'unknown error'))));
+        });
+    });
+}
+
+function loadDesktopCertificates() {
+    return new Promise((resolve, reject) => {
+        EIMZOClient.listAllUserKeys(
+            function (cert, idx) {
+                return `itm-${cert.serialNumber || 'cert'}-${idx}`;
+            },
+            function (itemId, cert) {
+                return {
+                    id: itemId,
+                    type: cert.type,
+                    disk: cert.disk,
+                    path: cert.path,
+                    name: cert.name,
+                    alias: cert.alias,
+                    cardUID: cert.cardUID,
+                    serialNumber: cert.serialNumber,
+                    validFrom: cert.validFrom,
+                    validTo: cert.validTo,
+                    CN: cert.CN,
+                    TIN: cert.TIN,
+                    UID: cert.UID,
+                    PINFL: cert.PINFL,
+                    O: cert.O,
+                    T: cert.T,
+                };
+            },
+            function (items) {
+                resolve(items);
+            },
+            function (e, reason) {
+                reject(new Error(reason || ('Certificate list failed: ' + (e || 'unknown error'))));
+            }
+        );
+    });
+}
+
+function normalizeDesktopCertificate(cert) {
+    const inn = cert.TIN || cert.UID || extractInnFromAlias(cert.alias);
+    const validTo = cert.validTo instanceof Date
+        ? cert.validTo.toISOString().slice(0, 19).replace('T', ' ')
+        : cert.validTo;
+
+    return {
+        id: cert.id,
+        index: cert.id,
+        type: cert.type,
+        disk: cert.disk,
+        path: cert.path,
+        name: cert.name,
+        alias: cert.alias,
+        cardUID: cert.cardUID,
+        serialNumber: cert.serialNumber,
+        inn,
+        taxId: inn,
+        uid: cert.UID || inn,
+        validTo,
+        displayName: `${cert.CN || cert.O || 'E-IMZO Certificate'}${validTo ? ` - ${validTo}` : ''}${inn ? ` ИНН: ${inn}` : ''}`,
+        raw: cert,
+    };
+}
+
+async function connectToEIMZO() {
+    const authMethod = document.querySelector('input[name="authMethod"]:checked').value;
+    eimzoAuth = createAuthClient(authMethod);
+
+    try {
+        updateStatus('Checking E-IMZO desktop client...', 'info');
+        await installDesktopApiKeys();
+        updateStatus('Loading certificates from E-IMZO...', 'info');
+
+        const certificates = (await loadDesktopCertificates()).map(normalizeDesktopCertificate);
+        desktopCertificates = {};
+        certificates.forEach((cert) => {
+            desktopCertificates[String(cert.id)] = cert;
+        });
+
+        populateCertificates(certificates);
+        desktopEimzoConnected = true;
+        document.getElementById('connectBtn').disabled = true;
+        document.getElementById('disconnectBtn').disabled = false;
+        document.getElementById('loginBtn').disabled = false;
+        updateStatus(`Найдено сертификатов: ${certificates.length}`, 'success');
+        updateStep(1, true);
+    } catch (error) {
+        desktopEimzoConnected = false;
+        updateStatus('Error: ' + error.message, 'danger');
+        document.getElementById('connectBtn').disabled = false;
+        document.getElementById('disconnectBtn').disabled = true;
+        document.getElementById('loginBtn').disabled = true;
+    }
 }
 
 function disconnectFromEIMZO() {
-    if (eimzoAuth) {
-        eimzoAuth.disconnect();
-        eimzoAuth = null;
-    }
+    eimzoAuth = null;
+    desktopEimzoConnected = false;
+    desktopCertificates = {};
 
     // Reset UI
     document.getElementById('connectBtn').disabled = false;
@@ -601,15 +787,15 @@ function populateCertificates(certificates) {
     
     certificates.forEach(cert => {
         const option = document.createElement('option');
-        option.value = cert.index;
+        option.value = cert.id || cert.index;
         option.textContent = cert.displayName;
         
         // Store certificate data for auto-fill - extract INN from various sources
         let extractedInn = null;
         
         // Try to get INN from cert.inn property
-        if (cert.inn) {
-            extractedInn = cert.inn;
+        if (cert.inn || cert.taxId || cert.TIN) {
+            extractedInn = cert.inn || cert.taxId || cert.TIN;
         }
         // Try to extract from alias
         else if (cert.alias) {
@@ -767,8 +953,8 @@ function performAuthentication() {
             // Direct individual authentication
             authenticateWithPassword(taxId, password, connectionType);
         }
-    } else if (authMethod === 'eimzo') {
-    if (!eimzoAuth) {
+    } else if (authMethod === 'eimzo_didox' || authMethod === 'eimzo_direct') {
+    if (!desktopEimzoConnected) {
         updateStatus('Please connect to E-IMZO first', 'danger');
         return;
     }
@@ -779,6 +965,12 @@ function performAuthentication() {
         return;
     }
 
+        const selectedCertificate = desktopCertificates[String(selectedIndex)];
+        if (!selectedCertificate) {
+            updateStatus('Selected certificate is no longer available. Please reconnect to E-IMZO.', 'danger');
+            return;
+        }
+
         console.log('Selected certificate index:', selectedIndex);
         
         // Get individual INN from selected certificate for debugging
@@ -788,12 +980,14 @@ function performAuthentication() {
         
         console.log('Individual INN from certificate:', individualInnFromCert);
         
-        if (connectionType === 'yur') {
+        if (authMethod === 'eimzo_didox' && connectionType === 'yur') {
             console.log('Company flow: Will auth individual first, then login to company');
             console.log('Company INN (from field):', taxId);
             console.log('Individual INN (from cert):', individualInnFromCert);
             
             updateStatus(`Company login: Step 1 - Authenticating individual (${individualInnFromCert}) via E-IMZO...`, 'info');
+        } else if (authMethod === 'eimzo_direct' && connectionType === 'yur') {
+            updateStatus('Direct E-IMZO will create/login a backend user with company type, without DIDOX company session.', 'warning');
         } else {
             console.log('Individual flow: Direct authentication');
             updateStatus(`Individual login: Authenticating via E-IMZO...`, 'info');
@@ -818,7 +1012,171 @@ function performAuthentication() {
         // Store in localStorage for cross-page access
         localStorage.setItem('didox_selected_certificate', JSON.stringify(certificateInfo));
         
-        eimzoAuth.loginWithCertificate(parseInt(selectedIndex), taxId, connectionType);
+        eimzoAuth = createAuthClient(authMethod);
+        eimzoAuth.loginData = {
+            taxId,
+            certificateIndex: selectedIndex,
+            certificate: selectedCertificate,
+            connectionType,
+            extra: {},
+        };
+
+        const payloadPromise = authMethod === 'eimzo_direct'
+            ? eimzoAuth.fetchDirectChallenge().then((challengeData) => {
+                eimzoAuth.loginData.challenge = challengeData.challenge;
+                eimzoAuth.loginData.challengeTtl = challengeData.ttl;
+                return challengeData.challenge;
+            })
+            : Promise.resolve(taxId);
+
+        payloadPromise.then((payloadToSign) => {
+            updateStatus('Loading certificate key from E-IMZO...', 'info');
+            updateStep(2, false);
+
+            EIMZOClient.loadKey(selectedCertificate.raw || selectedCertificate, function (keyId) {
+                eimzoAuth.loginData.keyId = keyId;
+                updateStatus('Создание цифровой подписи...', 'info');
+
+                EIMZOClient.createPkcs7(keyId, payloadToSign, null, async function (pkcs7) {
+                    eimzoAuth.loginData.pkcs7_64 = pkcs7;
+                    eimzoAuth.updateStep(3, true);
+
+                    if (authMethod === 'eimzo_direct') {
+                        await eimzoAuth.performDirectAuthentication();
+                    } else {
+                        await eimzoAuth.addDidoxTimestamp();
+                    }
+                }, function (e, reason) {
+                    eimzoAuth.handleError(reason || ('PKCS#7 creation failed: ' + (e || 'unknown error')));
+                }, false, false);
+            }, function (e, reason) {
+                eimzoAuth.handleError(reason || ('Key load failed: ' + (e || 'unknown error')));
+            }, false);
+        }).catch((error) => {
+            eimzoAuth.handleError(error.message || String(error));
+        });
+    }
+}
+
+function handleDirectAuthSuccess(token, authData) {
+    const payload = authData && authData.user ? authData : { user: authData };
+    const user = payload.user || {};
+
+    localStorage.setItem('shop_direct_eimzo_token', token);
+    localStorage.setItem('shop_direct_eimzo_user', JSON.stringify(payload));
+
+    updateStep(3, true);
+    updateStep(4, true);
+    updateStatus('Direct E-IMZO login successful. Backend bearer token stored in localStorage.', 'success');
+
+    const resultSection = document.getElementById('resultSection');
+    const resultContent = document.getElementById('resultContent');
+
+    resultContent.innerHTML = `
+        <div class="callout callout-success">
+            <h4><i class="fa fa-check-circle"></i> Direct E-IMZO Login Successful</h4>
+            <p><strong>User ID:</strong> ${user.id || '-'}</p>
+            <p><strong>INN:</strong> ${user.eimzo_tax_id || '-'}</p>
+            <p><strong>Type:</strong> ${user.type || '-'}</p>
+            <p><strong>Bearer Token:</strong><br><code style="word-break: break-all;">${token || '-'}</code></p>
+        </div>
+    `;
+
+    resultSection.style.display = 'block';
+}
+
+async function startMobileAuthentication() {
+    const authMethod = document.querySelector('input[name="authMethod"]:checked').value;
+    if (authMethod !== 'eimzo_direct') {
+        updateStatus('Mobile flow is available only for direct E-IMZO mode.', 'warning');
+        return;
+    }
+
+    if (mobileAuthInFlight) {
+        updateStatus('Mobile authentication is already running.', 'warning');
+        return;
+    }
+
+    try {
+        mobileAuthInFlight = true;
+        updateStatus('Starting mobile E-IMZO session...', 'info');
+
+        if (!eimzoAuth || !(eimzoAuth instanceof EIMZOYii2Auth)) {
+            eimzoAuth = new EIMZOYii2Auth(window.location.origin);
+        }
+
+        const init = await eimzoAuth.startMobileAuth();
+        const digestHex = await eimzoAuth.getDigestHex(init.challenge);
+        const qr = eimzoAuth.buildMobileQrPayload({
+            siteId: init.siteId,
+            documentId: init.documentId,
+            challenge: init.challenge,
+            hashHex: digestHex,
+        });
+
+        openMobileAuthModal(init, qr);
+        await pollMobileAuthentication(init.documentId, init.pollInterval || 5, init.timeout || 120);
+    } catch (error) {
+        updateStatus('Mobile E-IMZO error: ' + error.message, 'danger');
+        setMobileStatus('Mobile flow failed: ' + error.message, 'danger');
+    } finally {
+        mobileAuthInFlight = false;
+    }
+}
+
+function openMobileAuthModal(init, qr) {
+    document.getElementById('mobileAuthModal').style.display = 'block';
+    document.getElementById('mobileDocumentId').textContent = init.documentId || '-';
+    document.getElementById('mobileSiteId').textContent = init.siteId || '-';
+    document.getElementById('mobileDeepLink').value = qr.deepLink || '';
+    document.getElementById('mobileQrPayload').value = qr.qrCode || '';
+    document.getElementById('mobileOpenLink').href = qr.deepLink || '#';
+    document.getElementById('mobileQrImage').src =
+        'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' + encodeURIComponent(qr.qrCode || '');
+    setMobileStatus('Scan the QR code or open the deeplink, then confirm in the mobile app.', 'info');
+}
+
+function closeMobileAuthModal() {
+    document.getElementById('mobileAuthModal').style.display = 'none';
+}
+
+function setMobileStatus(message, type) {
+    const status = document.getElementById('mobileAuthStatus');
+    status.className = 'callout callout-' + (type || 'info');
+    status.innerHTML = `<i class="fa fa-${type === 'success' ? 'check-circle' : (type === 'danger' ? 'warning' : 'clock-o')}"></i> ${message}`;
+}
+
+async function pollMobileAuthentication(documentId, intervalSeconds, timeoutSeconds) {
+    setMobileStatus('Waiting for mobile confirmation...', 'info');
+    const status = await eimzoAuth.pollMobileStatus(documentId, {
+        intervalSeconds,
+        timeoutSeconds,
+    });
+
+    if (!status || status.status !== 1) {
+        throw new Error('Mobile confirmation did not complete');
+    }
+
+    setMobileStatus('Mobile signature received. Finalizing login...', 'info');
+    const connectionType = document.querySelector('input[name="connectionType"]:checked').value;
+    const authData = await eimzoAuth.getMobileAuthResult(documentId, connectionType === 'yur' ? 'yur' : 'fiz');
+
+    setMobileStatus('Direct mobile E-IMZO login completed.', 'success');
+    handleDirectAuthSuccess(authData.token, authData);
+}
+
+function copyMobilePayload() {
+    const value = document.getElementById('mobileQrPayload').value;
+    if (!value) {
+        return;
+    }
+
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(value).then(() => {
+            setMobileStatus('QR payload copied to clipboard.', 'success');
+        }).catch(() => {
+            setMobileStatus('Unable to copy payload automatically.', 'warning');
+        });
     }
 }
 

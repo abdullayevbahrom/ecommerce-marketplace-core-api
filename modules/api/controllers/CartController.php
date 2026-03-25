@@ -86,6 +86,8 @@ class CartController extends Controller {
             ->where(['user_id'=>$user->getId()])
             ->all();
 
+        $this->refreshCartDeliveryCosts($cartItems, $user);
+
         $groups = [];
 
         foreach ($cartItems as $item) {
@@ -756,8 +758,8 @@ class CartController extends Controller {
                 $product = $cartItem->product;
                 if (!$product) continue;
                 
-                // Calculate weight (fallback to 1kg if not set)
-                $unitWeight = (float)($product->weight ?: 1.0);
+                // Product weight is stored in grams in admin/shop forms.
+                $unitWeight = $this->normalizeProductWeightToKg($product->weight ?? null);
                 $totalWeight += $unitWeight * $cartItem->amount;
                 
                 // Calculate volume (convert mm to cubic meters)
@@ -794,8 +796,8 @@ class CartController extends Controller {
                 $product = $cartItem->product;
                 if (!$product) continue;
                 
-                // Calculate weight (fallback to 1kg if not set)
-                $unitWeight = (float)($product->weight ?: 1.0);
+                // Product weight is stored in grams in admin/shop forms.
+                $unitWeight = $this->normalizeProductWeightToKg($product->weight ?? null);
                 $totalWeight += $unitWeight * $cartItem->amount;
                 
                 // Calculate volume
@@ -848,6 +850,8 @@ class CartController extends Controller {
                     
                     if (isset($response['data'][$priceKey]['price'])) {
                         $deliveryCost = (float)$response['data'][$priceKey]['price'];
+                    } elseif (isset($response['data']['all_cost'])) {
+                        $deliveryCost = (float)$response['data']['all_cost'];
                     } elseif (isset($response['data']['price'])) {
                         // Fallback for single price response
                         $deliveryCost = (float)$response['data']['price'];
@@ -993,6 +997,37 @@ class CartController extends Controller {
             'total_price' => $totalPrice,
             'items_count' => count($items)
         ];
+    }
+
+    private function normalizeProductWeightToKg($rawWeight): float
+    {
+        $weightInGrams = (float)$rawWeight;
+        if ($weightInGrams <= 0) {
+            return 1.0;
+        }
+
+        return $weightInGrams / 1000;
+    }
+
+    private function refreshCartDeliveryCosts(array $cartItems, $user): void
+    {
+        if (!$user || empty($user->bts_city_id)) {
+            return;
+        }
+
+        foreach ($cartItems as $item) {
+            if (!$item->product || !$item->product->isAvailableForMarketplace()) {
+                continue;
+            }
+
+            $recalculatedCost = $item->calculateBtsDeliveryCost($item->product, $user, $item->amount);
+            if ((float)$item->delivery_cost === (float)$recalculatedCost) {
+                continue;
+            }
+
+            $item->delivery_cost = $recalculatedCost;
+            $item->save(false, ['delivery_cost']);
+        }
     }
 }
 ?>

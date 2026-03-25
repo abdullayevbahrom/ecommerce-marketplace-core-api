@@ -27,6 +27,12 @@ class ShopSupportController extends Controller
             return $this->redirect(['/admin/default']);
         }
         $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
+
+        if (!$this->user) {
+            Yii::$app->user->logout(false);
+            return $this->redirect(['/admin/default']);
+        }
+
         $this->shop = Shop::findOne(['user_id'=>$this->user->id]);
 
         if (($this->user->role == User::ROLE_MODERATOR)) {

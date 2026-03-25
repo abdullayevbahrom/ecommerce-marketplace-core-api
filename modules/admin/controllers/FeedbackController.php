@@ -3,20 +3,13 @@ namespace app\modules\admin\controllers;
 
 use Yii;
 use yii\web\Controller;
-use yii\web\UploadedFile;
+use yii\web\HttpException;
 
 use app\models\user\User;
-use app\models\feedback\Feedback;
-use app\models\feedback\FeedbackSearch;
-
-
-use app\models\support\SupportChat;
 use app\models\chat\Messages;
 use app\models\chat\MessageRoom;
 use yii\data\ActiveDataProvider;
 use yii\web\NotFoundHttpException;
-use yii\filters\VerbFilter;
-
 
 class FeedbackController extends Controller{
 	public $user;
@@ -27,6 +20,11 @@ class FeedbackController extends Controller{
             return $this->redirect(['/admin/default']);
         }
         $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
+
+        if (!$this->user) {
+            Yii::$app->user->logout(false);
+            return $this->redirect(["/admin/default"]);
+        }
 
         if (($this->user->role == User::ROLE_MODERATOR)) {
             $accesses = array();
@@ -47,51 +45,8 @@ class FeedbackController extends Controller{
         return parent::beforeAction($action);
     }
 
-    // public function actionIndex() {
-    //     $searchModel = new FeedbackSearch();
-    //     $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
-
-    //     $dataProvider->sort = ['defaultOrder'=>'id desc'];
-
-    //     return $this->render('index', [
-    //         'searchModel' => $searchModel,
-    //         'dataProvider' => $dataProvider
-    //     ]);
-    // }
-
-    // public function actionView($id) {
-    //     $model = Feedback::findOne($id);
-    //     if (!$model) {
-    //         throw new HttpException(404, 'Page not found');
-    //     }
-
-    //     $model->status = 1;
-    //     $model->save(false);
-
-    //     return $this->render('view', [
-    //         'model' => $model
-    //     ]);
-    // }
-
-    // public function actionRemove($id) {
-    //     $model = Feedback::findOne($id);
-    //     if (!$model) {
-    //         throw new HttpException(404, 'Page not found');
-    //     }
-        
-    //     if ($this->user && ($this->user->role != User::ROLE_USER) && $model && $model->delete()) {
-    //         Yii::$app->session->setFlash('feedback_removed', 'Сообщение успешно удалено');
-    //     }
-
-    //     return $this->redirect(['/admin/feedback']);
-    // }
-
-    
-
-
     public function actionIndex()
     {
-        
         $dataProvider = new ActiveDataProvider([
             'query' => MessageRoom::find()->orderBy('id DESC'),
         ]);
@@ -134,9 +89,6 @@ class FeedbackController extends Controller{
             'messagesModel' => $messagesModel,
         ]);
     }
-
-
-   
 
     /**
      * Deletes an existing SupportChat model.

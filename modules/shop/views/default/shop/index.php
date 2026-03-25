@@ -6,6 +6,8 @@ $this->title = 'Магазин';
 $this->params['breadcrumbs'][] = $this->title;
 
 $type = Yii::$app->request->get('type');
+$seller = $model->user;
+$sellerProfile = $model->shopSeller;
 ?>
 
 <div class="content-wrapper">
@@ -92,19 +94,19 @@ $type = Yii::$app->request->get('type');
                         <table class="table table-striped">
                             <tr>
                                 <td>Имя</td>
-                                <td><?=$model->user->name ? $model->user->name : '-';?></td>
+                                <td><?=$seller && $seller->name ? $seller->name : '-';?></td>
                             </tr>
                             <tr>
                                 <td>Телефон</td>
-                                <td><?=$model->user->phone ? $model->user->phone : '-';?></td>
+                                <td><?=$seller && $seller->phone ? $seller->phone : '-';?></td>
                             </tr>
                             <tr>
                                 <td>E-mail</td>
-                                <td><?=$model->user->email ? $model->user->email : '-';?></td>
+                                <td><?=$seller && $seller->email ? $seller->email : '-';?></td>
                             </tr>
                             <tr>
                                 <td>Логин</td>
-                                <td><?=$model->user->login ? $model->user->login : '-';?></td>
+                                <td><?=$seller && $seller->login ? $seller->login : '-';?></td>
                             </tr>
                         </table>
                     </div>
@@ -115,31 +117,31 @@ $type = Yii::$app->request->get('type');
                         <table class="table table-striped">
                             <tr>
                                 <td>ИНН</td>
-                                <td><?=$model->shopSeller->inn ? $model->shopSeller->inn : '-';?></td>
+                                <td><?=$sellerProfile && $sellerProfile->inn ? $sellerProfile->inn : '-';?></td>
                             </tr>
                             <tr>
                                 <td>Расчетный счет</td>
-                                <td><?=$model->shopSeller->account ? $model->shopSeller->account : '-';?></td>
+                                <td><?=$sellerProfile && $sellerProfile->account ? $sellerProfile->account : '-';?></td>
                             </tr>
                             <tr>
                                 <td>Банк</td>
-                                <td><?=$model->shopSeller->bank ? $model->shopSeller->bank : '-';?></td>
+                                <td><?=$sellerProfile && $sellerProfile->bank ? $sellerProfile->bank : '-';?></td>
                             </tr>
                             <tr>
                                 <td>Юридический адрес</td>
-                                <td><?=$model->shopSeller->address_legal ? $model->shopSeller->address_legal : '-';?></td>
+                                <td><?=$sellerProfile && $sellerProfile->address_legal ? $sellerProfile->address_legal : '-';?></td>
                             </tr>
                             <tr>
                                 <td>ОКЕД</td>
-                                <td><?=$model->shopSeller->oked ? $model->shopSeller->oked : '-';?></td>
+                                <td><?=$sellerProfile && $sellerProfile->oked ? $sellerProfile->oked : '-';?></td>
                             </tr>
                             <tr>
                                 <td>OKOHX</td>
-                                <td><?=$model->shopSeller->okohx ? $model->shopSeller->okohx : '-';?></td>
+                                <td><?=$sellerProfile && $sellerProfile->okohx ? $sellerProfile->okohx : '-';?></td>
                             </tr>
                             <tr>
                                 <td>MFO</td>
-                                <td><?=$model->shopSeller->mfo ? $model->shopSeller->mfo : '-';?></td>
+                                <td><?=$sellerProfile && $sellerProfile->mfo ? $sellerProfile->mfo : '-';?></td>
                             </tr>
                         </table>
                     </div>

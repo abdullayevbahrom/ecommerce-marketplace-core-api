@@ -21,6 +21,11 @@ class ShopAdvertisingController extends Controller{
         }
         $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
 
+        if (!$this->user) {
+            Yii::$app->user->logout(false);
+            return $this->redirect(["/admin/default"]);
+        }
+
         if (($this->user->role == User::ROLE_MODERATOR)) {
             $accesses = array();
 

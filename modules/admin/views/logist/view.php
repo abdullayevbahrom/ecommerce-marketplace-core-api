@@ -7,6 +7,7 @@ $this->title = 'Logistic company';
 $this->params['breadcrumbs'][] = $this->title;
 
 $type = Yii::$app->request->get('type');
+$logistUser = $model->user;
 ?>
 
 <div class="content-wrapper">
@@ -66,7 +67,7 @@ $type = Yii::$app->request->get('type');
                             </tr>
                             <tr>
                                 <td>Login</td>
-                                <td><?=$model->user->login ? $model->user->login : '-';?></td>
+                                <td><?=$logistUser && $logistUser->login ? $logistUser->login : '-';?></td>
                             </tr>
                             <tr>
                                 <td>Date</td>

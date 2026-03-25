@@ -60,6 +60,37 @@ class EimzoService
     }
 
     /**
+     * Calculate an E-IMZO digest for mobile deeplink payload generation.
+     *
+     * @param string $text Plain text to hash
+     * @param string $userIp Client IP for X-Real-IP header
+     * @return array{success: bool, digestHex?: string, error?: string}
+     */
+    public function digest(string $text, string $userIp): array
+    {
+        $response = $this->post('/backend/digest', $text, [
+            'Content-Type: application/text',
+            'X-Real-IP: ' . $userIp,
+        ]);
+
+        if ($response === null) {
+            return ['success' => false, 'error' => 'E-IMZO server is unreachable'];
+        }
+
+        if (($response['status'] ?? 0) !== 1) {
+            return [
+                'success' => false,
+                'error' => $response['message'] ?? 'Failed to calculate digest',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'digestHex' => $response['digestHex'] ?? null,
+        ];
+    }
+
+    /**
      * Attach a timestamp to a PKCS#7 document.
      *
      * @param string $pkcs7b64 Base64-encoded PKCS#7 document
