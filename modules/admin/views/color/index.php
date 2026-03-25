@@ -2,6 +2,7 @@
 use yii\helpers\Html;
 use yii\grid\GridView;
 use yii\widgets\Pjax;
+use app\models\color\Color;
 
 $this->title = 'Colors';
 $this->params['breadcrumbs'][] = $this->title;
@@ -20,6 +21,11 @@ $this->params['breadcrumbs'][] = $this->title;
         <?php if (Yii::$app->session->hasFlash('color_removed')) {?>
             <div class="callout callout-success text-center">
                 <?=Yii::$app->session->getFlash('color_removed');?>
+            </div>
+        <?php }?>
+        <?php if (Yii::$app->session->hasFlash('color_locked')) {?>
+            <div class="callout callout-success text-center">
+                <?=Yii::$app->session->getFlash('color_locked');?>
             </div>
         <?php }?>
         <div class="box box-info color-palette-box">
@@ -79,58 +85,69 @@ $this->params['breadcrumbs'][] = $this->title;
                                 'encodeLabel' => false,
                             ],
                             [
-                                'class' => 'yii\grid\ActionColumn',
-                                'template' => '{view}',
-                                'buttons' => [
-                                    'view' => function ($url, $model) {
-
-                                        $user = Yii::$app->user->identity;
-                                        $isModerator = $user->role === \app\models\user\User::ROLE_MODERATOR;
-                                            $menu = '
-                                                <div class="btn-group">
-                                                    <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown">
-                                                        <span class="fa fa-cog"></span>
-                                                </button>
-                                                <ul class="dropdown-menu pull-right">
-                                                    <li>
-                                                    <a href="' . Yii::$app->urlManager->createUrl(['/admin/color/view', 'id'=>$model->id]) . '">
-                                                        View
-                                                    </a>
-                                                    </li>';
-                                            if (!$isModerator) {
-                                                $menu .= '
-                                                    <li>
-                                                        <a href="' . Yii::$app->urlManager->createUrl(['/admin/color/create', 'id'=>$model->id]) . '">
-                                                            Edit
-                                                        </a>
-                                                    </li>';
-                                            }
-
-                                            if (!$isModerator) {
-                                                $menu .= '
-                                                    <li>
-                                                        <a href="' . Yii::$app->urlManager->createUrl(['/admin/color/remove', 'id'=>$model->id]) . '" 
-                                                           class="remove-object">
-                                                            Delete
-                                                        </a>
-                                                    </li>';
-                                            }
-
-                                            $menu .= '
-                                                </ul>
-                                            </div>';
-
-                                            return $menu;
-                                        // return '<div class="btn-group"><button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown">
-                                        //             <span class="fa fa-cog"></span>
-                                        //         </button>
-                                        //         <ul class="dropdown-menu pull-right">
-                                        //             <li><a href="'.Yii::$app->urlManager->createUrl(['/admin/color/view', 'id'=>$model->id]).'">View</a></li>
-                                        //             <li><a href="'.Yii::$app->urlManager->createUrl(['/admin/color/create', 'id'=>$model->id]).'">Edit</a></li>
-                                        //             <li><a href="'.Yii::$app->urlManager->createUrl(['/admin/color/remove', 'id'=>$model->id]).'" class="remove-object">Delete</a></li>
-                                        //         </ul></div>';
+                                'attribute' => 'status',
+                                'label' => 'Status',
+                                'value' => function($model) {
+                                    if ((int)$model->status === Color::STATUS_ACTIVE) {
+                                        return '<small class="label bg-green">Active</small>';
                                     }
+
+                                    return '<small class="label bg-red">Blocked</small>';
+                                },
+                                'format' => 'raw',
+                                'filter' => [
+                                    Color::STATUS_ACTIVE => 'Active',
+                                    Color::STATUS_INACTIVE => 'Blocked',
                                 ],
+                                'headerOptions' => ['style' => 'width: 100px;'],
+                            ],
+                            [
+                                'class' => 'yii\grid\ActionColumn',
+                                'template' => '{view} {update} {lock} {delete}',
+                                'buttons' => [
+                                    'view' => function ($url, $model, $key) {
+                                        return Html::a('<i class="fa fa-eye"></i>', ['/admin/color/view', 'id' => $model->id], [
+                                            'title' => 'View',
+                                            'class' => 'btn btn-sm btn-primary',
+                                            'data-pjax' => 0,
+                                        ]);
+                                    },
+                                    'update' => function ($url, $model, $key) {
+                                        if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR) {
+                                            return '';
+                                        }
+
+                                        return Html::a('<i class="fa fa-pencil"></i>', ['/admin/color/create', 'id' => $model->id], [
+                                            'title' => 'Update',
+                                            'class' => 'btn btn-sm btn-info',
+                                            'data-pjax' => 0,
+                                        ]);
+                                    },
+                                    'lock' => function ($url, $model, $key) {
+                                        $isActive = (int)$model->status === Color::STATUS_ACTIVE;
+                                        $icon = $isActive ? 'fa-lock' : 'fa-unlock-alt';
+                                        $class = $isActive ? 'btn-warning' : 'btn-success';
+
+                                        return Html::a('<i class="fa ' . $icon . '"></i>', ['/admin/color/lock', 'id' => $model->id], [
+                                            'title' => $isActive ? 'Block' : 'Unblock',
+                                            'class' => 'btn btn-sm ' . $class,
+                                            'data-pjax' => 0,
+                                        ]);
+                                    },
+                                    'delete' => function ($url, $model, $key) {
+                                        if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR) {
+                                            return '';
+                                        }
+
+                                        return Html::a('<i class="fa fa-trash"></i>', ['/admin/color/remove', 'id' => $model->id], [
+                                            'title' => 'Delete',
+                                            'class' => 'btn btn-sm btn-danger',
+                                            'data-confirm' => 'Are you sure you want to delete this item?',
+                                            'data-pjax' => 0,
+                                        ]);
+                                    },
+                                ],
+                                'headerOptions' => ['style' => 'width: 200px;'],
                             ]
                         ],
                     ]); ?>
