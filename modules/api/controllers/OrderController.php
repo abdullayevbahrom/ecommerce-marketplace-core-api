@@ -865,6 +865,10 @@ class OrderController extends Controller
             }
             
             // Fallback: try direct price field
+            if ($price === null && isset($response['data']['all_cost'])) {
+                $price = $response['data']['all_cost'];
+            }
+
             if ($price === null && isset($response['data']['price'])) {
                 $price = $response['data']['price'];
             }

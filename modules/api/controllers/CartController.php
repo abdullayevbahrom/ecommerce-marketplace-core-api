@@ -848,6 +848,8 @@ class CartController extends Controller {
                     
                     if (isset($response['data'][$priceKey]['price'])) {
                         $deliveryCost = (float)$response['data'][$priceKey]['price'];
+                    } elseif (isset($response['data']['all_cost'])) {
+                        $deliveryCost = (float)$response['data']['all_cost'];
                     } elseif (isset($response['data']['price'])) {
                         // Fallback for single price response
                         $deliveryCost = (float)$response['data']['price'];
