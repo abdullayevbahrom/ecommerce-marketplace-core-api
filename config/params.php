@@ -21,6 +21,9 @@ $rabbitMqExchangeMarketToSkladRetry = getenv('RABBITMQ_EXCHANGE_MARKET_TO_SKLAD_
 $rabbitMqQueueSkladSyncMain = getenv('RABBITMQ_QUEUE_SKLAD_SYNC_MAIN') ?: 'sklad.sync.main';
 $rabbitMqQueueMarketSyncMain = getenv('RABBITMQ_QUEUE_MARKET_SYNC_MAIN') ?: 'market.sync.main';
 
+$botToken = getenv('TELEGRAM_BOT_TOKEN') ?: null;
+$chatId = getenv('TELEGRAM_CHAT_ID') ?: null;
+
 $config = [
     'adminEmail' => 'admin@example.com',
     'senderEmail' => 'noreply@example.com',
@@ -100,6 +103,10 @@ $config = [
         'mobileStatusPollInterval' => 5,
         // Status polling timeout (seconds)
         'mobileStatusTimeout' => 120,
+    ],
+    'telegram' => [
+        'botToken' => $botToken,
+        'chatId' => $chatId,
     ],
 
     // Wallet Configuration

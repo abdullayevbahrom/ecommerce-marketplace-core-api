@@ -14,8 +14,20 @@ $config = [
         '@tests' => '@app/tests',
     ],
     'components' => [
+        'exceptionNotifier' => [
+            'class' => 'app\components\TelegramExceptionNotifier',
+            'appName' => 'shop-console',
+        ],
+        'telegram' => [
+            'class' => 'app\components\TelegramComponent',
+            'botToken' => $params['telegram']['botToken'],
+            'chatId' => $params['telegram']['chatId'],
+        ],
         'cache' => [
             'class' => 'yii\caching\FileCache',
+        ],
+        'errorHandler' => [
+            'class' => 'app\components\ConsoleErrorHandler',
         ],
         'log' => [
             'traceLevel' => YII_DEBUG ? 3 : 0,
