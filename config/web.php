@@ -33,10 +33,14 @@ $config = [
         ],
     ],
     'components' => [
+        'exceptionNotifier' => [
+            'class' => 'app\components\TelegramExceptionNotifier',
+            'appName' => 'shop',
+        ],
         'telegram' => [
             'class' => 'app\components\TelegramComponent',
-            'botToken' => '7436271920:AAEsS2gkJYKnv-gDX-h2DQDTDIGlSuRYJ-Y',
-            'chatId' => '-1002232025106',
+            'botToken' => $params['telegram']['botToken'],
+            'chatId' => $params['telegram']['chatId'],
         ],
         'assetManager' => [
             'bundles' => [
@@ -68,6 +72,7 @@ $config = [
             'enableAutoLogin' => true,
         ],
         'errorHandler' => [
+            'class' => 'app\components\WebErrorHandler',
             'errorAction' => '/main/error',
         ],
         'mailer' => [
