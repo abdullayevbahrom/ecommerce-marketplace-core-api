@@ -149,8 +149,8 @@ class BtsController extends Controller {
         // Get sender city code from product stock (stored as BTS city code string, e.g. "0101")
         $senderCityCode = (string)$product->stock->bts_city_id;
 
-        // Calculate total weight for the amount of products (in kg)
-        $unitWeight = $product->weight && $product->weight > 0 ? $product->weight : 1.0;
+        // Product weight is stored in grams in admin/shop forms.
+        $unitWeight = $this->normalizeProductWeightToKg($product->weight ?? null);
         $totalWeight = $unitWeight * $amount;
         $totalWeight = max(1.0, $totalWeight); // Minimum 1kg
 
@@ -348,6 +348,16 @@ class BtsController extends Controller {
         }
 
         return self::LEGACY_REGION_ID_TO_CODE[$regionId] ?? null;
+    }
+
+    private function normalizeProductWeightToKg($rawWeight): float
+    {
+        $weightInGrams = (float)$rawWeight;
+        if ($weightInGrams <= 0) {
+            return 1.0;
+        }
+
+        return $weightInGrams / 1000;
     }
 
     /**

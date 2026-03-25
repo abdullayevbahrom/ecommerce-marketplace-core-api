@@ -287,11 +287,20 @@ class UserCart extends \yii\db\ActiveRecord
      * @return float
      */
     protected function calculateTotalWeight($product, $amount) {
-        // Get product weight (fallback to 1kg if not set)
-        $unitWeight = (float)$product->weight ?: 1.0;
-        
-        // Return total weight (unit weight * total quantity)
-        return $unitWeight * $amount;
+        // Product weight is stored in grams in the admin/shop UI.
+        $unitWeightKg = $this->normalizeProductWeightToKg($product->weight ?? null);
+
+        return $unitWeightKg * $amount;
+    }
+
+    protected function normalizeProductWeightToKg($rawWeight): float
+    {
+        $weightInGrams = (float)$rawWeight;
+        if ($weightInGrams <= 0) {
+            return 1.0;
+        }
+
+        return $weightInGrams / 1000;
     }
 
     public function getProductFilter() {

@@ -756,8 +756,8 @@ class CartController extends Controller {
                 $product = $cartItem->product;
                 if (!$product) continue;
                 
-                // Calculate weight (fallback to 1kg if not set)
-                $unitWeight = (float)($product->weight ?: 1.0);
+                // Product weight is stored in grams in admin/shop forms.
+                $unitWeight = $this->normalizeProductWeightToKg($product->weight ?? null);
                 $totalWeight += $unitWeight * $cartItem->amount;
                 
                 // Calculate volume (convert mm to cubic meters)
@@ -794,8 +794,8 @@ class CartController extends Controller {
                 $product = $cartItem->product;
                 if (!$product) continue;
                 
-                // Calculate weight (fallback to 1kg if not set)
-                $unitWeight = (float)($product->weight ?: 1.0);
+                // Product weight is stored in grams in admin/shop forms.
+                $unitWeight = $this->normalizeProductWeightToKg($product->weight ?? null);
                 $totalWeight += $unitWeight * $cartItem->amount;
                 
                 // Calculate volume
@@ -993,6 +993,16 @@ class CartController extends Controller {
             'total_price' => $totalPrice,
             'items_count' => count($items)
         ];
+    }
+
+    private function normalizeProductWeightToKg($rawWeight): float
+    {
+        $weightInGrams = (float)$rawWeight;
+        if ($weightInGrams <= 0) {
+            return 1.0;
+        }
+
+        return $weightInGrams / 1000;
     }
 }
 ?>
