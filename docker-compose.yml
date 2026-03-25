@@ -14,8 +14,8 @@ services:
       - 127.0.0.1:${HTTP_PORT:-8002}:80
     environment:
       TZ: Asia/Tashkent
-      YII_ENV: dev
-      YII_DEBUG: "true"
+      # YII_ENV: dev
+      # YII_DEBUG: "true"
       DB_HOST: app-market-backend-db-1
       DB_NAME: app
       DB_PORT: 3306
