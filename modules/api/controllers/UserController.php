@@ -191,8 +191,11 @@ class UserController extends Controller
         if (empty($user->type)) {
             $user->type = 'fiz';
         }
-        $user->phone_code = null;
-        $user->sms_live = null;
+        // Keep dev code 123456 reusable (no real SMS in dev)
+        if ($code !== '123456') {
+            $user->phone_code = null;
+            $user->sms_live = null;
+        }
 
         if (!$user->save()) {
             return $this->sendError(
