@@ -239,6 +239,9 @@ class UserCart extends \yii\db\ActiveRecord
                 if (isset($response['data']['branch_to_courier']['price'])) {
                     return (float)$response['data']['branch_to_courier']['price'];
                 }
+                if (isset($response['data']['all_cost'])) {
+                    return (float)$response['data']['all_cost'];
+                }
                 if (isset($response['data']['price'])) {
                     return (float)$response['data']['price'];
                 }

@@ -206,6 +206,10 @@ class BtsController extends Controller {
                     }
                 }
 
+                if ($price === null && isset($result['data']['all_cost'])) {
+                    $price = $result['data']['all_cost'];
+                }
+
                 if ($price === null && isset($result['data']['price'])) {
                     $price = $result['data']['price'];
                 }
