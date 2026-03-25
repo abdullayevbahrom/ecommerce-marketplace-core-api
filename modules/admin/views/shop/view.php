@@ -67,6 +67,18 @@ $type = Yii::$app->request->get('type');
                                 <td>Date</td>
                                 <td><?=$model->date ? $model->date : '-';?></td>
                             </tr>
+                            <?php if ($model->user) {?>
+                            <tr>
+                                <td>Пользователь</td>
+                                <td>
+                                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/view', 'id' => $model->user->id])?>" class="btn btn-sm btn-primary">
+                                        <i class="fa fa-user"></i>
+                                        <?=\yii\helpers\Html::encode($model->user->name ?: $model->user->phone ?: "User #{$model->user->id}")?>
+                                        (ID: <?=$model->user->id?>)
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php }?>
                         </table>
                     </div>
                 </div>
@@ -100,7 +112,14 @@ $type = Yii::$app->request->get('type');
                         <table class="table table-striped">
                             <tr>
                                 <td>Name</td>
-                                <td><?=$model->user->name ? $model->user->name : '-';?></td>
+                                <td>
+                                    <?php if ($model->user) {?>
+                                        <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/view', 'id' => $model->user->id])?>" class="text-primary">
+                                            <i class="fa fa-external-link"></i>
+                                            <?=$model->user->name ? $model->user->name : '-';?>
+                                        </a>
+                                    <?php } else { echo '-'; } ?>
+                                </td>
                             </tr>
                             <tr>
                                 <td>Phone</td>
