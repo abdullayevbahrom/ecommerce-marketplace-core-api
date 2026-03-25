@@ -18,7 +18,8 @@ use app\modules\api\components\ErrorCodes;
  *
  * Endpoints:
  *   POST /api/eimzo/challenge           — Get a challenge string (no auth required)
- *   POST /api/eimzo/timestamp           — Attach timestamp to signed PKCS#7 (no auth required)
+     *   POST /api/eimzo/timestamp           — Attach timestamp to signed PKCS#7 (no auth required)
+     *   POST /api/eimzo/digest              — Calculate digest for mobile QR/deeplink payloads (no auth required)
  *   POST /api/eimzo/auth               — Verify signed challenge & authenticate user (no auth required)
  *   POST /api/eimzo/verify             — Verify a PKCS#7 signature (authenticated)
  *   POST /api/eimzo/sign               — Server-side sign data with PFX (authenticated)
@@ -57,7 +58,7 @@ class EimzoController extends Controller
 
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::class,
-            'optional' => ['options', 'challenge', 'timestamp', 'auth', 'mobile-auth', 'mobile-status', 'mobile-auth-result'],
+            'optional' => ['options', 'challenge', 'timestamp', 'digest', 'auth', 'mobile-auth', 'mobile-status', 'mobile-auth-result'],
         ];
 
         $auth = $behaviors['authenticator'];
@@ -127,6 +128,33 @@ class EimzoController extends Controller
         return $this->sendSuccess([
             'pkcs7b64' => $result['pkcs7b64'],
             'signers' => $result['signers'],
+        ]);
+    }
+
+    /**
+     * POST /api/eimzo/digest
+     *
+     * Calculate the digest used for mobile deeplink/QR payloads.
+     *
+     * Body: { "text": "<plain text to hash>" }
+     */
+    public function actionDigest()
+    {
+        $text = Yii::$app->request->post('text');
+        if ($text === null || $text === '') {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_PKCS7_REQUIRED, 'text is required');
+        }
+
+        $service = new EimzoService();
+        $userIp = Yii::$app->request->userIP ?? '127.0.0.1';
+        $result = $service->digest($text, $userIp);
+
+        if (!$result['success']) {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_SERVER_UNREACHABLE, $result['error']);
+        }
+
+        return $this->sendSuccess([
+            'digestHex' => $result['digestHex'],
         ]);
     }
 

@@ -42,6 +42,12 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  eimzo-redis:
+    container_name: eimzo-redis
+    image: redis:7.0-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "eimzo_secret_2026"]
+
   eimzo-server:
     container_name: eimzo-server
     image: amazoncorretto:8-alpine3.19-jre
@@ -53,6 +59,8 @@ services:
       TZ: Asia/Tashkent
     volumes:
       - ./docker/eimzo-server:/opt/eimzo:rw
+    depends_on:
+      - eimzo-redis
 
 volumes:
   rabbitmq_data:

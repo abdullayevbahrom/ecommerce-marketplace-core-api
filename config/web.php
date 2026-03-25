@@ -188,6 +188,7 @@ $config = [
                 // E-IMZO direct integration endpoints
                 'POST api/eimzo/challenge' => 'api/eimzo/challenge',
                 'POST api/eimzo/timestamp' => 'api/eimzo/timestamp',
+                'POST api/eimzo/digest' => 'api/eimzo/digest',
                 'POST api/eimzo/auth' => 'api/eimzo/auth',
                 'POST api/eimzo/verify' => 'api/eimzo/verify',
                 'POST api/eimzo/sign' => 'api/eimzo/sign',
