@@ -23,8 +23,6 @@ use Yii;
 class Color extends \yii\db\ActiveRecord
 {
     public bool $suppressSyncEvents = false;
-    public int $status = self::STATUS_ACTIVE;
-    public $deleted_at = null;
 
     /**
      * {@inheritdoc}
@@ -45,6 +43,7 @@ class Color extends \yii\db\ActiveRecord
     {
         return [
             [['name_ru', 'color'], 'required', 'message'=>'Заполните поле'],
+            [['status'], 'integer'],
             [['date'], 'safe'],
             [['name_ru', 'name_en', 'name_uz', 'color'], 'string', 'max' => 255],
         ];
@@ -65,14 +64,6 @@ class Color extends \yii\db\ActiveRecord
             'date' => 'Date',
 
         ];
-    }
-
-    public function afterFind()
-    {
-        parent::afterFind();
-
-        $this->status = $this->status ?? self::STATUS_ACTIVE;
-        $this->deleted_at = $this->deleted_at ?? null;
     }
 
     public function fields() {
@@ -97,6 +88,19 @@ class Color extends \yii\db\ActiveRecord
     public function getProductColors()
     {
         return $this->hasMany(ProductColor::className(), ['color_id' => 'id']);
+    }
+
+    public function beforeSave($insert)
+    {
+        if (!parent::beforeSave($insert)) {
+            return false;
+        }
+
+        if ($this->status === null || $this->status === '') {
+            $this->status = self::STATUS_ACTIVE;
+        }
+
+        return true;
     }
 
     public function afterSave($insert, $changedAttributes)

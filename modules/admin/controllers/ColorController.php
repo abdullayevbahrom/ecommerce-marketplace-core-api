@@ -115,14 +115,13 @@ class ColorController extends Controller{
             throw new HttpException(403, 'Moderator can only unlock colors');
         }
 
-        $oldStatus = $model->status;
-        $model->status = ($model->status == Color::STATUS_INACTIVE) ? Color::STATUS_ACTIVE : Color::STATUS_INACTIVE;
+        $model->status = ($model->status == Color::STATUS_ACTIVE) ? Color::STATUS_INACTIVE : Color::STATUS_ACTIVE;
         $model->save(false);
 
         $comment = new ModerationComment();
         $comment->entity_type  = 'color';
         $comment->entity_id    = $model->id;
-        $comment->action       = $model->status == Color::STATUS_ACTIVE ? 'approve' : 'reject';
+        $comment->action       = $model->status == Color::STATUS_ACTIVE ? 'approve' : 'block';
         $comment->comment      = 'Ваш цвет разблокирован';
         $comment->moderator_id = $user->id;
         $comment->is_sent_to_warehouse = (bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false);
@@ -132,19 +131,15 @@ class ColorController extends Controller{
             'id' => $model->id,
             'entity_type'  => 'color',
             'entity_id'    => $model->id,
-            'action'       => $model->status == Color::STATUS_ACTIVE  ? 'approve' : 'reject',
-            'status_after' => $model->status == Color::STATUS_ACTIVE  ? 'approved' : 'rejected',
+            'action'       => $model->status == Color::STATUS_ACTIVE  ? 'approve' : 'block',
+            'status_after' => $model->status == Color::STATUS_ACTIVE  ? 'approved' : 'pending',
             'comment'      => 'Ваш цвет разблокирован',
             'moderator_id' => $user->id,
         ]);
 
         Yii::$app->session->setFlash('color_locked', $model->status == 1 ? 'color unlocked' : 'color blocked');
 
-        if ($user->role === User::ROLE_MODERATOR) {
-            return $this->redirect(['/admin/color']);
-        }
-
-        return $this->redirect(Yii::$app->request->referrer);
+        return $this->redirect(['/admin/color']);
     }
 
     protected function sendToWarehouse(array $payload)
