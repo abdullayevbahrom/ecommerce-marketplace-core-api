@@ -32,6 +32,7 @@ use GuzzleHttp\Exception\RequestException;
  * @property int|null $bts_region_id
  * @property int|null $bts_city_id
  * @property string|null $address
+ * @property int $for_marketplace
  *
  * @property Shop $shop
  * @property Region $btsRegion
@@ -57,7 +58,7 @@ class Stock extends \yii\db\ActiveRecord
     {
         return [
             [['name_ru'], 'required', 'message' => 'Заполните поле'],
-            [['shop_id', 'status', 'sort'], 'integer'],
+            [['shop_id', 'status', 'sort', 'for_marketplace'], 'integer'],
             [['bts_region_id', 'bts_city_id'], 'string', 'max' => 10],
             [['description_ru', 'description_en', 'description_uz', 'address'], 'string'],
             [['date'], 'safe'],
@@ -90,6 +91,7 @@ class Stock extends \yii\db\ActiveRecord
             'bts_region_id' => 'Регион',
             'bts_city_id' => 'Город',
             'address' => 'Адрес',
+            'for_marketplace' => 'Для маркетплейса',
         ];
     }
 
@@ -190,6 +192,11 @@ class Stock extends \yii\db\ActiveRecord
     public function getProducts()
     {
         return $this->hasMany(Product::class, ['stock_id' => 'id']);
+    }
+
+    public function isAvailableForMarketplace(): bool
+    {
+        return (int) $this->for_marketplace === 1;
     }
 
     // location relationships using BTS constants

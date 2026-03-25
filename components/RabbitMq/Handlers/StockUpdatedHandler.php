@@ -33,6 +33,7 @@ class StockUpdatedHandler
             $stock->bts_region_id = $payload['bts_region_id'] ?? null;
             $stock->bts_city_id = $payload['bts_city_id'] ?? null;
             $stock->address = $payload['address'] ?? null;
+            $stock->for_marketplace = isset($payload['for_marketplace']) ? (int) $payload['for_marketplace'] : 0;
             $stock->save(false);
 
             $tx->commit();

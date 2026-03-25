@@ -89,6 +89,11 @@ class ProductController extends Controller
         }
     }
 
+    protected function applyMarketplaceVisibility($query)
+    {
+        return $query->marketplaceVisible();
+    }
+
     public function beforeAction($action)
     {
         $this->enableCsrfValidation = false;
@@ -472,8 +477,9 @@ class ProductController extends Controller
     public function actionIndex()
     {
         $query = Product::find()
+            ->marketplaceVisible()
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
-            ->where(['status' => 1])
+            ->where(['product.status' => 1])
             ->orderBy('id desc');
 
         if ($sort = Yii::$app->request->get('sort')) {
@@ -555,10 +561,10 @@ class ProductController extends Controller
             }
 
             if (!empty($productIds)) {
-                $query->andWhere(['in', 'id', $productIds]);
+                $query->andWhere(['in', 'product.id', $productIds]);
             } else {
                 // No products match the filters
-                $query->andWhere(['id' => -1]);
+                $query->andWhere(['product.id' => -1]);
             }
         }
 
@@ -783,9 +789,10 @@ class ProductController extends Controller
         }
 
         $models = Product::find()
+            ->marketplaceVisible()
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
-            ->where(['id' => $ids, 'status' => 1])
-            ->andWhere(['deleted_at' => null])
+            ->where(['product.id' => $ids, 'product.status' => 1])
+            ->andWhere(['product.deleted_at' => null])
             ->indexBy('id')
             ->all();
 
@@ -955,9 +962,10 @@ class ProductController extends Controller
         }
 
         $models = Product::find()
+            ->marketplaceVisible()
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
-            ->where(['id' => $ids, 'status' => 1])
-            ->andWhere(['deleted_at' => null])
+            ->where(['product.id' => $ids, 'product.status' => 1])
+            ->andWhere(['product.deleted_at' => null])
             ->indexBy('id')
             ->all();
 
@@ -1010,6 +1018,7 @@ class ProductController extends Controller
     {
         $query = Product::find()
             ->alias('p')
+            ->marketplaceVisible('p')
             ->select([
                 'p.*',
                 'orders_count' => 'COUNT(DISTINCT o.id)',
@@ -1091,8 +1100,9 @@ class ProductController extends Controller
 
         if (Yii::$app->user->isGuest) {
             $query = Product::find()
+                ->marketplaceVisible()
                 ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
-                ->where(['status' => 1])
+                ->where(['product.status' => 1])
                 ->orderBy('views DESC, RAND()')
                 ->limit($limit * 2);
 
@@ -1151,11 +1161,12 @@ class ProductController extends Controller
         $viewedProductIds = array_column($viewedProducts, 'product_id');
 
         $query = Product::find()
+            ->marketplaceVisible()
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
-            ->where(['status' => 1]);
+            ->where(['product.status' => 1]);
 
         if (!empty($viewedProductIds)) {
-            $query->andWhere(['not in', 'id', $viewedProductIds]);
+            $query->andWhere(['not in', 'product.id', $viewedProductIds]);
         }
 
         $conditions = ['or'];
@@ -1209,10 +1220,17 @@ class ProductController extends Controller
 
         $ids = ArrayHelper::map(Category::find()->where(['parent_id' => $id])->all(), 'id', 'id');
         $query = Product::find()
+            ->marketplaceVisible()
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
-            ->where(['status' => 1])
-            ->andWhere(['category_id' => $id])
-            ->orWhere(['in', 'category_id', $ids])->andWhere(['status' => 1]);
+            ->where([
+                'and',
+                ['product.status' => 1],
+                [
+                    'or',
+                    ['product.category_id' => $id],
+                    ['in', 'product.category_id', $ids],
+                ],
+            ]);
 
         // Price filtering
         if ($price_min = Yii::$app->request->get('price_min')) {
@@ -1251,7 +1269,7 @@ class ProductController extends Controller
 
     public function actionByBrand($id)
     {
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['brand_id' => $id]);
+        $query = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1])->andWhere(['product.brand_id' => $id]);
 
         // Price filtering
         if ($price_min = Yii::$app->request->get('price_min')) {
@@ -1296,7 +1314,7 @@ class ProductController extends Controller
 
     public function actionByShop($id)
     {
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['shop_id' => $id]);
+        $query = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1])->andWhere(['product.shop_id' => $id]);
 
         if ($category_id = Yii::$app->request->get('category_id')) {
             $query->andWhere(['category_id' => $category_id]);
@@ -1345,7 +1363,7 @@ class ProductController extends Controller
 
     public function actionByFilter()
     {
-        $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1]);
+        $products = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1]);
 
         if ($filter = Yii::$app->request->get('filter')) {
             // Check if we should use OR logic instead of AND
@@ -1388,10 +1406,10 @@ class ProductController extends Controller
             }
 
             if (!empty($productIds)) {
-                $products->andWhere(['in', 'id', $productIds]);
+                $products->andWhere(['in', 'product.id', $productIds]);
             } else {
                 // No products match the filters
-                $products->andWhere(['id' => -1]);
+                $products->andWhere(['product.id' => -1]);
             }
         }
 
@@ -1399,8 +1417,8 @@ class ProductController extends Controller
             $ids1 = ArrayHelper::map(Category::find()->where(['parent_id' => $category_id])->all(), 'id', 'id');
             $products->andWhere([
                 'or',
-                ['category_id' => $category_id],
-                ['in', 'category_id', $ids1],
+                ['product.category_id' => $category_id],
+                ['in', 'product.category_id', $ids1],
             ]);
         }
 
@@ -1444,7 +1462,7 @@ class ProductController extends Controller
      */
     public function actionSearch($query = null)
     {
-        $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1]);
+        $products = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1]);
 
         if ($query) {
             UserActivity::trackSearch($query);
@@ -1619,13 +1637,14 @@ class ProductController extends Controller
         $limit = Yii::$app->request->get('limit', 10);
 
         $products = Product::find()
+            ->marketplaceVisible()
             ->select(['name_ru', 'name_uz', 'name_en'])
-            ->where(['status' => 1])
+            ->where(['product.status' => 1])
             ->andWhere([
                 'or',
-                ['like', 'name_ru', $query],
-                ['like', 'name_uz', $query],
-                ['like', 'name_en', $query],
+                ['like', 'product.name_ru', $query],
+                ['like', 'product.name_uz', $query],
+                ['like', 'product.name_en', $query],
             ])
             ->limit($limit * 3)
             ->asArray()
@@ -1813,9 +1832,9 @@ class ProductController extends Controller
                 }
             }
 
-            $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1]);
+            $products = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1]);
             if (!empty($ids)) {
-                $products->andWhere(['in', 'id', $ids]);
+                $products->andWhere(['in', 'product.id', $ids]);
             } else {
                 // If no similar images found, return an empty data provider
                 $products->andWhere('0=1'); // Force no results
@@ -1828,15 +1847,15 @@ class ProductController extends Controller
                 foreach ($subcategories as $subcat) {
                     $categoryIds[] = $subcat->id;
                 }
-                $products->andWhere(['in', 'category_id', $categoryIds]);
+                $products->andWhere(['in', 'product.category_id', $categoryIds]);
             }
 
             if ($brand_id = Yii::$app->request->get('brand_id')) {
-                $products->andWhere(['brand_id' => $brand_id]);
+                $products->andWhere(['product.brand_id' => $brand_id]);
             }
 
             if ($shop_id = Yii::$app->request->get('shop_id')) {
-                $products->andWhere(['shop_id' => $shop_id]);
+                $products->andWhere(['product.shop_id' => $shop_id]);
             }
 
             $this->applyPriceFilterWithBounds($products, 'price');
@@ -1894,6 +1913,7 @@ class ProductController extends Controller
     public function actionDetail($id)
     {
         $product = Product::find()->with([
+            'stock',
             'image',
             'category',
             'gallery',
@@ -1910,10 +1930,11 @@ class ProductController extends Controller
             'products',
             'products.image',
             'products.color',
+            'products.stock',
             'products.productProductTypes',
             'products.productProductTypes.productType',
             'products.productProductTypes.productTypeValue'
-        ])->where(['id' => $id])->one();
+        ])->marketplaceVisible()->where(['product.id' => $id])->one();
 
         if ($product === null) {
             throw new \yii\web\NotFoundHttpException('Товар не найден.');
@@ -1942,7 +1963,7 @@ class ProductController extends Controller
         $user = Yii::$app->user->identity;
 
         $ids = ArrayHelper::map(UserFavorite::find()->where(['user_id' => $user->id])->all(), 'product_id', 'product_id');
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['in', 'id', $ids]);
+        $query = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1])->andWhere(['in', 'product.id', $ids]);
 
         if ($sort = Yii::$app->request->get('sort')) {
             if (($sort == 'new') || ($sort == 'recently')) {
@@ -1999,7 +2020,7 @@ class ProductController extends Controller
             return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Validation error', $user_favorite->errors);
         }
 
-        $product = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productProperties', 'productColors', 'productColors.color')->where(['id' => $post['product_id']])->one();
+        $product = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productProperties', 'productColors', 'productColors.color')->where(['product.id' => $post['product_id']])->one();
 
         if (!$product) {
             return $this->sendError(ErrorCodes::ERROR_PRODUCT_NOT_FOUND, 'Product not found', ['product_id' => 'Product not found.']);
@@ -2023,7 +2044,7 @@ class ProductController extends Controller
         $user = Yii::$app->user->identity;
 
         $ids = ArrayHelper::map(UserFavorite::find()->where(['user_id' => $user->id])->all(), 'product_id', 'product_id');
-        $category_ids = ArrayHelper::map(Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['in', 'id', $ids])->all(), 'category_id', 'category_id');
+        $category_ids = ArrayHelper::map(Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1])->andWhere(['in', 'product.id', $ids])->all(), 'category_id', 'category_id');
 
         $categories = Category::find()->where(['in', 'id', $category_ids])->all();
 
@@ -2037,7 +2058,7 @@ class ProductController extends Controller
         $user = Yii::$app->user->identity;
 
         $ids = ArrayHelper::map(UserCompare::find()->where(['user_id' => $user->id])->all(), 'product_id', 'product_id');
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['in', 'id', $ids]);
+        $query = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1])->andWhere(['in', 'product.id', $ids]);
 
         if ($sort = Yii::$app->request->get('sort')) {
             if (($sort == 'new') || ($sort == 'recently')) {
@@ -2095,7 +2116,7 @@ class ProductController extends Controller
             return ['errors' => $user_compare->errors];
         }
 
-        $product = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productProperties', 'productColors', 'productColors.color')->where(['id' => $post['product_id']])->one();
+        $product = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productProperties', 'productColors', 'productColors.color')->where(['product.id' => $post['product_id']])->one();
 
         if (!$product) {
             Yii::$app->response->statusCode = 404;
@@ -2122,7 +2143,7 @@ class ProductController extends Controller
         $user = Yii::$app->user->identity;
 
         $ids = ArrayHelper::map(UserCompare::find()->where(['user_id' => $user->id])->all(), 'product_id', 'product_id');
-        $category_ids = ArrayHelper::map(Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1])->andWhere(['in', 'id', $ids])->all(), 'category_id', 'category_id');
+        $category_ids = ArrayHelper::map(Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1])->andWhere(['in', 'product.id', $ids])->all(), 'category_id', 'category_id');
 
         $categories = Category::find()->where(['in', 'id', $category_ids])->all();
 
@@ -2144,7 +2165,7 @@ class ProductController extends Controller
             return ['errors' => $product_review->errors];
         }
 
-        $product = Product::findOne($post['product_id']);
+        $product = Product::find()->marketplaceVisible()->where(['product.id' => $post['product_id']])->one();
 
         if (!$product) {
             Yii::$app->response->statusCode = 404;
@@ -2161,7 +2182,7 @@ class ProductController extends Controller
         $product_review->user_id = $user->id; // Ensure user_id is set
         $product_review->save(); // Use save directly if saveObject is not defined or needed
 
-        $product = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productColors', 'productColors.color')->where(['id' => $post['product_id']])->one();
+        $product = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productReviews', 'productColors', 'productColors.color')->where(['product.id' => $post['product_id']])->one();
 
         Yii::$app->response->statusCode = 200;
         return ['data' => $product];
@@ -2202,10 +2223,10 @@ class ProductController extends Controller
         $ids = ArrayHelper::map(ProductViewRecently::find()->where(['ip' => Yii::$app->request->userIP])->orderBy('date DESC')->all(), 'product_id', 'product_id');
 
         // Ensure that recently viewed products are active (status=1)
-        $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['status' => 1]);
+        $query = Product::find()->marketplaceVisible()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1]);
         if (!empty($ids)) {
             // Maintain the order of recently viewed items
-            $query->andWhere(['in', 'id', $ids])->orderBy(['FIELD(id, ' . implode(',', $ids) . ')' => SORT_ASC]);
+            $query->andWhere(['in', 'product.id', $ids])->orderBy(['FIELD(product.id, ' . implode(',', $ids) . ')' => SORT_ASC]);
         } else {
             $query->andWhere('0=1'); // No recently viewed products
         }
@@ -2225,7 +2246,7 @@ class ProductController extends Controller
 
     public function actionRelatedProducts($product_id)
     {
-        $product = Product::findOne($product_id);
+        $product = Product::find()->marketplaceVisible()->where(['product.id' => $product_id])->one();
 
         if (!$product) {
             Yii::$app->response->statusCode = 404;
@@ -2234,8 +2255,9 @@ class ProductController extends Controller
 
         // Start with a broad search based on main product fields
         $query = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
-            ->where(['status' => 1])
-            ->andWhere(['!=', 'id', $product_id]); // Exclude the current product
+            ->marketplaceVisible()
+            ->where(['product.status' => 1])
+            ->andWhere(['!=', 'product.id', $product_id]); // Exclude the current product
 
         $orConditions = ['or'];
         $keywords = [];

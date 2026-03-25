@@ -89,7 +89,7 @@ class CartController extends Controller {
         $groups = [];
 
         foreach ($cartItems as $item) {
-            if (!$item->product) continue;
+            if (!$item->product || !$item->product->isAvailableForMarketplace()) continue;
 
             // Group by token_key if available, otherwise by product ID
             $key = !empty($item->product->token_key) ? 'token_' . $item->product->token_key : 'prod_' . $item->product->id;
@@ -175,7 +175,7 @@ class CartController extends Controller {
         $groups = [];
         
         foreach ($cartItems as $item) {
-            if (!$item->product) continue;
+            if (!$item->product || !$item->product->isAvailableForMarketplace()) continue;
             
             // Group by token_key if available, otherwise by product ID
             // Using a prefix to ensure keys are strings and distinct
@@ -248,7 +248,7 @@ class CartController extends Controller {
             return $this->sendError(ErrorCodes::ERROR_VALIDATION, 'Amount must be at least 1', ['amount' => 'Amount must be at least 1']);
         }
     
-        $product = Product::find()->with(['stock', 'shop.stock'])->where(['id' => $post['product_id']])->one();
+        $product = Product::find()->marketplaceVisible()->with(['stock', 'shop.stock'])->where(['product.id' => $post['product_id']])->one();
         if (!$product) {
             return $this->sendError(ErrorCodes::ERROR_PRODUCT_NOT_FOUND, 'Product not found', ['product_id' => 'Product not found']);
         }
@@ -371,8 +371,9 @@ class CartController extends Controller {
         
         // Batch load products for performance
         $productModels = Product::find()
+            ->marketplaceVisible()
             ->with(['stock', 'shop.stock'])
-            ->where(['id' => $productIds])
+            ->where(['product.id' => $productIds])
             ->indexBy('id')
             ->all();
         
@@ -550,7 +551,7 @@ class CartController extends Controller {
             return ['errors'=>['amount'=>'Amount must be at least 1']];
         }
 
-        $product = Product::find()->with(['stock', 'shop.stock'])->where(['id' => $post['product_id']])->one();
+        $product = Product::find()->marketplaceVisible()->with(['stock', 'shop.stock'])->where(['product.id' => $post['product_id']])->one();
         if (!$product) {
             Yii::$app->response->statusCode = 404;
             return ['errors'=>['product_id'=>'Product not found']];
@@ -697,6 +698,9 @@ class CartController extends Controller {
         $stockGroups = [];
         foreach ($cartItems as $cartItem) {
             $product = $cartItem->product;
+            if (!$product || !$product->isAvailableForMarketplace()) {
+                continue;
+            }
             
             // Get stock ID (priority: product's direct stock, then shop's stock)
             $stockId = null;
