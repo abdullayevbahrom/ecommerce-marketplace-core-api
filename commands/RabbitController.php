@@ -9,6 +9,9 @@ use app\models\IntegrationEvent;
 use app\components\RabbitMq\TopologySetup;
 use app\components\RabbitMq\Publisher;
 use app\components\RabbitMq\Consumer;
+use PhpAmqpLib\Exception\AMQPConnectionClosedException;
+use PhpAmqpLib\Exception\AMQPIOException;
+use PhpAmqpLib\Exception\AMQPRuntimeException;
 
 class RabbitController extends Controller
 {
@@ -57,13 +60,32 @@ class RabbitController extends Controller
 
     public function actionConsumeMarketSync(): int
     {
-        try {
-            (new Consumer())->consumeMarketSyncQueue();
-            return ExitCode::OK;
-        } catch (\Throwable $e) {
-            $this->stderr("Consumer failed: {$e->getMessage()}\n");
-            Yii::error($e, __METHOD__);
-            return ExitCode::UNSPECIFIED_ERROR;
+        $attempt = 0;
+
+        while (true) {
+            try {
+                (new Consumer())->consumeMarketSyncQueue();
+
+                return ExitCode::OK;
+            } catch (AMQPIOException|AMQPConnectionClosedException|AMQPRuntimeException $e) {
+                $attempt++;
+                $delay = min(30, max(5, $attempt * 5));
+
+                $this->stderr("RabbitMQ unavailable, retrying in {$delay}s: {$e->getMessage()}\n");
+                Yii::warning([
+                    'message' => 'RabbitMQ consumer connection failed, retrying',
+                    'attempt' => $attempt,
+                    'delay_seconds' => $delay,
+                    'error' => $e->getMessage(),
+                ], __METHOD__);
+
+                sleep($delay);
+            } catch (\Throwable $e) {
+                $this->stderr("Consumer failed: {$e->getMessage()}\n");
+                Yii::error($e, __METHOD__);
+
+                return ExitCode::UNSPECIFIED_ERROR;
+            }
         }
     }
 }
