@@ -161,6 +161,26 @@ class UserController extends Controller {
     }
 
     /**
+     * Менеджеры — только ROLE_MANAGER
+     */
+    public function actionManagers() {
+        $searchModel = new UserSearch();
+        $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
+        $dataProvider->query->with(['image'])->andWhere(['role' => User::ROLE_MANAGER])->andWhere(['!=', 'status', 0]);
+
+        $dataProvider->setSort([
+            'defaultOrder' => [
+                'id' => 'desc'
+            ]
+        ]);
+
+        return $this->render('managers', [
+            'searchModel' => $searchModel,
+            'dataProvider' => $dataProvider
+        ]);
+    }
+
+    /**
      * Магазины — только ROLE_SHOP, с отображением связанного магазина
      */
     public function actionShops() {
