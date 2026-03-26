@@ -149,7 +149,7 @@ $type = Yii::$app->request->get('type');
                                         <td><strong>Комментарий модератора:</strong></td>
                                         <td>
                                             <?php if (!empty($model->moderationComments)): ?>
-                                                <?php $lastComment = end($model->moderationComments); ?>
+                                                <?php $comments = $model->moderationComments; $lastComment = end($comments); ?>
                                                 <?= Html::encode($lastComment->comment) ?>
                                                 <br>
                                                 <small class="text-muted">
