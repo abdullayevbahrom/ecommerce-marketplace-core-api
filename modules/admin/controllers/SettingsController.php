@@ -128,20 +128,18 @@ class SettingsController extends Controller{
                     mkdir($uploadDir, 0755, true);
                 }
                 
-                // Use fixed name or random? Fixed name makes it easier to track single key
                 $filename = 'key_' . date('Ymd_His') . '.' . $uploadedFile->extension;
                 $filePath = $uploadDir . DIRECTORY_SEPARATOR . $filename;
                 
                 if ($uploadedFile->saveAs($filePath)) {
-                    // Save path to settings
                     if (isset($models['didox_pfx_path'])) {
-                        $models['didox_pfx_path']->content = $filePath;
+                        $models['didox_pfx_path']->content = $filename;
                         $models['didox_pfx_path']->date = date('Y-m-d H:i:s');
                         $models['didox_pfx_path']->save();
                     } else {
                          // Should exist from init loop, but just in case
                          $models['didox_pfx_path'] = new Settings(['type' => 'didox_pfx_path']);
-                         $models['didox_pfx_path']->content = $filePath;
+                         $models['didox_pfx_path']->content = $filename;
                          $models['didox_pfx_path']->date = date('Y-m-d H:i:s');
                          $models['didox_pfx_path']->save();
                     }

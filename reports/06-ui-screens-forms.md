@@ -288,7 +288,7 @@ The admin panel contains **36 management sections**, each with its own view dire
 - "Sync Session to Settings" button
 
 **Tab 2: Automated Signing**
-- Current PFX Key Path (read-only)
+- Current PFX File Name (read-only)
 - Upload New PFX Key file
 - PFX Key Password
 - Signer Service URL

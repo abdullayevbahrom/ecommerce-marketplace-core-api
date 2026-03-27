@@ -1075,7 +1075,7 @@ return [
 | `didox_seller_account` | Seller bank account |
 | `didox_seller_mfo` | Seller bank MFO code |
 | `didox_seller_vat_reg_code` | Seller VAT registration code |
-| `didox_pfx_path` | Path to E-IMZO PFX certificate file |
+| `didox_pfx_path` | E-IMZO PFX certificate file name |
 | `didox_pfx_password` | PFX certificate password |
 | `didox_signer_url` | Local signer service URL (default: `http://127.0.0.1:8080/generate`) |
 | `didox_eimzo_token` | Stored system Didox token (fallback) |
