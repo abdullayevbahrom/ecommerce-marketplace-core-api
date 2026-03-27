@@ -15,11 +15,72 @@ class DidoxService
     
     public function __construct()
     {
-        // Set base URL based on environment
-        $this->baseUrl = YII_ENV_DEV ? self::STAGE_URL : self::PROD_URL;
-        
-        // Get partner token from params or config
+        $configuredBaseUrl = '';
+        try {
+            $config = $this->getDidoxSettingMap(['didox_url']);
+            $configuredBaseUrl = trim((string)($config['didox_url'] ?? ''));
+        } catch (\Throwable $e) {
+            $configuredBaseUrl = '';
+        }
+
+        if ($configuredBaseUrl === '') {
+            $configuredBaseUrl = trim((string)(Yii::$app->params['didoxApiUrl'] ?? ''));
+        }
+
+        $this->baseUrl = $configuredBaseUrl !== '' ? rtrim($configuredBaseUrl, '/') : (YII_ENV_DEV ? self::STAGE_URL : self::PROD_URL);
+
         $this->partnerToken = isset(Yii::$app->params['didoxPartnerToken']) ? Yii::$app->params['didoxPartnerToken'] : '';
+    }
+
+    private function getDidoxSettingMap(array $types): array
+    {
+        $settings = \app\models\Settings::find()
+            ->where(['type' => $types])
+            ->all();
+
+        return \yii\helpers\ArrayHelper::map($settings, 'type', 'content');
+    }
+
+    private function getConfiguredDidoxAccountId(): string
+    {
+        $config = $this->getDidoxSettingMap(['didox_seller_inn']);
+        return trim((string)($config['didox_seller_inn'] ?? ''));
+    }
+
+    private function normalizeSenderIdentity(array $documentData): array
+    {
+        $configuredAccountId = $this->getConfiguredDidoxAccountId();
+        if ($configuredAccountId === '') {
+            return $documentData;
+        }
+
+        $normalized = $documentData;
+        $override = function (array &$target, string $field) use ($configuredAccountId) {
+            if (isset($target[$field]) && $target[$field] !== $configuredAccountId) {
+                Yii::warning("Overriding {$field} from {$target[$field]} to {$configuredAccountId}", __METHOD__);
+                $target[$field] = $configuredAccountId;
+            }
+        };
+
+        $override($normalized, 'SellerTin');
+        $override($normalized, 'sellertin');
+
+        if (isset($normalized['ProductList']) && is_array($normalized['ProductList'])) {
+            $override($normalized['ProductList'], 'Tin');
+            $override($normalized['ProductList'], 'tin');
+        }
+
+        if (isset($normalized['data']) && is_array($normalized['data'])) {
+            $override($normalized['data'], 'SellerTin');
+            $override($normalized['data'], 'sellertin');
+
+            if (isset($normalized['data']['ProductList']) && is_array($normalized['data']['ProductList'])) {
+                $override($normalized['data']['ProductList'], 'Tin');
+                $override($normalized['data']['ProductList'], 'tin');
+            }
+        }
+
+        return $normalized;
     }
     
     /**
@@ -29,81 +90,110 @@ class DidoxService
      */
     public function getAuthTokenFromPfx()
     {
-        // Load Settings
-        $settings = \app\models\Settings::find()
-            ->where(['type' => ['didox_pfx_path', 'didox_pfx_password', 'didox_signer_url', 'didox_seller_inn']])
-            ->all();
-        $config = \yii\helpers\ArrayHelper::map($settings, 'type', 'content');
-        
-        $pfxPath = $config['didox_pfx_path'] ?? '';
-        $password = $config['didox_pfx_password'] ?? '';
-        $signerUrl = $config['didox_signer_url'] ?? 'http://eimzo-signer:8080/generate';
-        $jshir = $config['didox_seller_inn'] ?? ''; 
-        
-        $appPfxPath = $this->resolveAppPfxPath($pfxPath);
+        $config = $this->getDidoxSettingMap(['didox_seller_inn']);
+        $targetTaxId = trim((string)($config['didox_seller_inn'] ?? ''));
 
-        if (empty($appPfxPath) || empty($password) || !file_exists($appPfxPath)) {
-            return ['success' => false, 'error' => 'PFX file not configured or missing.'];
+        if ($targetTaxId === '') {
+            return ['success' => false, 'error' => 'Seller INN/JSHIR not configured.'];
         }
 
-        if (empty($jshir)) {
-             return ['success' => false, 'error' => 'Seller INN/JSHIR not configured.'];
+        $pfxIdentity = $this->extractConfiguredPfxIdentity();
+        $individualTaxId = trim((string)($pfxIdentity['uid'] ?? ''));
+
+        if ($individualTaxId !== '' && $individualTaxId !== $targetTaxId) {
+            return $this->authenticateCompanyWithConfiguredPfx($targetTaxId);
         }
 
-        $signerData = [
-            'pfxFilePath' => $pfxPath,
-            'password' => $password,
-            'alias' => '', 
-            'data' => $jshir,
-            'attached' => true
-        ];
-        
+        return $this->authenticateWithConfiguredPfx($targetTaxId);
+    }
+
+    /**
+     * Authenticate a Didox user by signing the provided tax ID with the configured PFX.
+     *
+     * @param string $taxId
+     * @return array
+     */
+    public function authenticateWithConfiguredPfx(string $taxId): array
+    {
+        $taxId = trim($taxId);
+        if ($taxId === '') {
+            return ['success' => false, 'error' => 'Tax ID is required.'];
+        }
+
         try {
-            // Call Signer Service
-            $ch = curl_init();
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $signerUrl,
-                CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => json_encode($signerData),
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-                CURLOPT_TIMEOUT => 10
-            ]);
-            $signerResponse = curl_exec($ch);
-            $signerHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $signerError = curl_error($ch);
-            curl_close($ch);
-
-            if ($signerError || $signerHttpCode != 200) {
-                return ['success' => false, 'error' => 'Signer Service failed: ' . ($signerError ?: "HTTP $signerHttpCode")];
+            $signed = $this->signConfiguredPfxPayload($taxId);
+            if (!$signed['success']) {
+                return $signed;
             }
 
-            $tokenData = json_decode($signerResponse, true); 
-            if (!isset($tokenData['pkcs7']) || !isset($tokenData['signature'])) {
-                return ['success' => false, 'error' => 'Invalid response from Signer Service'];
-            }
-
-            // 2. Get Timestamp from Didox
-            $timestampRes = $this->createTimestamp($tokenData['pkcs7'], $tokenData['signature']);
-            if (!$timestampRes['success']) {
+            $timestampRes = $this->createTimestamp($signed['pkcs7'], $signed['signature']);
+            if (!$timestampRes['success'] || empty($timestampRes['data']['timeStampTokenB64'])) {
                 return ['success' => false, 'error' => 'Failed to get timestamp: ' . json_encode($timestampRes)];
             }
-            
-            $timestampToken = $timestampRes['data']['timeStampTokenB64'];
 
-            // 3. Get Token from Didox
-            $authUrl = "/v1/auth/{$jshir}/token/ru";
-            $authRes = $this->makeRequest('POST', $authUrl, ['signature' => $timestampToken]);
-            
+            $authUrl = "/v1/auth/{$taxId}/token/ru";
+            $authRes = $this->makeRequest('POST', $authUrl, ['signature' => $timestampRes['data']['timeStampTokenB64']]);
+
             if ($authRes['isOk'] && isset($authRes['data']['token'])) {
-                 return ['success' => true, 'token' => $authRes['data']['token']];
-            } else {
-                 return ['success' => false, 'error' => 'Didox Auth failed: ' . json_encode($authRes)];
+                return [
+                    'success' => true,
+                    'token' => $authRes['data']['token'],
+                    'taxId' => $taxId,
+                    'data' => $authRes['data'],
+                ];
             }
 
-        } catch (\Exception $e) {
+            return ['success' => false, 'error' => 'Didox Auth failed: ' . json_encode($authRes)];
+        } catch (\Throwable $e) {
             return ['success' => false, 'error' => 'Exception during auto-auth: ' . $e->getMessage()];
         }
+    }
+
+    /**
+     * Authenticate with configured PFX as individual, then login to a company account.
+     *
+     * @param string $companyTaxId
+     * @return array
+     */
+    public function authenticateCompanyWithConfiguredPfx(string $companyTaxId): array
+    {
+        $companyTaxId = trim($companyTaxId);
+        if ($companyTaxId === '') {
+            return ['success' => false, 'error' => 'Company Tax ID is required.'];
+        }
+
+        $pfxIdentity = $this->extractConfiguredPfxIdentity();
+        $individualTaxId = trim((string)($pfxIdentity['uid'] ?? ''));
+        if ($individualTaxId === '') {
+            $individualTaxId = trim((string)($pfxIdentity['tin'] ?? ''));
+        }
+
+        if ($individualTaxId === '') {
+            return ['success' => false, 'error' => 'Could not extract individual tax ID from configured PFX.'];
+        }
+
+        $authResult = $this->authenticateWithConfiguredPfx($individualTaxId);
+        if (!$authResult['success']) {
+            return $authResult;
+        }
+
+        $companyLoginResult = $this->loginToCompany($companyTaxId, $authResult['token']);
+        if (!$companyLoginResult['success']) {
+            return [
+                'success' => false,
+                'error' => 'Individual authentication succeeded, but company login failed: ' . ($companyLoginResult['error'] ?? 'Unknown error'),
+                'individualTaxId' => $individualTaxId,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'token' => $companyLoginResult['token'],
+            'taxId' => $companyTaxId,
+            'individualTaxId' => $individualTaxId,
+            'permissions' => $companyLoginResult['permissions'] ?? null,
+            'data' => $companyLoginResult['data'] ?? null,
+        ];
     }
 
     /**
@@ -119,7 +209,7 @@ class DidoxService
         
         $headers = [
             'Content-Type: application/json',
-            'Authorization: Bearer ' . $this->partnerToken
+            'Partner-Authorization: ' . $this->partnerToken
         ];
         
         curl_setopt_array($ch, [
@@ -150,6 +240,9 @@ class DidoxService
         }
         
         $decodedResponse = json_decode($response, true);
+        if ($decodedResponse === null && json_last_error() !== JSON_ERROR_NONE && $response !== false && $response !== '') {
+            $decodedResponse = $response;
+        }
         
         return [
             'httpCode' => $httpCode,
@@ -208,6 +301,136 @@ class DidoxService
 
         $filename = basename(str_replace('\\', '/', $path));
         return Yii::getAlias('@app/keys/' . $filename);
+    }
+
+    private function getConfiguredPfxSettings(): array
+    {
+        $config = $this->getDidoxSettingMap(['didox_pfx_path', 'didox_pfx_password', 'didox_signer_url']);
+
+        $pfxPath = trim((string)($config['didox_pfx_path'] ?? ''));
+        $password = (string)($config['didox_pfx_password'] ?? '');
+        $signerUrl = trim((string)($config['didox_signer_url'] ?? 'http://eimzo-signer:8080/generate'));
+        $appPfxPath = $this->resolveAppPfxPath($pfxPath);
+
+        return [
+            'pfxPath' => $pfxPath,
+            'appPfxPath' => $appPfxPath,
+            'password' => $password,
+            'signerUrl' => $signerUrl,
+        ];
+    }
+
+    private function signConfiguredPfxPayload(string $data): array
+    {
+        $settings = $this->getConfiguredPfxSettings();
+
+        if (empty($settings['appPfxPath']) || empty($settings['password']) || !file_exists($settings['appPfxPath'])) {
+            return ['success' => false, 'error' => 'PFX file not configured or missing.'];
+        }
+
+        $signerData = [
+            'pfxFilePath' => $settings['pfxPath'],
+            'password' => $settings['password'],
+            'alias' => '',
+            'data' => $data,
+            'attached' => true,
+        ];
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $settings['signerUrl'],
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($signerData),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT => 10,
+        ]);
+        $signerResponse = curl_exec($ch);
+        $signerHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $signerError = curl_error($ch);
+        curl_close($ch);
+
+        if ($signerError || $signerHttpCode != 200) {
+            return ['success' => false, 'error' => 'Signer Service failed: ' . ($signerError ?: "HTTP $signerHttpCode")];
+        }
+
+        $tokenData = json_decode($signerResponse, true);
+        if (!isset($tokenData['pkcs7']) || !isset($tokenData['signature'])) {
+            return ['success' => false, 'error' => 'Invalid response from Signer Service'];
+        }
+
+        return [
+            'success' => true,
+            'pkcs7' => $tokenData['pkcs7'],
+            'signature' => $tokenData['signature'],
+        ];
+    }
+
+    /**
+     * Extract identity fields from the configured PFX certificate.
+     *
+     * @return array{success?: bool, error?: string, subject?: array, uid?: string|null, tin?: string|null, pinfl?: string|null}
+     */
+    public function extractConfiguredPfxIdentity(): array
+    {
+        $settings = $this->getConfiguredPfxSettings();
+        $identitySettings = $this->getDidoxSettingMap(['didox_eimzo_tax_id']);
+        $configuredIdentity = trim((string)($identitySettings['didox_eimzo_tax_id'] ?? ''));
+        if (empty($settings['appPfxPath']) || empty($settings['password']) || !file_exists($settings['appPfxPath'])) {
+            return [
+                'success' => false,
+                'error' => 'PFX file not configured or missing.',
+                'uid' => $configuredIdentity !== '' ? $configuredIdentity : null,
+            ];
+        }
+
+        if (!function_exists('openssl_pkcs12_read')) {
+            return [
+                'success' => false,
+                'error' => 'OpenSSL PKCS#12 support is not available.',
+                'uid' => $configuredIdentity !== '' ? $configuredIdentity : null,
+            ];
+        }
+
+        $pkcs12 = @file_get_contents($settings['appPfxPath']);
+        if ($pkcs12 === false) {
+            return [
+                'success' => false,
+                'error' => 'Unable to read configured PFX file.',
+                'uid' => $configuredIdentity !== '' ? $configuredIdentity : null,
+            ];
+        }
+
+        $certs = [];
+        if (!@openssl_pkcs12_read($pkcs12, $certs, $settings['password'])) {
+            return [
+                'success' => false,
+                'error' => 'Unable to parse configured PFX file.',
+                'uid' => $configuredIdentity !== '' ? $configuredIdentity : null,
+            ];
+        }
+
+        $parsed = @openssl_x509_parse($certs['cert'] ?? '');
+        if (!$parsed || !is_array($parsed)) {
+            return [
+                'success' => false,
+                'error' => 'Unable to parse configured PFX certificate.',
+                'uid' => $configuredIdentity !== '' ? $configuredIdentity : null,
+            ];
+        }
+
+        $subject = $parsed['subject'] ?? [];
+        $uid = trim((string)($subject['UID'] ?? ''));
+        $tin = trim((string)($subject['1.2.860.3.16.1.1'] ?? ''));
+        $pinfl = trim((string)($subject['1.2.860.3.16.1.2'] ?? ''));
+
+        return [
+            'success' => true,
+            'subject' => $subject,
+            'uid' => $uid !== '' ? $uid : ($configuredIdentity !== '' ? $configuredIdentity : null),
+            'tin' => $tin !== '' ? $tin : null,
+            'pinfl' => $pinfl !== '' ? $pinfl : null,
+        ];
     }
 
     /**
@@ -565,6 +788,8 @@ class DidoxService
                 $headers[] = 'user-key: ' . $userKey;
             }
             
+            $documentData = $this->normalizeSenderIdentity($documentData);
+
             // Get document type for the endpoint URL and remove from data
             $docType = isset($documentData['doctype']) ? $documentData['doctype'] : '000';
             
@@ -666,6 +891,8 @@ class DidoxService
                 $headers[] = 'user-key: ' . $userKey;
             }
             
+            $documentData = $this->normalizeSenderIdentity($documentData);
+
             // Get document type for the endpoint URL and remove from data
             $docType = isset($documentData['doctype']) ? $documentData['doctype'] : '002';
             
@@ -884,6 +1111,57 @@ class DidoxService
                 'error' => $e->getMessage()
             ];
         }
+    }
+
+    /**
+     * Extract the canonical outgoing document JSON payload that Didox expects to be signed.
+     * For owner=1 flow the API returns a wrapper object and only data.json should be signed.
+     *
+     * @param array $responseData
+     * @return array|null
+     */
+    public function extractOutgoingDocumentJson(array $responseData): ?array
+    {
+        if (isset($responseData['data']['json']) && is_array($responseData['data']['json'])) {
+            return $responseData['data']['json'];
+        }
+
+        if (isset($responseData['json']) && is_array($responseData['json'])) {
+            return $responseData['json'];
+        }
+
+        return null;
+    }
+
+    /**
+     * Build the exact JSON/base64 payload for outgoing document signing.
+     *
+     * @param array $responseData
+     * @return array{success: bool, documentJson?: string, documentBase64?: string, error?: string}
+     */
+    public function buildOutgoingDocumentSignaturePayload(array $responseData): array
+    {
+        $documentJsonData = $this->extractOutgoingDocumentJson($responseData);
+        if ($documentJsonData === null) {
+            return [
+                'success' => false,
+                'error' => 'Didox response does not contain signable data.json payload.',
+            ];
+        }
+
+        $documentJson = json_encode($documentJsonData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($documentJson === false) {
+            return [
+                'success' => false,
+                'error' => 'Failed to encode signable document JSON.',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'documentJson' => $documentJson,
+            'documentBase64' => base64_encode($documentJson),
+        ];
     }
 
     /**
@@ -1471,6 +1749,9 @@ class DidoxService
         }
         
         $decodedResponse = json_decode($response, true);
+        if ($decodedResponse === null && json_last_error() !== JSON_ERROR_NONE && $response !== false && $response !== '') {
+            $decodedResponse = $response;
+        }
         
         return [
             'httpCode' => $httpCode,

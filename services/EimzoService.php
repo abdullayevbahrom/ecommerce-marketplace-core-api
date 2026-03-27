@@ -202,7 +202,7 @@ class EimzoService
      * Sign arbitrary data server-side using a PFX certificate.
      *
      * Uses the local signer service (same as Didox flow) to produce
-     * a PKCS#7 signature, then optionally timestamps it via E-IMZO server.
+     * a PKCS#7 signature, then optionally timestamps it via Didox.
      *
      * @param string $data        Data to sign (e.g. document hash, JSON payload)
      * @param bool   $addTimestamp Whether to attach a timestamp after signing
@@ -251,17 +251,24 @@ class EimzoService
 
         $decoded = json_decode($result, true);
         $pkcs7b64 = $decoded['pkcs7'] ?? $decoded['pkcs7b64'] ?? null;
+        $signatureHex = $decoded['signatureHex'] ?? $decoded['signature'] ?? null;
 
         if (empty($pkcs7b64)) {
             return ['success' => false, 'error' => 'Signer returned empty PKCS#7'];
         }
 
         if ($addTimestamp) {
-            $tsResult = $this->attachTimestamp($pkcs7b64, '127.0.0.1');
-            if (!$tsResult['success']) {
-                return $tsResult;
+            if (empty($signatureHex)) {
+                return ['success' => false, 'error' => 'Signer returned empty signature hex'];
             }
-            $pkcs7b64 = $tsResult['pkcs7b64'];
+
+            $didoxService = new DidoxService();
+            $tsResult = $didoxService->createTimestamp($pkcs7b64, $signatureHex);
+            if (!$tsResult['success'] || empty($tsResult['data']['timeStampTokenB64'])) {
+                return ['success' => false, 'error' => 'Didox timestamp failed'];
+            }
+
+            $pkcs7b64 = $tsResult['data']['timeStampTokenB64'];
         }
 
         return ['success' => true, 'pkcs7b64' => $pkcs7b64];

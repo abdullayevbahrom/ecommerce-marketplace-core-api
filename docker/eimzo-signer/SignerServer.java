@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.Certificate;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.Security;
@@ -168,7 +169,17 @@ public class SignerServer {
         );
 
         List<X509Certificate> certList = new ArrayList<X509Certificate>();
-        certList.add(cert);
+        Certificate[] certificateChain = keyStore.getCertificateChain(resolvedAlias);
+        if (certificateChain != null && certificateChain.length > 0) {
+            for (Certificate chainCertificate : certificateChain) {
+                if (chainCertificate instanceof X509Certificate) {
+                    certList.add((X509Certificate) chainCertificate);
+                }
+            }
+        }
+        if (certList.isEmpty()) {
+            certList.add(cert);
+        }
         generator.addCertificates(new JcaCertStore(certList));
 
         CMSSignedData signedData = generator.generate(cmsData, attached);

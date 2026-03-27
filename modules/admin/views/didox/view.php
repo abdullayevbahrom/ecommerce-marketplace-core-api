@@ -642,12 +642,12 @@ $this->params['breadcrumbs'][] = $this->title;
  * DIDOX API Steps (all executed in frontend JavaScript):
  * Step 1: Получить список ключей (Get list of keys) - E-IMZO WebSocket
  * Step 2: Получить keyId (Get keyId) - E-IMZO WebSocket  
- * Step 3: Получить значение json с респонса GET /v1/documents/{didox_id}?owner=1 - Direct DIDOX API call
- * Step 4: Преобразовать json с 3го шага в base64 (Convert JSON from step 3 to base64) - Frontend
+ * Step 3: Получить значение data.json с респонса GET /v1/documents/{didox_id}?owner=1 - Direct DIDOX API call
+ * Step 4: Преобразовать data.json с 3го шага в base64 (Convert data.json from step 3 to base64) - Frontend
  * Step 5: Создать подпись (Create signature - first argument is base64 from step 4) - E-IMZO WebSocket
  * Step 6: Прикрепить timestamp к подписи (Attach timestamp to signature) - Direct DIDOX API call
  * Step 7: Получить значение timeStampTokenB64 с респонса 6го шага - Frontend
- * Step 8: Отправить значение timeStampTokenB64 на эндпоинт POST /v1/documents/{didox_id}/accept - Direct DIDOX API call
+ * Step 8: Отправить значение timeStampTokenB64 на эндпоинт POST /v1/documents/{didox_id}/sign - Direct DIDOX API call
  * 
  * Benefits of Frontend Implementation:
  * ✅ No need for additional PHP backend endpoints
