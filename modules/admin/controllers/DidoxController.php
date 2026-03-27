@@ -35,6 +35,7 @@ class DidoxController extends Controller
                     'cancel' => ['POST'],
                     'save-token' => ['POST'],
                     'authenticate-password' => ['POST'],
+                    'authenticate-signer' => ['POST'],
                     'login-to-company' => ['POST'],
                 ],
             ],
@@ -770,8 +771,8 @@ class DidoxController extends Controller
     }
 
     /**
-     * Get document data for E-IMZO signing (step 1)
-     * AJAX endpoint to get document data and convert to base64
+     * Get signable data.json for outgoing E-IMZO signing (step 1)
+     * AJAX endpoint to fetch DIDOX owner=1 payload and convert data.json to base64
      */
     public function actionGetDocumentForSigning() {
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
@@ -868,12 +869,23 @@ class DidoxController extends Controller
             Yii::info('DIDOX API response: ' . json_encode($result), 'didox-debug');
             
             if ($result['success']) {
-                // Convert DIDOX API response to base64 for E-IMZO signing
-                // $result['data'] contains the JSON response from DIDOX API
-                $documentJson = json_encode($result['data']);
-                $documentBase64 = base64_encode($documentJson);
-                
-                Yii::info('Successfully converted DIDOX API response to base64. Length: ' . strlen($documentBase64), 'didox-debug');
+                $payload = $didoxService->buildOutgoingDocumentSignaturePayload($result['data']);
+                if (!$payload['success']) {
+                    Yii::$app->response->statusCode = 422;
+                    return [
+                        'success' => false,
+                        'message' => $payload['error'],
+                        'didox_details' => [
+                            'endpoint' => '/v1/documents/' . $model->didox_id . '?owner=1',
+                            'response' => $result['data'],
+                        ]
+                    ];
+                }
+
+                $documentJson = $payload['documentJson'];
+                $documentBase64 = $payload['documentBase64'];
+
+                Yii::info('Successfully converted DIDOX data.json to base64. Length: ' . strlen($documentBase64), 'didox-debug');
                 
                 return [
                     'success' => true,
@@ -882,10 +894,11 @@ class DidoxController extends Controller
                         'document_id' => $model->id,
                         'didox_id' => $didoxId,
                         'didox_endpoint' => '/v1/documents/' . $didoxId . '?owner=1',
-                        'document_json' => $documentJson, // This is DIDOX API response converted to JSON
-                        'document_base64' => $documentBase64, // This is DIDOX JSON converted to base64
+                        'document_json' => $documentJson, // This is DIDOX data.json converted to JSON
+                        'document_base64' => $documentBase64, // This is DIDOX data.json converted to base64
                         'base64_length' => strlen($documentBase64),
-                        'source' => 'DIDOX_API_DIRECT_CALL'
+                        'source' => 'DIDOX_API_DIRECT_CALL',
+                        'sign_source' => 'data.json'
                     ]
                 ];
             } else {
@@ -1934,6 +1947,72 @@ class DidoxController extends Controller
 
         } catch (\Exception $e) {
             Yii::error('Password authentication error: ' . $e->getMessage(), __METHOD__);
+            return [
+                'success' => false,
+                'error' => 'Authentication error: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Authenticate into Didox using the configured server-side signer instead of local E-IMZO.
+     */
+    public function actionAuthenticateSigner() {
+        if (!Yii::$app->request->isPost) {
+            throw new HttpException(405, 'Method not allowed');
+        }
+
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+
+        $post = Yii::$app->request->post();
+        $taxId = trim((string)($post['taxId'] ?? ''));
+        $connectionType = trim((string)($post['connectionType'] ?? 'fiz'));
+
+        if ($taxId === '') {
+            return [
+                'success' => false,
+                'error' => 'Tax ID is required'
+            ];
+        }
+
+        try {
+            $didoxService = new DidoxService();
+            $result = $connectionType === 'yur'
+                ? $didoxService->authenticateCompanyWithConfiguredPfx($taxId)
+                : $didoxService->authenticateWithConfiguredPfx($taxId);
+
+            if (empty($result['success']) || empty($result['token'])) {
+                return [
+                    'success' => false,
+                    'error' => $result['error'] ?? 'Signer authentication failed'
+                ];
+            }
+
+            $session = Yii::$app->session;
+            $session->set('didox_authenticated', true);
+            $session->set('didox_token', $result['token']);
+            $session->set('didox_tax_id', $result['taxId'] ?? $taxId);
+            $session->set('didox_connection_type', $connectionType);
+            $session->set('didox_auth_method', 'signer');
+            $session->set('didox_user_data', [
+                'permissions' => $result['permissions'] ?? null,
+                'individual_tax_id' => $result['individualTaxId'] ?? null,
+            ]);
+
+            $this->user->eimzo_didox_token = $result['token'];
+            $this->user->eimzo_tax_id = $result['taxId'] ?? $taxId;
+            $this->user->eimzo_last_login = date('Y-m-d H:i:s');
+            $this->user->save(false);
+
+            return [
+                'success' => true,
+                'message' => $connectionType === 'yur'
+                    ? 'Company authentication successful via signer'
+                    : 'Didox authentication successful via signer',
+                'redirect' => Yii::$app->urlManager->createUrl(['/admin/didox/index'])
+            ];
+        } catch (\Throwable $e) {
+            Yii::error('Signer authentication error: ' . $e->getMessage(), __METHOD__);
             return [
                 'success' => false,
                 'error' => 'Authentication error: ' . $e->getMessage()

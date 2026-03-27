@@ -5,6 +5,13 @@ $this->title = 'DIDOX - E-IMZO Authentication';
 $this->params['breadcrumbs'][] = ['label' => 'DIDOX Documents', 'url' => ['index']];
 $this->params['breadcrumbs'][] = $this->title;
 
+$didoxSettings = \app\models\Settings::find()
+    ->where(['type' => ['didox_eimzo_tax_id', 'didox_seller_inn']])
+    ->all();
+$didoxSettingMap = \yii\helpers\ArrayHelper::map($didoxSettings, 'type', 'content');
+$defaultSignerTaxId = trim((string)($didoxSettingMap['didox_eimzo_tax_id'] ?? ''));
+$defaultSignerCompanyTaxId = trim((string)($didoxSettingMap['didox_seller_inn'] ?? ''));
+
 // Register E-IMZO JavaScript modules
 $this->registerJsFile('https://test.e-imzo.uz/demo/e-imzo.js', ['position' => \yii\web\View::POS_HEAD]);
 $this->registerJsFile('https://test.e-imzo.uz/demo/e-imzo-client.js', ['position' => \yii\web\View::POS_HEAD]);
@@ -109,8 +116,8 @@ $this->registerJsFile('/eimzo-auth.js', ['position' => \yii\web\View::POS_HEAD])
                                     <div class="radio">
                                         <label>
                                             <input type="radio" name="authMethod" value="eimzo_didox" checked>
-                                            <strong>E-IMZO -> DIDOX</strong>
-                                            <br><small class="text-muted">Authenticate in DIDOX using your digital certificate</small>
+                                            <strong>DIDOX via Signer</strong>
+                                            <br><small class="text-muted">Authenticate in DIDOX using the configured server-side PFX signer</small>
                                         </label>
                                     </div>
                                     <div class="radio">
@@ -493,6 +500,8 @@ let eimzoAuth = null;
 let mobileAuthInFlight = false;
 let desktopEimzoConnected = false;
 let desktopCertificates = {};
+const DEFAULT_SIGNER_TAX_ID = <?= json_encode($defaultSignerTaxId) ?>;
+const DEFAULT_SIGNER_COMPANY_TAX_ID = <?= json_encode($defaultSignerCompanyTaxId) ?>;
 
 const DESKTOP_EIMZO_API_KEYS = [
     'null', 'E0A205EC4E7B78BBB56AFF83A733A1BB9FD39D562E67978CC5E7D73B0951DB1954595A20672A63332535E13CC6EC1E1FC8857BB09E0855D7E76E411B6FA16E9D',
@@ -519,22 +528,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Authentication method change handler
     document.querySelectorAll('input[name="authMethod"]').forEach(radio => {
         radio.addEventListener('change', function() {
-            const eimzoSection = document.getElementById('eimzoSection');
-            const passwordGroup = document.getElementById('passwordGroup');
-            const loginBtn = document.getElementById('loginBtn');
-            const mobileLoginBtn = document.getElementById('mobileLoginBtn');
-            
-            if (this.value === 'eimzo_didox' || this.value === 'eimzo_direct') {
-                eimzoSection.style.display = 'block';
-                passwordGroup.style.display = 'none';
-                loginBtn.disabled = !desktopEimzoConnected;
-                mobileLoginBtn.style.display = this.value === 'eimzo_direct' ? 'inline-block' : 'none';
-            } else {
-                eimzoSection.style.display = 'none';
-                passwordGroup.style.display = 'block';
-                loginBtn.disabled = false;
-                mobileLoginBtn.style.display = 'none';
-            }
+            applyAuthMethodUiState(this.value);
             updateLoginButtonText();
         });
     });
@@ -547,14 +541,44 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize labels
     updateTaxIdFieldLabels();
+    applyAuthMethodUiState(document.querySelector('input[name="authMethod"]:checked').value);
     updateLoginButtonText();
     
     // Check if user is already authenticated
     checkAuthenticationStatus();
 });
 
+function applyAuthMethodUiState(authMethod) {
+    const eimzoSection = document.getElementById('eimzoSection');
+    const passwordGroup = document.getElementById('passwordGroup');
+    const loginBtn = document.getElementById('loginBtn');
+    const mobileLoginBtn = document.getElementById('mobileLoginBtn');
+
+    if (authMethod === 'eimzo_direct') {
+        eimzoSection.style.display = 'block';
+        passwordGroup.style.display = 'none';
+        loginBtn.disabled = !desktopEimzoConnected;
+        mobileLoginBtn.style.display = 'inline-block';
+        return;
+    }
+
+    if (authMethod === 'eimzo_didox') {
+        eimzoSection.style.display = 'none';
+        passwordGroup.style.display = 'none';
+        loginBtn.disabled = false;
+        mobileLoginBtn.style.display = 'none';
+        return;
+    }
+
+    eimzoSection.style.display = 'none';
+    passwordGroup.style.display = 'block';
+    loginBtn.disabled = false;
+    mobileLoginBtn.style.display = 'none';
+}
+
 function updateTaxIdFieldLabels() {
     const connectionType = document.querySelector('input[name="connectionType"]:checked').value;
+    const authMethod = document.querySelector('input[name="authMethod"]:checked').value;
     const taxIdLabel = document.getElementById('taxIdLabel');
     const taxIdInput = document.getElementById('taxIdInput');
     const taxIdHelpText = document.getElementById('taxIdHelpText');
@@ -567,6 +591,13 @@ function updateTaxIdFieldLabels() {
         taxIdLabel.innerHTML = 'Your INN (Tax ID) <span class="text-red">*</span>';
         taxIdInput.placeholder = 'Enter your 9-digit INN';
         taxIdHelpText.textContent = 'Enter your 9-digit Tax Identification Number (INN)';
+    }
+
+    if (authMethod === 'eimzo_didox' && taxIdInput.value.trim() === '') {
+        const defaultTaxId = getDefaultSignerTaxId(connectionType);
+        if (defaultTaxId) {
+            taxIdInput.placeholder = defaultTaxId;
+        }
     }
 }
 
@@ -585,6 +616,77 @@ function updateLoginButtonText() {
     }
     
     loginBtnText.textContent = text;
+}
+
+function getDefaultSignerTaxId(connectionType) {
+    return connectionType === 'yur' ? DEFAULT_SIGNER_COMPANY_TAX_ID : DEFAULT_SIGNER_TAX_ID;
+}
+
+function resolveSignerTaxId(taxId, connectionType) {
+    const normalizedTaxId = (taxId || '').trim();
+    if (normalizedTaxId !== '') {
+        return normalizedTaxId;
+    }
+
+    const fallbackTaxId = getDefaultSignerTaxId(connectionType);
+    if (!fallbackTaxId) {
+        return '';
+    }
+
+    const taxIdInput = document.getElementById('taxIdInput');
+    if (taxIdInput) {
+        taxIdInput.value = fallbackTaxId;
+        taxIdInput.classList.add('success');
+        setTimeout(() => {
+            taxIdInput.classList.remove('success');
+        }, 2000);
+    }
+
+    return fallbackTaxId;
+}
+
+function authenticateDidoxWithSigner(taxId, connectionType) {
+    taxId = resolveSignerTaxId(taxId, connectionType);
+    if (!taxId) {
+        updateStatus('Signer authentication failed: Tax ID is required', 'danger');
+        return;
+    }
+
+    updateStatus('Authenticating in DIDOX via server-side signer...', 'info');
+    updateStep(2, false);
+
+    fetch(<?= json_encode(\yii\helpers\Url::to(['/admin/didox/authenticate-signer'])) ?>, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams({
+            taxId: taxId,
+            connectionType: connectionType
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        updateStep(2, true);
+
+        if (data.success) {
+            updateStep(3, true);
+            updateStep(4, true);
+            showSuccess(data.message || 'Authentication successful!');
+            if (data.redirect) {
+                setTimeout(() => {
+                    window.location.href = data.redirect;
+                }, 1500);
+            }
+        } else {
+            updateStatus('Signer authentication failed: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Signer authentication error:', error);
+        updateStatus('Signer authentication error: ' + error.message, 'danger');
+    });
 }
 
 function createAuthClient(authMethod) {
@@ -927,7 +1029,7 @@ function extractInnFromAlias(alias) {
 }
 
 function performAuthentication() {
-    const taxId = document.getElementById('taxIdInput').value;
+    let taxId = document.getElementById('taxIdInput').value;
     const connectionType = document.querySelector('input[name="connectionType"]:checked').value;
     const authMethod = document.querySelector('input[name="authMethod"]:checked').value;
 
@@ -953,7 +1055,10 @@ function performAuthentication() {
             // Direct individual authentication
             authenticateWithPassword(taxId, password, connectionType);
         }
-    } else if (authMethod === 'eimzo_didox' || authMethod === 'eimzo_direct') {
+    } else if (authMethod === 'eimzo_didox') {
+        taxId = resolveSignerTaxId(taxId, connectionType);
+        authenticateDidoxWithSigner(taxId, connectionType);
+    } else if (authMethod === 'eimzo_direct') {
     if (!desktopEimzoConnected) {
         updateStatus('Please connect to E-IMZO first', 'danger');
         return;
