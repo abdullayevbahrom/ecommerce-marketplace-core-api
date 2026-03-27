@@ -22,6 +22,7 @@ services:
       - ./docker/supervisor/conf.d/php-fpm.conf:/etc/supervisor/conf.d/php-fpm.conf
     depends_on:
       - db
+      - eimzo-signer
 
   db:
     container_name: mysql
@@ -45,6 +46,18 @@ services:
         "--character-set-server=utf8mb4",
         "--collation-server=utf8mb4_unicode_ci",
       ]
+
+  eimzo-signer:
+    container_name: eimzo-signer
+    build:
+      context: ./docker
+      dockerfile: eimzo-signer/Dockerfile
+    restart: unless-stopped
+    working_dir: /opt/eimzo
+    environment:
+      TZ: Asia/Tashkent
+    volumes:
+      - ./keys:/opt/eimzo/keys:ro
 
 volumes:
   db_data:

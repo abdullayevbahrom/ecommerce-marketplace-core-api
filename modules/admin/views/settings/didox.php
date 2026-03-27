@@ -128,13 +128,13 @@ $this->params['breadcrumbs'][] = $this->title;
                         <h3 class="box-title">Automated Server-Side Signing</h3>
                         <p class="text-muted">Configure PFX key and Signer Service to allow fully automated document creation without browser interaction.</p>
                         <div class="alert alert-info">
-                            <i class="fa fa-info"></i> Requires a local E-IMZO signer service running (e.g., at http://127.0.0.1:8080/generate).
+                            <i class="fa fa-info"></i> Requires a Docker-accessible E-IMZO signer service running (e.g., at http://eimzo-signer:8080/generate).
                         </div>
                     </div>
                     <?php $form = ActiveForm::begin(['id' => 'form-auto-auth', 'options' => ['enctype' => 'multipart/form-data']]);?>
                         <div class="box-body">
                             <div class="form-group">
-                                <label>Current PFX Key Path</label>
+                                <label>Current PFX File Name</label>
                                 <input type="text" class="form-control" disabled value="<?=$models['didox_pfx_path']->content?>">
                             </div>
                             
@@ -145,7 +145,7 @@ $this->params['breadcrumbs'][] = $this->title;
 
                             <?=$form->field($models['didox_pfx_password'], '[didox_pfx_password]content')->passwordInput(['value' => $models['didox_pfx_password']->content])->label('PFX Key Password');?>
                             
-                            <?=$form->field($models['didox_signer_url'], '[didox_signer_url]content')->textInput()->label('Signer Service URL (e.g. http://127.0.0.1:8080/generate)');?>
+                            <?=$form->field($models['didox_signer_url'], '[didox_signer_url]content')->textInput()->label('Signer Service URL (e.g. http://eimzo-signer:8080/generate)');?>
                         </div>
                         <div class="box-footer">
                             <div class="text-right">
@@ -159,4 +159,3 @@ $this->params['breadcrumbs'][] = $this->title;
         </div>
     </section>
 </div>
-

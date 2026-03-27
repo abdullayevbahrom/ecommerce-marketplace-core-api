@@ -14,7 +14,7 @@ use yii\db\Migration;
  * ('didox_eimzo_certificate', '', NOW()),
  * ('didox_pfx_path', '', NOW()),
  * ('didox_pfx_password', '', NOW()),
- * ('didox_signer_url', 'http://127.0.0.1:8080/generate', NOW());
+ * ('didox_signer_url', 'http://eimzo-signer:8080/generate', NOW());
  */
 class m251214_000002_add_didox_eimzo_settings extends Migration
 {
@@ -30,7 +30,7 @@ class m251214_000002_add_didox_eimzo_settings extends Migration
             ['didox_eimzo_certificate', ''], // Will store JSON if needed
             ['didox_pfx_path', ''],
             ['didox_pfx_password', ''],
-            ['didox_signer_url', 'http://127.0.0.1:8080/generate']
+            ['didox_signer_url', 'http://eimzo-signer:8080/generate']
         ];
 
         foreach ($settings as $setting) {

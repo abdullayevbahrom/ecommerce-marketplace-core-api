@@ -28,6 +28,7 @@ services:
       - ./docker/supervisor:/etc/supervisor
     depends_on:
       - eimzo-server
+      - eimzo-signer
       - rabbitmq
 
   rabbitmq:
@@ -63,6 +64,18 @@ services:
       - ./docker/eimzo-server:/opt/eimzo:rw
     depends_on:
       - eimzo-redis
+
+  eimzo-signer:
+    container_name: eimzo-signer
+    build:
+      context: ./docker
+      dockerfile: eimzo-signer/Dockerfile
+    restart: unless-stopped
+    working_dir: /opt/eimzo
+    environment:
+      TZ: Asia/Tashkent
+    volumes:
+      - ./keys:/opt/eimzo/keys:ro
 
 volumes:
   rabbitmq_data:

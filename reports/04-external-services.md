@@ -1074,7 +1074,7 @@ Credentials passed in the request body:
 
 | Setting Type | Purpose |
 |-------------|---------|
-| `didox_pfx_path` | Path to PFX certificate file |
+| `didox_pfx_path` | PFX certificate file name |
 | `didox_pfx_password` | PFX certificate password |
 | `didox_signer_url` | Local signer service URL |
 | `didox_seller_inn` | Seller TIN for invoices |

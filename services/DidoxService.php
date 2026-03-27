@@ -37,10 +37,12 @@ class DidoxService
         
         $pfxPath = $config['didox_pfx_path'] ?? '';
         $password = $config['didox_pfx_password'] ?? '';
-        $signerUrl = $config['didox_signer_url'] ?? 'http://127.0.0.1:8080/generate';
+        $signerUrl = $config['didox_signer_url'] ?? 'http://eimzo-signer:8080/generate';
         $jshir = $config['didox_seller_inn'] ?? ''; 
         
-        if (empty($pfxPath) || empty($password) || !file_exists($pfxPath)) {
+        $appPfxPath = $this->resolveAppPfxPath($pfxPath);
+
+        if (empty($appPfxPath) || empty($password) || !file_exists($appPfxPath)) {
             return ['success' => false, 'error' => 'PFX file not configured or missing.'];
         }
 
@@ -192,6 +194,20 @@ class DidoxService
             return $matches[1];
         }
         return null;
+    }
+
+    private function resolveAppPfxPath(string $path): string
+    {
+        if ($path === '') {
+            return '';
+        }
+
+        if (strpos($path, '/var/www/html/keys/') === 0) {
+            return $path;
+        }
+
+        $filename = basename(str_replace('\\', '/', $path));
+        return Yii::getAlias('@app/keys/' . $filename);
     }
 
     /**
