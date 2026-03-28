@@ -2,8 +2,8 @@ FROM amazoncorretto:8-alpine3.19 AS builder
 
 WORKDIR /build
 
-COPY eimzo-signer/SignerServer.java ./
 COPY eimzo-server/lib ./lib
+COPY eimzo-signer/SignerServer.java ./
 
 RUN javac -cp "./lib/*" SignerServer.java
 

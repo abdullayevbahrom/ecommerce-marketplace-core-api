@@ -449,7 +449,9 @@ class UserController extends Controller
 
                 $keys = ['user_id', 'address'];
                 $vals = [];
-                foreach ($model->address as $key => $value) {
+                $addresses = is_array($model->address) ? $model->address : [$model->address];
+                
+                foreach ($addresses as $key => $value) {
                     if ($value) {
                         $vals[] = [
                             'user_id' => $model->id,
