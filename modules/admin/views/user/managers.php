@@ -19,6 +19,11 @@ $this->params['breadcrumbs'][] = $this->title;
         <div class="box box-info color-palette-box">
             <div class="box-header with-border">
                 <h3 class="box-title"><i class="fa fa-user-secret"></i> Пользователи с ролью «Менеджер»</h3>
+                <div class="box-tools pull-right">
+                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/create', 'role' => \app\models\user\User::ROLE_MANAGER])?>" class="btn btn-primary btn-sm">
+                        <i class="fa fa-plus"></i> Добавить менеджера
+                    </a>
+                </div>
             </div>
             <div class="box-body" id="item-block">
                 <?= GridView::widget([
