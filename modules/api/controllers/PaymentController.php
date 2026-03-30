@@ -101,7 +101,9 @@ class PaymentController extends Controller {
     {
         $token              = Yii::$app->params['walletDefaultToken'] ?? 'USDT';
         $currencyBackendUrl = rtrim(Yii::$app->params['currencyBackendUrl'] ?? Yii::$app->params['walletServiceUrl'] ?? '', '/');
-        $paymentAmount      = (float)$order->price;
+        // TODO: Add real UZS→USDT exchange rate API. Currently 1:1.
+        $exchangeRate       = (float)(Yii::$app->params['uzsToUsdtRate'] ?? 1.0);
+        $paymentAmount      = (float)$order->price * $exchangeRate;
 
         // Retrieve current wallet balance
         $walletService = new WalletService();
