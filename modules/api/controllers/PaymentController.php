@@ -141,16 +141,118 @@ class PaymentController extends Controller {
             ];
         }
 
-        $payUrl = $currencyBackendUrl . '/api/app/pay/order/' . $order->id;
+        $baseUrl = rtrim(Yii::$app->params['baseUrl'] ?? Yii::$app->request->hostInfo, '/');
+        $payUrl = $baseUrl . '/api/app/pay/order/' . $order->id;
 
         return [
             'data' => [
+                'order_id' => $order->id,
                 'balance' => $balance,
                 'amount'  => $paymentAmount,
                 'token'   => $token,
                 'pay_url' => $payUrl,
             ],
         ];
+    }
+
+    /**
+     * Execute crypto payment for an order.
+     * POST /api/app/pay/order/{orderId}
+     * Checks ownership, balance, then calls the AA backend to transfer tokens.
+     */
+    public function actionPayOrder($orderId)
+    {
+        $userId = Yii::$app->user->identity->id;
+
+        $order = Order::find()
+            ->where(['id' => $orderId, 'user_id' => $userId])
+            ->one();
+
+        if (!$order) {
+            Yii::$app->response->statusCode = 404;
+            return ['success' => false, 'error' => 'Order not found or does not belong to you'];
+        }
+
+        if ($order->status_payment == 1) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'Order is already paid'];
+        }
+
+        $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
+        if (!$walletPaymentId || (int)$order->payment_id !== (int)$walletPaymentId) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'This order does not use crypto payment'];
+        }
+
+        $token = Yii::$app->params['walletDefaultToken'] ?? 'USDT';
+        $exchangeRate = (float)(Yii::$app->params['uzsToUsdtRate'] ?? 1.0);
+        $paymentAmount = (float)$order->price * $exchangeRate;
+
+        // Find the merchant (shop owner) to pay
+        $shop = $order->shop;
+        $merchantUserId = $shop ? $shop->user_id : null;
+
+        if (!$merchantUserId) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'Shop owner not found for this order'];
+        }
+
+        $walletService = new WalletService();
+        $walletService->init();
+
+        // Check balance first
+        try {
+            $balanceData = $walletService->getBalance($userId);
+            $balance = $this->extractTokenBalance($balanceData, $token);
+
+            if ($balance < $paymentAmount) {
+                Yii::$app->response->statusCode = 422;
+                return [
+                    'success' => false,
+                    'error' => sprintf('Insufficient %s balance: %s available, %s required', $token, $balance, $paymentAmount),
+                    'data' => ['balance' => $balance, 'amount' => $paymentAmount, 'token' => $token],
+                ];
+            }
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 503;
+            return ['success' => false, 'error' => 'Could not check wallet balance: ' . $e->getMessage()];
+        }
+
+        // Execute payment via AA backend
+        $dbTransaction = Yii::$app->db->beginTransaction();
+        try {
+            $result = $walletService->pay($userId, $merchantUserId, (string)$paymentAmount, $token);
+
+            $order->status_payment = 1;
+            $order->save(false);
+
+            $transaction = new \app\models\transaction\Transaction();
+            $transaction->user_id = $userId;
+            $transaction->order_id = $order->id;
+            $transaction->shop_id = $order->shop_id;
+            $transaction->type_transaction = 'payment';
+            $transaction->type_payment = 'wallet';
+            $transaction->amount = $order->price;
+            $transaction->status = 1;
+            $transaction->save(false);
+
+            $dbTransaction->commit();
+
+            return [
+                'success' => true,
+                'message' => 'Payment successful',
+                'data' => [
+                    'order_id' => $order->id,
+                    'amount_paid' => $paymentAmount,
+                    'token' => $token,
+                    'tx_result' => $result,
+                ],
+            ];
+        } catch (\Exception $e) {
+            $dbTransaction->rollBack();
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'Payment failed: ' . $e->getMessage()];
+        }
     }
 
     /**
