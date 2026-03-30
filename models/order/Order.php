@@ -146,7 +146,9 @@ class Order extends \yii\db\ActiveRecord
         $user = Yii::$app->user->identity;
         $this->user_id = $user->id;
         $this->status = 0;
-        $this->status_payment = 1;
+        // Crypto/wallet payments (walletPaymentId) start unpaid — user pays via /api/payment/pay
+        $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
+        $this->status_payment = ($walletPaymentId && (int)$this->payment_id === (int)$walletPaymentId) ? 0 : 1;
         $this->status_delivery = 0;
         $this->status_review = 0;
         $this->bts_city_id = $user->bts_city_id;

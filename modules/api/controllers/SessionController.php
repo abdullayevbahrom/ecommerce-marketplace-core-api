@@ -90,17 +90,20 @@ class SessionController extends Controller
             return ['success' => false, 'message' => 'Unauthorized'];
         }
 
-        if (!\in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_SHOP])) {
+        if (!\in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_SHOP, User::ROLE_MANAGER])) {
             Yii::$app->response->statusCode = 403;
 
             return ['success' => false, 'message' => 'Forbidden'];
         }
 
-        // Find shop_id for shop/merchant users
+        // Find shop_id for shop/merchant and manager users
         $shopId = null;
         if ($user->role === User::ROLE_SHOP) {
             $shop = \app\models\shop\Shop::findOne(['user_id' => $user->id]);
             $shopId = $shop ? (int)$shop->id : null;
+        } elseif ($user->role === User::ROLE_MANAGER && $user->shop_id) {
+            // Manager is linked to a shop via shop_id field
+            $shopId = (int)$user->shop_id;
         }
 
         $payload = [
