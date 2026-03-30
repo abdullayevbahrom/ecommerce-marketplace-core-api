@@ -181,9 +181,9 @@ class User extends ActiveRecord implements IdentityInterface
 
             // save user by admin
             [['password', 'name', 'phone'], 'required', 'message' => 'Заполните поле', 'on' => self::SIGNUP_ADMIN_USER],
-            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on' => self::SIGNUP_ADMIN_USER],
+            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id', 'shop_id'], 'safe', 'on' => self::SIGNUP_ADMIN_USER],
             [['name', 'phone'], 'required', 'message' => 'Заполните поле', 'on' => self::UPDATE_ADMIN_USER],
-            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on' => self::UPDATE_ADMIN_USER],
+            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id', 'shop_id'], 'safe', 'on' => self::UPDATE_ADMIN_USER],
             ['phone', 'checkPhone', 'on' => self::SIGNUP_ADMIN_USER],
             ['email', 'checkEmail', 'on' => self::SIGNUP_ADMIN_USER],
             ['phone', 'checkPhoneAdmin', 'on' => self::UPDATE_ADMIN_USER],
