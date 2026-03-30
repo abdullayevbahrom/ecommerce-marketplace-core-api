@@ -20,11 +20,6 @@ $this->params['breadcrumbs'][] = $this->title;
         <div class="box box-info color-palette-box">
             <div class="box-header with-border">
                 <h3 class="box-title"><i class="fa fa-shopping-bag"></i> Пользователи с ролью «Магазин»</h3>
-                <div class="box-tools pull-right">
-                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/create', 'role' => \app\models\user\User::ROLE_SHOP])?>" class="btn btn-primary btn-sm">
-                        <i class="fa fa-plus"></i> Добавить магазин
-                    </a>
-                </div>
             </div>
             <div class="box-body" id="item-block">
                 <?= GridView::widget([

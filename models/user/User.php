@@ -80,7 +80,6 @@ class User extends ActiveRecord implements IdentityInterface
     const ROLE_SHOP = 4;
     const ROLE_LOGIST = 5;
     const ROLE_OPERATOR = 6;
-    const ROLE_MANAGER = 7;
 
     const ROLE_LABELS = [
         self::ROLE_ADMIN => 'Администратор',
@@ -89,7 +88,6 @@ class User extends ActiveRecord implements IdentityInterface
         self::ROLE_SHOP => 'Магазин',
         self::ROLE_LOGIST => 'Логист',
         self::ROLE_OPERATOR => 'Оператор',
-        self::ROLE_MANAGER => 'Менеджер',
     ];
 
     const ROLE_COLORS = [
@@ -99,7 +97,6 @@ class User extends ActiveRecord implements IdentityInterface
         self::ROLE_SHOP => 'bg-green',
         self::ROLE_LOGIST => 'bg-orange',
         self::ROLE_OPERATOR => 'bg-blue',
-        self::ROLE_MANAGER => 'bg-teal',
     ];
 
     const PHOTO_PATH = 'uploads/user/';
@@ -181,9 +178,9 @@ class User extends ActiveRecord implements IdentityInterface
 
             // save user by admin
             [['password', 'name', 'phone'], 'required', 'message' => 'Заполните поле', 'on' => self::SIGNUP_ADMIN_USER],
-            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id', 'shop_id'], 'safe', 'on' => self::SIGNUP_ADMIN_USER],
+            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on' => self::SIGNUP_ADMIN_USER],
             [['name', 'phone'], 'required', 'message' => 'Заполните поле', 'on' => self::UPDATE_ADMIN_USER],
-            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id', 'shop_id'], 'safe', 'on' => self::UPDATE_ADMIN_USER],
+            [['lastname', 'middlename', 'email', 'gender', 'birthday', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'address_legal', 'address', 'organization_name', 'bts_region_id', 'bts_city_id'], 'safe', 'on' => self::UPDATE_ADMIN_USER],
             ['phone', 'checkPhone', 'on' => self::SIGNUP_ADMIN_USER],
             ['email', 'checkEmail', 'on' => self::SIGNUP_ADMIN_USER],
             ['phone', 'checkPhoneAdmin', 'on' => self::UPDATE_ADMIN_USER],
