@@ -396,8 +396,8 @@ class User extends ActiveRecord implements IdentityInterface
             return false;
         }
 
-        $regionId = trim((string)$this->bts_region_id);
-        $cityId = trim((string)$this->bts_city_id);
+        $regionId = trim((string) $this->bts_region_id);
+        $cityId = trim((string) $this->bts_city_id);
 
         if ($regionId === '' || $cityId === '') {
             return false;
@@ -654,7 +654,7 @@ class User extends ActiveRecord implements IdentityInterface
         }
 
         $code->phone = $current_phone;
-        $code->code = (string)$this->generateCode($current_phone);
+        $code->code = (string) $this->generateCode($current_phone);
         // $code->code = '000000';
         $code->sms_expire = strtotime('+30 seconds');
         $code->token = $this->generateToken();
@@ -751,10 +751,50 @@ class User extends ActiveRecord implements IdentityInterface
 
     public function fields()
     {
-        $controller = Yii::$app->controller->id;
-        $action = Yii::$app->controller->action->id;
+        return [
+            'id',
+            'device_id',
+            'token',
+            'name',
+            'lastname',
+            'middlename',
+            'phone',
+            'email',
+            'gender',
+            'birthday',
+            'photo',
+            'type',
+            'inn',
+            'account',
+            'bank',
+            'oked',
+            'okohx',
+            'mfo',
+            'addresses',
+            'date',
+            'last_address',
+            'organization_name',
+            'accesses' => function () {
+                return $this->getAccesses();
+            },
+        ];
+    }
 
-        return ['id', 'device_id', 'token', 'name', 'lastname', 'middlename', 'phone', 'email', 'gender', 'birthday', 'photo', 'type', 'inn', 'account', 'bank', 'oked', 'okohx', 'mfo', 'addresses', 'date', 'last_address', 'organization_name'];
+    public function getAccesses(): array
+    {
+        $accesses = [];
+
+        if (\in_array($this->role, [self::ROLE_ADMIN, self::ROLE_MODERATOR], true)) {
+            return ['warehouse', 'operator'];
+        }
+
+        if (\in_array($this->role, [self::ROLE_SHOP], true)) {
+            $accesses[] = 'warehouse';
+        } else if (\in_array($this->role, [self::ROLE_OPERATOR, self::ROLE_USER], true)) {
+            $accesses[] = 'operator';
+        }
+
+        return $accesses;
     }
 
     // relations
