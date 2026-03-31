@@ -91,7 +91,7 @@ class SessionController extends Controller
         }
 
         if (!\in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_SHOP])) {
-            Yii::$app->response->statusCode = 403;
+            Yii::$app->response->statusCode = 200;
 
             return ['success' => false, 'message' => 'Forbidden'];
         }
@@ -160,7 +160,7 @@ class SessionController extends Controller
         }
 
         if (!\in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_USER, User::ROLE_OPERATOR])) {
-            Yii::$app->response->statusCode = 403;
+            Yii::$app->response->statusCode = 200;
 
             return ['success' => false, 'message' => 'Forbidden'];
         }
