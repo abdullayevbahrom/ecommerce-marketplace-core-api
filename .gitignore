@@ -54,4 +54,4 @@ docker/eimzo-server/keys/*.jks
 docker/eimzo-server/test.pfx
 docker/eimzo-server/SignChallenge.*
 
-eimzo-telegram/
+eimzo-telegram/.claude/worktrees/
