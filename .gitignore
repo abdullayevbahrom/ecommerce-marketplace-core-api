@@ -55,3 +55,16 @@ docker/eimzo-server/test.pfx
 docker/eimzo-server/SignChallenge.*
 
 eimzo-telegram/.claude/worktrees/
+
+# Claude Code
+.claude/
+.playwright-cli/
+.playwright-mcp/
+
+# Root-level screenshots (from E2E tests)
+/admin-panel*.png
+/e2e-*.png
+/arrival-page*.png
+/products-populated*.png
+/tc*.png
+/ux-*.png
