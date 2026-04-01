@@ -3,14 +3,13 @@ use yii\helpers\Html;
 use yii\grid\GridView;
 use app\models\shop\Shop;
 
-$this->title = 'Магазины (пользователи)';
+$this->title = 'Менеджеры';
 $this->params['breadcrumbs'][] = $this->title;
 ?>
 
 <div class="content-wrapper">
     <section class="content-header">
         <h1><?=$this->title;?></h1>
-
         <ol class="breadcrumb">
             <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/'])?>"><i class="fa fa-dashboard"></i> Главная</a></li>
             <li class="active"><?=$this->title;?></li>
@@ -19,10 +18,10 @@ $this->params['breadcrumbs'][] = $this->title;
     <section class="content">
         <div class="box box-info color-palette-box">
             <div class="box-header with-border">
-                <h3 class="box-title"><i class="fa fa-shopping-bag"></i> Пользователи с ролью «Магазин»</h3>
+                <h3 class="box-title"><i class="fa fa-user-secret"></i> Пользователи с ролью «Менеджер»</h3>
                 <div class="box-tools pull-right">
-                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/create', 'role' => \app\models\user\User::ROLE_SHOP])?>" class="btn btn-primary btn-sm">
-                        <i class="fa fa-plus"></i> Добавить магазин
+                    <a href="<?=Yii::$app->urlManager->createUrl(['/admin/user/create', 'role' => \app\models\user\User::ROLE_MANAGER])?>" class="btn btn-primary btn-sm">
+                        <i class="fa fa-plus"></i> Добавить менеджера
                     </a>
                 </div>
             </div>
@@ -30,9 +29,9 @@ $this->params['breadcrumbs'][] = $this->title;
                 <?= GridView::widget([
                     'dataProvider' => $dataProvider,
                     'filterModel' => $searchModel,
-                    'summary' => "Показано {begin} - {end} из {totalCount} магазинов<br/><br/>",
-                    'emptyText' => 'Пользователи-магазины не найдены',
-                    'rowOptions' => function ($model, $index, $widget, $grid) {
+                    'summary' => "Показано {begin} - {end} из {totalCount} менеджеров<br/><br/>",
+                    'emptyText' => 'Менеджеры не найдены',
+                    'rowOptions' => function ($model) {
                         return [
                             'id' => $model['id'],
                             'url' => Yii::$app->urlManager->createUrl('/admin/user/view').'?id='.$model['id']
@@ -40,17 +39,12 @@ $this->params['breadcrumbs'][] = $this->title;
                     },
                     'pager' => [
                         'options'=>['class'=>'pagination'],
-                        'pageCssClass' => 'page-item',
                         'prevPageLabel' => 'Назад',
                         'nextPageLabel' => 'Вперед',
                         'maxButtonCount'=>10,
-                        'linkOptions' => [
-                            'class' => 'page-link'
-                        ]
+                        'linkOptions' => ['class' => 'page-link']
                     ],
-                    'tableOptions' => [
-                        'class'=>'table table-striped table-bordered'
-                    ],
+                    'tableOptions' => ['class'=>'table table-striped table-bordered'],
                     'columns' => [
                         ['class' => 'yii\grid\SerialColumn'],
                         [
@@ -62,7 +56,6 @@ $this->params['breadcrumbs'][] = $this->title;
                             'attribute'=>'id',
                             'label'=>'<i class="fa fa-sort"></i> ID',
                             'encodeLabel' => false,
-                            'contentOptions' => ['style' => 'width:60px'],
                         ],
                         [
                             'attribute'=>'name',
@@ -82,31 +75,23 @@ $this->params['breadcrumbs'][] = $this->title;
                             'encodeLabel' => false,
                         ],
                         [
-                            'attribute'=>'email',
-                            'label'=>'<i class="fa fa-sort"></i> E-mail',
-                            'encodeLabel' => false,
-                            'value' => function ($model) {
-                                return $model->email ?: '—';
-                            },
-                        ],
-                        [
                             'label' => '<i class="fa fa-shopping-bag"></i> Магазин',
                             'encodeLabel' => false,
                             'format' => 'html',
                             'value' => function ($model) {
-                                $shop = Shop::findOne(['user_id' => $model->id]);
-                                if (!$shop) {
+                                if (!$model->shop_id) {
                                     return '<span class="text-muted">Не привязан</span>';
                                 }
+                                $shop = Shop::findOne($model->shop_id);
+                                if (!$shop) {
+                                    return '<span class="text-muted">Магазин #' . $model->shop_id . '</span>';
+                                }
                                 $shopUrl = Yii::$app->urlManager->createUrl(['/admin/shop/view', 'id' => $shop->id]);
-                                $badge = $shop->status == 1
-                                    ? '<small class="label bg-green">Active</small>'
-                                    : '<small class="label bg-red">Blocked</small>';
                                 return Html::a(
                                     '<i class="fa fa-external-link"></i> ' . Html::encode($shop->name_ru ?: "Магазин #{$shop->id}"),
                                     $shopUrl,
-                                    ['class' => 'text-primary', 'title' => 'Перейти к магазину']
-                                ) . ' ' . $badge;
+                                    ['class' => 'text-primary']
+                                );
                             },
                         ],
                         [
@@ -116,12 +101,8 @@ $this->params['breadcrumbs'][] = $this->title;
                             'format' => 'html',
                             'filter' => Html::activeDropDownList($searchModel, 'status', ['1'=>'Активен', '2'=>'Заблокирован'], ['class'=>'form-control select2','prompt' => 'Все']),
                             'value' => function ($model) {
-                                if ($model->status == 1) {
-                                    return '<small class="label bg-green">Активен</small>';
-                                }
-                                if ($model->status == 2) {
-                                    return '<small class="label bg-red">Заблокирован</small>';
-                                }
+                                if ($model->status == 1) return '<small class="label bg-green">Активен</small>';
+                                if ($model->status == 2) return '<small class="label bg-red">Заблокирован</small>';
                                 return '<small class="label bg-yellow">Ожидает</small>';
                             },
                         ],
@@ -129,9 +110,6 @@ $this->params['breadcrumbs'][] = $this->title;
                             'attribute'=>'date',
                             'label'=>'<i class="fa fa-sort"></i> Дата',
                             'encodeLabel' => false,
-                            'value' => function ($model) {
-                                return $model->date ?: '—';
-                            },
                         ],
                     ],
                 ]); ?>

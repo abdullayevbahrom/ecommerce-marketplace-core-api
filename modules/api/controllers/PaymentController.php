@@ -3,6 +3,7 @@ namespace app\modules\api\controllers;
 
 
 use app\services\PayKeeperService;
+use app\services\WalletService;
 use YooKassa\Client;
 use Yii;
 use yii\helpers\ArrayHelper;
@@ -65,44 +66,174 @@ class PaymentController extends Controller {
 
 
     public function actionPay() {
+        $orderId = Yii::$app->request->post('order_id');
+        $userId  = Yii::$app->user->identity->id;
 
-        $id = Yii::$app->request->post('order_id');
-        $user_id = Yii::$app->user->identity->id;
-        $order  = Order::find()
-            ->where(['id'=> $id, 'user_id' =>  $user_id ])->one();
-
-        $order_products  = OrderProduct::find()
-            ->where(['order_id'=> $id])->all();
-
-        
-        $amount = 0;
-        foreach($order_products as $order_product){
-            $amount  += $order_product->price;
+        if (!$orderId) {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['order_id' => 'order_id is required']];
         }
 
-        $service =  new PayKeeperService();
-        
-        $url = $service->get_invoice_url($order->id, $amount);
-        $band_card = $this->createPayment($amount,$order->id,'bank_card');
-        $yoo_money = $this->createPayment($amount,$order->id,'yoo_money');    
-        // $sberbank = $this->createPayment($amount, $order->id,'sberbank');  
-        // $b2b_sberbank = $this->createPayment($amount, $order->id,'b2b_sberbank');    
-        // $qiwi = $this->createPayment($amount, $order->id,'qiwi');    
-        // $alfabank = $this->createPayment($amount, $order->id,'alfabank');    
-        // $tinkoff_bank = $this->createPayment($amount, $order->id,'tinkoff_bank');
+        $order = Order::find()->where(['id' => $orderId, 'user_id' => $userId])->one();
+
+        if (!$order) {
+            Yii::$app->response->statusCode = 404;
+            return ['errors' => ['order' => 'Order not found']];
+        }
+
+        if ($order->status_payment == 1) {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['order' => 'Order is already paid']];
+        }
+
+        $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
+
+        if ($walletPaymentId && (int)$order->payment_id === (int)$walletPaymentId) {
+            return $this->handleCryptoPayment($order, $userId);
+        }
+
+        return $this->handleTraditionalPayment($order);
+    }
+
+    private function handleCryptoPayment(Order $order, int $userId): array
+    {
+        $token = Yii::$app->params['walletDefaultToken'] ?? 'USDT';
+        // TODO: Add real UZS→USDT exchange rate API. Currently 1:1.
+        $exchangeRate = (float)(Yii::$app->params['uzsToUsdtRate'] ?? 1.0);
+        $paymentAmount = (float)$order->price * $exchangeRate;
+
+        $walletService = new WalletService();
+        $walletService->init();
+
+        try {
+            $balanceData = $walletService->getBalance($userId);
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 503;
+            return ['errors' => ['wallet' => 'Could not retrieve wallet balance.']];
+        }
+
+        $balance = $this->extractTokenBalance($balanceData, $token);
+
+        if ($balance < $paymentAmount) {
+            Yii::$app->response->statusCode = 422;
+            return [
+                'errors' => ['wallet' => sprintf('Insufficient %s balance: %s available, %s required', $token, $balance, $paymentAmount)],
+                'data' => ['balance' => $balance, 'amount' => $paymentAmount, 'token' => $token],
+            ];
+        }
+
+        $baseUrl = rtrim(Yii::$app->params['baseUrl'] ?? Yii::$app->request->hostInfo, '/');
+        $payUrl = $baseUrl . '/api/app/pay/order/' . $order->id;
 
         return [
-            'data'=> [
-                'pay_url' => $url ,
-                'band_card' => $band_card,
-                'yoo_money' => $yoo_money,
-                // 'sberbank' => $sberbank,
-                // 'qiwi' => $qiwi,
-                // 'alfabank' => $alfabank,
-                // 'tinkoff_bank' => $tinkoff_bank,
-                // 'b2b_sberbank' => $b2b_sberbank,
-            ]
+            'data' => [
+                'order_id' => $order->id,
+                'balance' => $balance,
+                'amount' => $paymentAmount,
+                'token' => $token,
+                'pay_url' => $payUrl,
+            ],
         ];
+    }
+
+    private function extractTokenBalance(array $balanceData, string $symbol): float
+    {
+        foreach ($balanceData['tokens'] ?? [] as $tokenEntry) {
+            if (isset($tokenEntry['symbol']) && strtoupper($tokenEntry['symbol']) === strtoupper($symbol)) {
+                return (float)($tokenEntry['balance'] ?? 0);
+            }
+        }
+        return (float)($balanceData['balance'] ?? 0);
+    }
+
+    private function handleTraditionalPayment(Order $order): array
+    {
+        $orderProducts = OrderProduct::find()->where(['order_id' => $order->id])->all();
+        $amount = 0;
+        foreach ($orderProducts as $op) { $amount += $op->price; }
+
+        $service = new PayKeeperService();
+        $payUrl = $service->get_invoice_url($order->id, $amount);
+        $bandCard = $this->createPayment($amount, $order->id, 'bank_card');
+        $yooMoney = $this->createPayment($amount, $order->id, 'yoo_money');
+
+        return ['data' => ['pay_url' => $payUrl, 'band_card' => $bandCard, 'yoo_money' => $yooMoney]];
+    }
+
+    /**
+     * Execute crypto payment for an order.
+     * POST /api/app/pay/order/{orderId}
+     */
+    public function actionPayOrder($orderId)
+    {
+        $userId = Yii::$app->user->identity->id;
+        $order = Order::find()->where(['id' => $orderId, 'user_id' => $userId])->one();
+
+        if (!$order) {
+            Yii::$app->response->statusCode = 404;
+            return ['success' => false, 'error' => 'Order not found or does not belong to you'];
+        }
+        if ($order->status_payment == 1) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'Order is already paid'];
+        }
+
+        $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
+        if (!$walletPaymentId || (int)$order->payment_id !== (int)$walletPaymentId) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'This order does not use crypto payment'];
+        }
+
+        $token = Yii::$app->params['walletDefaultToken'] ?? 'USDT';
+        $exchangeRate = (float)(Yii::$app->params['uzsToUsdtRate'] ?? 1.0);
+        $paymentAmount = (float)$order->price * $exchangeRate;
+
+        $shop = $order->shop;
+        $merchantUserId = $shop ? $shop->user_id : null;
+        if (!$merchantUserId) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'Shop owner not found'];
+        }
+
+        $walletService = new WalletService();
+        $walletService->init();
+
+        try {
+            $balanceData = $walletService->getBalance($userId);
+            $balance = $this->extractTokenBalance($balanceData, $token);
+            if ($balance < $paymentAmount) {
+                Yii::$app->response->statusCode = 422;
+                return ['success' => false, 'error' => "Insufficient $token balance: $balance < $paymentAmount"];
+            }
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 503;
+            return ['success' => false, 'error' => 'Balance check failed: ' . $e->getMessage()];
+        }
+
+        $dbTransaction = Yii::$app->db->beginTransaction();
+        try {
+            $result = $walletService->pay($userId, $merchantUserId, (string)$paymentAmount, $token);
+
+            $order->status_payment = 1;
+            $order->save(false);
+
+            $transaction = new \app\models\transaction\Transaction();
+            $transaction->user_id = $userId;
+            $transaction->order_id = $order->id;
+            $transaction->shop_id = $order->shop_id;
+            $transaction->type_transaction = 'payment';
+            $transaction->type_payment = 'wallet';
+            $transaction->amount = $order->price;
+            $transaction->status = 1;
+            $transaction->save(false);
+
+            $dbTransaction->commit();
+            return ['success' => true, 'message' => 'Payment successful', 'data' => ['order_id' => $order->id, 'amount_paid' => $paymentAmount, 'token' => $token]];
+        } catch (\Exception $e) {
+            $dbTransaction->rollBack();
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'Payment failed: ' . $e->getMessage()];
+        }
     }
 
     public function actionNotify() {

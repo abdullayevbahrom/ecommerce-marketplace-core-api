@@ -144,7 +144,7 @@ class ProductController extends Controller {
                 throw new HttpException(404, 'Page not found');
             }
             
-            $tree = explode('/', $model->category_tree);
+            $tree = $model->category_tree ? explode('/', $model->category_tree) : [0];
 
             foreach ($tree as $key => $v_id) {
                 $current_categories[] = ArrayHelper::map(Category::find()->where(['parent_id'=>$v_id])->all(), 'id', 'name_ru');
@@ -792,9 +792,9 @@ class ProductController extends Controller {
 
 
     function log($type){
-        $get = file_get_contents('log.txt');
-        file_put_contents('log.txt',$get.'
-        '.date("Y-m-s H:i:s").' - '.$type.' - '.Yii::$app->user->identity->id);
+        $userId = Yii::$app->user->identity ? Yii::$app->user->identity->id : 'guest';
+        $get = @file_get_contents('log.txt') ?: '';
+        @file_put_contents('log.txt', $get . "\n" . date("Y-m-d H:i:s") . ' - ' . $type . ' - ' . $userId);
     }
 
     /**

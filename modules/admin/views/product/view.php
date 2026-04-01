@@ -251,7 +251,39 @@ $type = Yii::$app->request->get('type');
                                     </tr>
                                     <tr>
                                         <td><strong>Магазин:</strong></td>
-                                        <td><?= $model->shop_id ? 'ID: ' . $model->shop_id : '<span class="text-muted">Не указан</span>' ?></td>
+                                        <td>
+                                            <?php if ($model->shop_id): ?>
+                                                <?php $shop = \app\models\shop\Shop::findOne($model->shop_id); ?>
+                                                <?php if ($shop): ?>
+                                                    <a href="<?= Yii::$app->urlManager->createUrl(['/admin/shop/view', 'id' => $shop->id]) ?>">
+                                                        <i class="fa fa-external-link"></i> <?= Html::encode($shop->name_ru ?: "Магазин #{$shop->id}") ?>
+                                                    </a>
+                                                <?php else: ?>
+                                                    ID: <?= $model->shop_id ?>
+                                                <?php endif; ?>
+                                            <?php else: ?>
+                                                <span class="text-muted">Не указан</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Склад (филиал):</strong></td>
+                                        <td>
+                                            <?php if ($model->stock_id): ?>
+                                                <?php $stock = \app\models\stock\Stock::findOne($model->stock_id); ?>
+                                                <?php if ($stock): ?>
+                                                    <span class="label label-info"><?= Html::encode($stock->name_ru ?: "Склад #{$stock->id}") ?></span>
+                                                <?php else: ?>
+                                                    ID: <?= $model->stock_id ?>
+                                                <?php endif; ?>
+                                            <?php else: ?>
+                                                <span class="text-muted">Не указан</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Sklad Product ID:</strong></td>
+                                        <td><?= $model->sklad_product_id ? '<span class="label label-default">' . $model->sklad_product_id . '</span>' : '<span class="text-muted">Не синхронизирован</span>' ?></td>
                                     </tr>
                                     <tr>
                                         <td><strong>Тип доставки:</strong></td>

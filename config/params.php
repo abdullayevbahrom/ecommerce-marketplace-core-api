@@ -117,6 +117,10 @@ $config = [
 
     'walletDefaultToken' => 'USDT', // Default token symbol for wallet payments
 
+    // Currency backend URL — hosts the /api/app/pay/order/{id} endpoint for crypto payments.
+    // Falls back to walletServiceUrl if not set.
+    'currencyBackendUrl' => getenv('CURRENCY_BACKEND_URL') ?: 'https://wallet.example.com',
+
 ];
 
 if (YII_ENV_DEV) {

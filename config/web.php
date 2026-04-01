@@ -223,6 +223,9 @@ $config = [
                 'POST api/promocode/check' => 'api/promocode/check',
                 'POST api/promocode/apply' => 'api/promocode/apply',
 
+                // Crypto payment execution
+                'POST api/app/pay/order/<orderId:\d+>' => 'api/payment/pay-order',
+
             ],
         ],
         'image' => [
