@@ -18,6 +18,7 @@ if ($isNewRecord) {
         User::ROLE_SHOP => 'Добавить магазин',
         User::ROLE_LOGIST => 'Добавить логиста',
         User::ROLE_OPERATOR => 'Добавить оператора',
+        User::ROLE_MANAGER => 'Добавить менеджера',
     ];
     $this->title = $roleTitles[$model->role] ?? 'Добавить пользователя';
 } else {
@@ -105,10 +106,25 @@ $this->params['breadcrumbs'][] = $this->title;
                                 <div class="col-sm-6">
                                     <?= $form->field($model, 'role')->dropDownList(
                                         User::ROLE_LABELS,
-                                        ['class' => 'form-control']
+                                        ['class' => 'form-control', 'id' => 'user-role']
                                     )->label('Роль'); ?>
                                 </div>
                                 <?php endif; ?>
+                            </div>
+                            <?php
+                            $isManagerRole = $model->role == User::ROLE_MANAGER;
+                            $shops = \app\models\shop\Shop::find()->where(['status' => 1])->orderBy('name_ru')->all();
+                            $shopList = \yii\helpers\ArrayHelper::map($shops, 'id', function($shop) {
+                                return ($shop->name_ru ?: $shop->name_en ?: "Магазин #{$shop->id}");
+                            });
+                            ?>
+                            <div class="row" id="shop-selector" style="display:<?= $isManagerRole ? 'flex' : 'none' ?>">
+                                <div class="col-sm-6">
+                                    <?= $form->field($model, 'shop_id')->dropDownList(
+                                        $shopList,
+                                        ['class' => 'form-control select2', 'prompt' => 'Выберите магазин']
+                                    )->label('Магазин'); ?>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -144,7 +160,7 @@ $this->params['breadcrumbs'][] = $this->title;
                     <?=$form->field($model, 'address_legal')->textInput()->input('text')->label('Юридический адрес');?>
                 </div>
             </div>
-            <div class="box box-info color-palette-box">
+            <div class="box box-info color-palette-box" id="delivery-section" style="display:<?= $isManagerRole ? 'none' : 'block' ?>">
                 <div class="box-header">Адреса доставки</div>
                 <div class="box-body">
                     <div id="item-form">
@@ -250,6 +266,20 @@ $script = <<<JS
             $('#yur-data').show();
         }
     });
+
+    // Toggle shop selector and delivery section based on role
+    var ROLE_MANAGER = <?= User::ROLE_MANAGER ?>;
+    function toggleManagerFields() {
+        var role = parseInt($('#user-role').val());
+        if (role === ROLE_MANAGER) {
+            $('#shop-selector').show();
+            $('#delivery-section').hide();
+        } else {
+            $('#shop-selector').hide();
+            $('#delivery-section').show();
+        }
+    }
+    $('#user-role').on('change', toggleManagerFields);
 
     // BTS Region/City dynamic loading
     $('#user-region').on('change', function() {

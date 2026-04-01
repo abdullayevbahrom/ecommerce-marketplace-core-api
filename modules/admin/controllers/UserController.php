@@ -180,6 +180,26 @@ class UserController extends Controller {
         ]);
     }
 
+    /**
+     * Менеджеры — только ROLE_MANAGER
+     */
+    public function actionManagers() {
+        $searchModel = new UserSearch();
+        $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
+        $dataProvider->query->with(['image'])->andWhere(['role' => User::ROLE_MANAGER])->andWhere(['!=', 'status', 0]);
+
+        $dataProvider->setSort([
+            'defaultOrder' => [
+                'id' => 'desc'
+            ]
+        ]);
+
+        return $this->render('managers', [
+            'searchModel' => $searchModel,
+            'dataProvider' => $dataProvider
+        ]);
+    }
+
     public function actionLock($id) {
         $model = User::findOne($id);
 
@@ -217,7 +237,7 @@ class UserController extends Controller {
         }
 
         $newRole = (int) Yii::$app->request->post('role');
-        $validRoles = [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_USER, User::ROLE_SHOP, User::ROLE_LOGIST, User::ROLE_OPERATOR];
+        $validRoles = [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_USER, User::ROLE_SHOP, User::ROLE_LOGIST, User::ROLE_OPERATOR, User::ROLE_MANAGER];
 
         if (!in_array($newRole, $validRoles)) {
             Yii::$app->session->setFlash('error', 'Неверная роль');
@@ -247,7 +267,7 @@ class UserController extends Controller {
 
         // Default role from ?role= GET param (e.g. /admin/user/create?role=1)
         $defaultRole = (int) Yii::$app->request->get('role', User::ROLE_USER);
-        $validRoles = [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_USER, User::ROLE_SHOP, User::ROLE_LOGIST, User::ROLE_OPERATOR];
+        $validRoles = [User::ROLE_ADMIN, User::ROLE_MODERATOR, User::ROLE_USER, User::ROLE_SHOP, User::ROLE_LOGIST, User::ROLE_OPERATOR, User::ROLE_MANAGER];
         if (!in_array($defaultRole, $validRoles)) {
             $defaultRole = User::ROLE_USER;
         }
