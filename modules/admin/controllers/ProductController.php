@@ -144,7 +144,7 @@ class ProductController extends Controller {
                 throw new HttpException(404, 'Page not found');
             }
             
-            $tree = explode('/', $model->category_tree);
+            $tree = $model->category_tree ? explode('/', $model->category_tree) : [0];
 
             foreach ($tree as $key => $v_id) {
                 $current_categories[] = ArrayHelper::map(Category::find()->where(['parent_id'=>$v_id])->all(), 'id', 'name_ru');
