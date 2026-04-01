@@ -357,7 +357,7 @@ class EimzoService
             'success' => true,
             'siteId' => $response['siteId'] ?? '',
             'documentId' => $response['documentId'] ?? '',
-            'challenge' => $response['challange'] ?? '', // note: e-imzo-server typo "challange"
+            'challenge' => $response['challange'] ?? '',
         ];
     }
 
