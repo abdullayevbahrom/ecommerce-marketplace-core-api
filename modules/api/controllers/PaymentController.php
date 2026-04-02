@@ -335,22 +335,25 @@ class PaymentController extends Controller {
         try {
             $result = $walletService->pay($user->id, $merchantUserId, (string)$cryptoAmount, $token);
 
+            // Extract tx data — WalletService returns {success, data: {txHash, ...}}
+            $payData = $result['data'] ?? $result;
+            $txHash = $payData['txHash'] ?? $payData['tx_hash'] ?? $result['txHash'] ?? 'unknown';
+            $payerAddr = $payData['payerAddress'] ?? $payData['payer'] ?? '';
+
             // Step 4: Confirm payment to sklad
             $confirmContext = stream_context_create([
                 'http' => [
                     'method' => 'POST',
                     'header' => "Content-Type: application/json\r\n",
                     'content' => json_encode([
-                        'tx_hash' => $result['txHash'] ?? $result['tx_hash'] ?? 'unknown',
-                        'customer_wallet' => $result['payerAddress'] ?? $result['payer'] ?? '',
+                        'tx_hash' => $txHash,
+                        'customer_wallet' => $payerAddr,
                         'payment_type' => 'crypto',
                         'token' => $token,
                     ]),
                     'ignore_errors' => true,
                 ],
             ]);
-
-            $txHash = $result['txHash'] ?? $result['tx_hash'] ?? 'unknown';
 
             @file_get_contents("{$skladUrl}/api/pay/{$sessionToken}/confirm", false, $confirmContext);
 
