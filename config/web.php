@@ -159,6 +159,8 @@ $config = [
                 'GET api/product-attribute/currency' => 'api/product-attribute/currency-list',
 
                 // Product Management (Sklad Integration)
+                'GET api/filters' => 'api/product/filters',
+                'GET api/products' => 'api/product/index',
                 'POST api/product/create' => 'api/product/create',
                 'PUT api/product/update' => 'api/product/update',
                 'POST api/product/delete' => 'api/product/delete',
