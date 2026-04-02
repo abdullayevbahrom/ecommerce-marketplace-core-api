@@ -63,6 +63,7 @@ class EsController extends Controller
                     'price_small' => ['type' => 'double'],
                     'price_opt' => ['type' => 'double'],
                     'discount' => ['type' => 'double'],
+                    'amount' => ['type' => 'double'],
 
                     'name_uz' => ['type' => 'text'],
                     'name_ru' => ['type' => 'text'],
@@ -83,6 +84,7 @@ class EsController extends Controller
                         'type' => 'nested',
                         'properties' => [
                             'filter_id' => ['type' => 'integer'],
+                            'filter_code' => ['type' => 'keyword'],
                             'pf_id' => ['type' => 'integer'],
                             'value_ru' => ['type' => 'keyword'],
                             'value_en' => ['type' => 'keyword'],

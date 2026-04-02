@@ -28,6 +28,7 @@ class ProductEs extends ActiveRecord
             'price_small',
             'price_opt',
             'discount',
+            'amount',
             'name_uz',
             'name_ru',
             'name_en',

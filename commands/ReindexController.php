@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\commands;
 
 use yii\console\Controller;
+use app\models\filter\Filter;
 use app\models\product\Product;
 use app\models\product\ProductFilter;
 use app\models\elasticsearch\ProductEs;
@@ -36,7 +37,9 @@ class ReindexController extends Controller
                 $descEn = (string)($p->description_en ?? '');
 
                 $pfRows = ProductFilter::find()
-                    ->select(['id', 'filter_id', 'value_ru', 'value_en', 'value_uz'])
+                    ->alias('pf')
+                    ->select(['pf.id', 'pf.filter_id', 'pf.value_ru', 'pf.value_en', 'pf.value_uz', 'f.code AS filter_code'])
+                    ->leftJoin(['f' => Filter::tableName()], 'f.id = pf.filter_id')
                     ->where(['product_id' => $docId])
                     ->asArray()
                     ->all();
@@ -45,6 +48,7 @@ class ReindexController extends Controller
                 foreach ($pfRows as $r) {
                     $nestedFilters[] = [
                         'filter_id' => (int)$r['filter_id'],
+                        'filter_code' => (string)($r['filter_code'] ?? ''),
                         'pf_id'     => (int)$r['id'],
                         'value_ru'  => (string)($r['value_ru'] ?? ''),
                         'value_en'  => (string)($r['value_en'] ?? ''),
@@ -78,6 +82,7 @@ class ReindexController extends Controller
                     'price_small' => $p->price_small !== null ? (float)$p->price_small : null,
                     'price_opt' => $p->price_opt !== null ? (float)$p->price_opt : null,
                     'discount' => $p->discount !== null ? (float)$p->discount : null,
+                    'amount' => $p->amount !== null ? (float)$p->amount : null,
 
                     'name_uz' => $nameUz,
                     'name_ru' => $nameRu,
