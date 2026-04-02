@@ -197,6 +197,206 @@ class DidoxService
     }
 
     /**
+     * Refresh and store Didox token automatically using configured PFX
+     * Called by console command or queue job every 3 hours
+     * 
+     * @return array ['success' => bool, 'token' => string|null, 'expires_at' => string|null, 'error' => string|null]
+     */
+    public function refreshAndStoreToken(): array
+    {
+        $now = date('Y-m-d H:i:s');
+        
+        try {
+            // Check if auto-refresh is enabled
+            $settings = $this->getDidoxSettingMap([
+                'didox_auto_refresh_status',
+                'didox_seller_inn',
+            ]);
+            
+            $status = $settings['didox_auto_refresh_status'] ?? 'manual';
+            if ($status === 'disabled') {
+                return ['success' => false, 'error' => 'Auto-refresh is disabled', 'token' => null, 'expires_at' => null];
+            }
+            
+            // Get new token using PFX
+            $result = $this->getAuthTokenFromPfx();
+            
+            // Update last attempt timestamp
+            $this->updateSetting('didox_auto_refresh_last_attempt', $now);
+            
+            if (!$result['success']) {
+                // Log error
+                $this->updateSetting('didox_auto_refresh_status', 'failed');
+                $this->updateSetting('didox_auto_refresh_error', $result['error'] ?? 'Unknown error');
+                
+                Yii::error('Didox token refresh failed: ' . ($result['error'] ?? 'Unknown error'), __METHOD__);
+                
+                return [
+                    'success' => false,
+                    'error' => $result['error'] ?? 'Failed to get token from PFX',
+                    'token' => null,
+                    'expires_at' => null
+                ];
+            }
+            
+            // Calculate expiry (3 hours from now)
+            $expiresAt = date('Y-m-d H:i:s', strtotime('+3 hours'));
+            
+            // Save token and metadata to settings
+            $this->updateSetting('didox_eimzo_token', $result['token']);
+            $this->updateSetting('didox_eimzo_tax_id', $result['taxId'] ?? '');
+            $this->updateSetting('didox_eimzo_last_login', $now);
+            $this->updateSetting('didox_token_expires_at', $expiresAt);
+            $this->updateSetting('didox_auto_refresh_status', 'active');
+            $this->updateSetting('didox_auto_refresh_error', ''); // Clear any previous error
+            
+            // Save certificate info if available
+            if (isset($result['data']['certificate'])) {
+                $this->updateSetting('didox_eimzo_certificate', json_encode($result['data']['certificate']));
+            }
+            
+            Yii::info('Didox token refreshed successfully. Expires at: ' . $expiresAt, __METHOD__);
+            
+            return [
+                'success' => true,
+                'token' => $result['token'],
+                'expires_at' => $expiresAt,
+                'tax_id' => $result['taxId'] ?? null,
+                'error' => null
+            ];
+            
+        } catch (\Throwable $e) {
+            $error = 'Exception during token refresh: ' . $e->getMessage();
+            
+            $this->updateSetting('didox_auto_refresh_status', 'failed');
+            $this->updateSetting('didox_auto_refresh_error', $error);
+            $this->updateSetting('didox_auto_refresh_last_attempt', $now);
+            
+            Yii::error($error, __METHOD__);
+            
+            return [
+                'success' => false,
+                'error' => $error,
+                'token' => null,
+                'expires_at' => null
+            ];
+        }
+    }
+    
+    /**
+     * Update or create a setting value
+     * 
+     * @param string $type
+     * @param string $content
+     * @return bool
+     */
+    private function updateSetting(string $type, string $content): bool
+    {
+        try {
+            $model = \app\models\Settings::findOne(['type' => $type]);
+            
+            if (!$model) {
+                $model = new \app\models\Settings();
+                $model->type = $type;
+            }
+            
+            $model->content = $content;
+            $model->date = date('Y-m-d H:i:s');
+            
+            return $model->save(false);
+        } catch (\Throwable $e) {
+            Yii::error("Failed to update setting {$type}: " . $e->getMessage(), __METHOD__);
+            return false;
+        }
+    }
+    
+    /**
+     * Check if token is expired or about to expire (within 10 minutes)
+     * 
+     * @return bool
+     */
+    public function isTokenExpiringSoon(): bool
+    {
+        $settings = $this->getDidoxSettingMap(['didox_token_expires_at', 'didox_eimzo_token']);
+        
+        // No token exists
+        if (empty($settings['didox_eimzo_token'])) {
+            return true;
+        }
+        
+        // No expiry set
+        if (empty($settings['didox_token_expires_at'])) {
+            return true;
+        }
+        
+        $expiresAt = strtotime($settings['didox_token_expires_at']);
+        $now = time();
+        $tenMinutes = 600; // 10 minutes buffer
+        
+        return ($expiresAt - $now) <= $tenMinutes;
+    }
+    
+    /**
+     * Get token status info for admin panel
+     * 
+     * @return array
+     */
+    public function getTokenStatus(): array
+    {
+        $settings = $this->getDidoxSettingMap([
+            'didox_eimzo_token',
+            'didox_token_expires_at',
+            'didox_eimzo_last_login',
+            'didox_auto_refresh_status',
+            'didox_auto_refresh_error',
+            'didox_auto_refresh_last_attempt',
+            'didox_seller_inn'
+        ]);
+        
+        $expiresAt = $settings['didox_token_expires_at'] ?? null;
+        $hasToken = !empty($settings['didox_eimzo_token']);
+        $isExpired = $expiresAt ? strtotime($expiresAt) <= time() : !$hasToken;
+        $expiringSoon = $this->isTokenExpiringSoon();
+        
+        return [
+            'has_token' => $hasToken,
+            'is_expired' => $isExpired,
+            'expiring_soon' => $expiringSoon && !$isExpired,
+            'expires_at' => $expiresAt,
+            'expires_in' => $expiresAt ? $this->formatTimeRemaining($expiresAt) : null,
+            'last_login' => $settings['didox_eimzo_last_login'] ?? null,
+            'status' => $settings['didox_auto_refresh_status'] ?? 'manual',
+            'last_error' => $settings['didox_auto_refresh_error'] ?? null,
+            'last_attempt' => $settings['didox_auto_refresh_last_attempt'] ?? null,
+            'seller_inn' => $settings['didox_seller_inn'] ?? null,
+        ];
+    }
+    
+    /**
+     * Format time remaining for display
+     * 
+     * @param string $expiresAt
+     * @return string
+     */
+    private function formatTimeRemaining(string $expiresAt): string
+    {
+        $diff = strtotime($expiresAt) - time();
+        
+        if ($diff <= 0) {
+            return 'Expired';
+        }
+        
+        $hours = floor($diff / 3600);
+        $minutes = floor(($diff % 3600) / 60);
+        
+        if ($hours > 0) {
+            return "{$hours}h {$minutes}m";
+        }
+        
+        return "{$minutes}m";
+    }
+
+    /**
      * Make HTTP request using cURL
      * @param string $method
      * @param string $url

@@ -15,10 +15,6 @@ use app\models\didox\DidoxDocument;
 use app\models\didox\DidoxDocumentSignature;
 use app\models\user\User;
 
-/**
- * DIDOX API Controller for frontend
- * Handles document retrieval for assigned users
- */
 class DidoxController extends Controller
 {
     public function beforeAction($action) {
@@ -41,7 +37,7 @@ class DidoxController extends Controller
         
         // Use HttpBearerAuth - requires 'Authorization: Bearer {token}' header
         $behaviors['authenticator'] = [
-            'class' => HttpBearerAuth::className(),
+            'class' => HttpBearerAuth::class,
             'optional' => ['options', 'test', 'timestamp']
         ];
 
@@ -49,7 +45,7 @@ class DidoxController extends Controller
         unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
-            'class' => \yii\filters\Cors::className(),
+            'class' => \yii\filters\Cors::class,
             'cors' => [
                 'Access-Control-Allow-Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],

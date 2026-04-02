@@ -83,6 +83,39 @@ class SettingsController extends Controller{
     }
 
     public function actionDidox() {
+        // Handle manual token refresh
+        if (Yii::$app->request->post('refresh_token')) {
+            $didoxService = new \app\services\DidoxService();
+            $result = $didoxService->refreshAndStoreToken();
+            
+            if ($result['success']) {
+                Yii::$app->session->setFlash('didox_saved', 'Token refreshed successfully! Expires at: ' . $result['expires_at']);
+            } else {
+                Yii::$app->session->setFlash('error', 'Token refresh failed: ' . $result['error']);
+            }
+            return $this->redirect(['didox']);
+        }
+        
+        // Handle toggle auto-refresh status
+        $toggleAuto = Yii::$app->request->post('toggle_auto');
+        if ($toggleAuto) {
+            $newStatus = $toggleAuto === 'enable' ? 'active' : 'disabled';
+            $model = \app\models\Settings::findOne(['type' => 'didox_auto_refresh_status']);
+            if (!$model) {
+                $model = new \app\models\Settings();
+                $model->type = 'didox_auto_refresh_status';
+            }
+            $model->content = $newStatus;
+            $model->date = date('Y-m-d H:i:s');
+            if ($model->save()) {
+                Yii::$app->session->setFlash('didox_saved', 'Auto-refresh ' . ($toggleAuto === 'enable' ? 'enabled' : 'disabled'));
+            } else {
+                Yii::$app->session->setFlash('error', 'Failed to update auto-refresh status');
+            }
+            return $this->redirect(['didox']);
+        }
+        
+        // Update types array to include auto-refresh fields
         $types = [
             'didox_seller_inn', 
             'didox_seller_name', 
@@ -96,7 +129,11 @@ class SettingsController extends Controller{
             'didox_eimzo_certificate',
             'didox_pfx_path',
             'didox_pfx_password',
-            'didox_signer_url'
+            'didox_signer_url',
+            'didox_token_expires_at',
+            'didox_auto_refresh_status',
+            'didox_auto_refresh_error',
+            'didox_auto_refresh_last_attempt'
         ];
         
         $settings = Settings::find()->where(['type' => $types])->all();

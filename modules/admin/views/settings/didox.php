@@ -37,6 +37,7 @@ $this->params['breadcrumbs'][] = $this->title;
             <ul class="nav nav-tabs">
                 <li class="active"><a href="#tab_general" data-toggle="tab" aria-expanded="true">General Settings</a></li>
                 <li class=""><a href="#tab_auto_auth" data-toggle="tab" aria-expanded="false">Automated Signing</a></li>
+                <li class=""><a href="#tab_token_status" data-toggle="tab" aria-expanded="false">Token Status</a></li>
             </ul>
             <div class="tab-content">
                 <!-- General Settings Tab -->
@@ -153,6 +154,134 @@ $this->params['breadcrumbs'][] = $this->title;
                             </div>
                         </div>
                     <?php ActiveForm::end();?>
+                </div>
+                
+                <!-- Token Status Tab -->
+                <div class="tab-pane" id="tab_token_status">
+                    <div class="box-header">
+                        <h3 class="box-title">Automatic Token Management</h3>
+                        <p class="text-muted">Monitor and manage the automated Didox token refresh system.</p>
+                    </div>
+                    
+                    <div class="box-body">
+                        <!-- Token Status Card -->
+                        <?php
+                        $tokenStatus = (new \app\services\DidoxService())->getTokenStatus();
+                        $statusClass = $tokenStatus['is_expired'] ? 'danger' : ($tokenStatus['expiring_soon'] ? 'warning' : 'success');
+                        $statusIcon = $tokenStatus['is_expired'] ? 'times-circle' : ($tokenStatus['expiring_soon'] ? 'exclamation-triangle' : 'check-circle');
+                        $statusText = $tokenStatus['is_expired'] ? 'Expired' : ($tokenStatus['expiring_soon'] ? 'Expiring Soon' : 'Active');
+                        ?>
+                        
+                        <div class="callout callout-<?=$statusClass;?>">
+                            <h4><i class="fa fa-<?=$statusIcon;?>"></i> Token Status: <?=$statusText;?></h4>
+                            <div class="row" style="margin-top: 15px;">
+                                <div class="col-md-3">
+                                    <strong>Has Token:</strong><br>
+                                    <span class="badge bg-<?=$tokenStatus['has_token'] ? 'green' : 'red';?>">
+                                        <?= $tokenStatus['has_token'] ? 'Yes' : 'No'; ?>
+                                    </span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Auto Refresh:</strong><br>
+                                    <?php if ($tokenStatus['status'] === 'active'): ?>
+                                        <span class="badge bg-green">Active</span>
+                                    <?php elseif ($tokenStatus['status'] === 'disabled'): ?>
+                                        <span class="badge bg-gray">Disabled</span>
+                                    <?php elseif ($tokenStatus['status'] === 'failed'): ?>
+                                        <span class="badge bg-red">Failed</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-yellow">Manual</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Time Remaining:</strong><br>
+                                    <?php if ($tokenStatus['expires_in']): ?>
+                                        <code style="font-size: 14px;"><?=$tokenStatus['expires_in'];?></code>
+                                    <?php else: ?>
+                                        <span class="text-muted">N/A</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Seller INN:</strong><br>
+                                    <code><?=$tokenStatus['seller_inn'] ?: 'Not set';?></code>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Detailed Info -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="box box-solid box-default">
+                                    <div class="box-header with-border">
+                                        <h3 class="box-title">Token Details</h3>
+                                    </div>
+                                    <div class="box-body">
+                                        <table class="table table-bordered table-striped">
+                                            <tr>
+                                                <td><strong>Expires At:</strong></td>
+                                                <td><?=$tokenStatus['expires_at'] ?: '-';?></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Last Login:</strong></td>
+                                                <td><?=$tokenStatus['last_login'] ?: '-';?></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Last Attempt:</strong></td>
+                                                <td><?=$tokenStatus['last_attempt'] ?: '-';?></td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <?php if ($tokenStatus['last_error']): ?>
+                                <div class="box box-solid box-danger">
+                                    <div class="box-header with-border">
+                                        <h3 class="box-title">Last Error</h3>
+                                    </div>
+                                    <div class="box-body">
+                                        <div class="alert alert-danger" style="margin: 0;">
+                                            <?=nl2br(Html::encode($tokenStatus['last_error']));?>
+                                        </div>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                                
+                                <div class="box box-solid box-info">
+                                    <div class="box-header with-border">
+                                        <h3 class="box-title">Actions</h3>
+                                    </div>
+                                    <div class="box-body">
+                                        <?=Html::beginForm(['/admin/settings/didox'], 'post', ['style' => 'display: inline;']);?>
+                                            <?=Html::hiddenInput('refresh_token', '1');?>
+                                            <button type="submit" class="btn btn-primary" 
+                                                onclick="return confirm('Are you sure you want to refresh the token now?');">
+                                                <i class="fa fa-refresh"></i> Refresh Token Now
+                                            </button>
+                                        <?=Html::endForm();?>
+                                        
+                                        &nbsp;
+                                        
+                                        <?php if ($tokenStatus['status'] === 'active'): ?>
+                                            <?=Html::beginForm(['/admin/settings/didox'], 'post', ['style' => 'display: inline;']);?>
+                                                <?=Html::hiddenInput('toggle_auto', 'disable');?>
+                                                <button type="submit" class="btn btn-warning">
+                                                    <i class="fa fa-pause"></i> Disable Auto-Refresh
+                                                </button>
+                                            <?=Html::endForm();?>
+                                        <?php else: ?>
+                                            <?=Html::beginForm(['/admin/settings/didox'], 'post', ['style' => 'display: inline;']);?>
+                                                <?=Html::hiddenInput('toggle_auto', 'enable');?>
+                                                <button type="submit" class="btn btn-success">
+                                                    <i class="fa fa-play"></i> Enable Auto-Refresh
+                                                </button>
+                                            <?=Html::endForm();?>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <!-- /.tab-content -->
