@@ -121,11 +121,18 @@ $config = [
     // Falls back to walletServiceUrl if not set.
     'currencyBackendUrl' => getenv('CURRENCY_BACKEND_URL') ?: 'https://wallet.example.com',
 
+    // Sklad API URL — for POS QR payment session resolution
+    'skladApiUrl' => getenv('SKLAD_API_URL') ?: 'https://api.warehouse.example.com',
+
+    // UZS to USDT exchange rate (default 1:1 for testing)
+    'uzsToUsdtRate' => (float)(getenv('UZS_TO_USDT_RATE') ?: 1.0),
+
 ];
 
 if (YII_ENV_DEV) {
     $config['baseUrl'] = 'http://localhost:8001';
-    $config['warehouseApiUrl'] = 'http://sklad_app';
+    $config['warehouseApiUrl'] = 'http://sklad';
+    $config['skladApiUrl'] = 'http://sklad';
     $config['operatorApiUrl'] = 'http://operator_app';  // TODO: update when operator is running
 }
 

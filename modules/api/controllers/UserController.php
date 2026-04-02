@@ -89,6 +89,49 @@ class UserController extends Controller
         'collectionEnvelope' => 'data',
     ];
 
+    /**
+     * Search client by phone number (for POS/Kassa).
+     * GET /api/user/search-client?phone=998901234567
+     */
+    public function actionSearchClient()
+    {
+        $phone = Yii::$app->request->get('phone', '');
+        $phone = preg_replace('/[^\d]/', '', $phone);
+
+        if (strlen($phone) < 9) {
+            return ['success' => false, 'data' => null, 'message' => 'Phone number too short'];
+        }
+
+        // Search by phone (with and without +)
+        $user = User::find()
+            ->where(['like', 'phone', $phone])
+            ->andWhere(['!=', 'status', 0])
+            ->one();
+
+        if (!$user) {
+            return ['success' => false, 'data' => null, 'message' => 'Client not found'];
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'id' => $user->id,
+                'full_name' => trim(($user->lastname ?? '') . ' ' . ($user->name ?? '') . ' ' . ($user->middlename ?? '')),
+                'name' => $user->name,
+                'lastname' => $user->lastname,
+                'phone' => $user->phone,
+                'type' => $user->type ?? 'fiz',
+                'inn' => $user->inn ?? '',
+                'organization_name' => $user->organization_name ?? '',
+                'mfo' => $user->mfo ?? '',
+                'oked' => $user->oked ?? '',
+                'account' => $user->account ?? '',
+                'balance' => 0,
+                'role' => $user->role,
+            ],
+        ];
+    }
+
     public function actionSendPhone()
     {
         try {

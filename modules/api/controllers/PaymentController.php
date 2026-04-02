@@ -236,6 +236,210 @@ class PaymentController extends Controller {
         }
     }
 
+    /**
+     * POS QR crypto payment — mobile scans QR at kassa, pays via wallet.
+     * POST /api/payment/pos-pay
+     *
+     * Body: { session_token, token? }
+     *
+     * Flow:
+     * 1. Fetch session from sklad API (order items, total, merchant)
+     * 2. Check user wallet balance
+     * 3. Execute payment (user → merchant)
+     * 4. Confirm payment back to sklad
+     */
+    public function actionPosPay()
+    {
+        $user = Yii::$app->user->identity;
+        $post = Yii::$app->request->post();
+        $sessionToken = $post['session_token'] ?? null;
+        $token = $post['token'] ?? Yii::$app->params['walletDefaultToken'] ?? 'USDT';
+
+        if (!$sessionToken) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'session_token is required'];
+        }
+
+        $skladUrl = Yii::$app->params['skladApiUrl'] ?? 'https://api.warehouse.example.com';
+
+        // Step 1: Fetch session from sklad
+        try {
+            $sessionResponse = file_get_contents("{$skladUrl}/api/pay/{$sessionToken}");
+            $sessionData = json_decode($sessionResponse, true);
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 503;
+            return ['success' => false, 'error' => 'Could not reach sklad API'];
+        }
+
+        if (!($sessionData['success'] ?? false)) {
+            Yii::$app->response->statusCode = 404;
+            return ['success' => false, 'error' => $sessionData['message'] ?? 'Session not found'];
+        }
+
+        $session = $sessionData['data'];
+
+        if ($session['status'] !== 'pending') {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => "Session is {$session['status']}"];
+        }
+
+        if ($session['is_expired'] ?? false) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'Session expired'];
+        }
+
+        // Step 2: Resolve merchant
+        try {
+            $merchantResponse = file_get_contents("{$skladUrl}/api/pay/{$sessionToken}/merchant");
+            $merchantData = json_decode($merchantResponse, true);
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 503;
+            return ['success' => false, 'error' => 'Could not resolve merchant'];
+        }
+
+        $merchantUserId = $merchantData['data']['merchant_user_id'] ?? null;
+        if (!$merchantUserId) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'Merchant not found for this branch'];
+        }
+
+        $paymentAmount = (float)$session['total'];
+        $exchangeRate = (float)(Yii::$app->params['uzsToUsdtRate'] ?? 1.0);
+        $cryptoAmount = $paymentAmount * $exchangeRate;
+
+        // Step 3: Check balance and execute payment
+        $walletService = new WalletService();
+        $walletService->init();
+
+        try {
+            $balanceData = $walletService->getBalance($user->id);
+            $balance = $this->extractTokenBalance($balanceData, $token);
+
+            if ($balance < $cryptoAmount) {
+                Yii::$app->response->statusCode = 422;
+                return [
+                    'success' => false,
+                    'error' => "Insufficient {$token} balance",
+                    'data' => [
+                        'balance' => $balance,
+                        'required' => $cryptoAmount,
+                        'token' => $token,
+                    ],
+                ];
+            }
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 503;
+            return ['success' => false, 'error' => 'Balance check failed: ' . $e->getMessage()];
+        }
+
+        try {
+            $result = $walletService->pay($user->id, $merchantUserId, (string)$cryptoAmount, $token);
+
+            // Extract tx data — WalletService returns {success, data: {txHash, ...}}
+            $payData = $result['data'] ?? $result;
+            $txHash = $payData['txHash'] ?? $payData['tx_hash'] ?? $result['txHash'] ?? 'unknown';
+            $payerAddr = $payData['payerAddress'] ?? $payData['payer'] ?? '';
+
+            // Step 4: Confirm payment to sklad
+            $confirmContext = stream_context_create([
+                'http' => [
+                    'method' => 'POST',
+                    'header' => "Content-Type: application/json\r\n",
+                    'content' => json_encode([
+                        'tx_hash' => $txHash,
+                        'customer_wallet' => $payerAddr,
+                        'payment_type' => 'crypto',
+                        'token' => $token,
+                    ]),
+                    'ignore_errors' => true,
+                ],
+            ]);
+
+            @file_get_contents("{$skladUrl}/api/pay/{$sessionToken}/confirm", false, $confirmContext);
+
+            // Create transaction record
+            $transaction = new \app\models\transaction\Transaction();
+            $transaction->user_id = $user->id;
+            $transaction->shop_id = null; // POS payment, no marketplace order
+            $transaction->type_transaction = 'pos_payment';
+            $transaction->type_payment = 'wallet';
+            $transaction->amount = $paymentAmount;
+            $transaction->status = 1;
+            $transaction->save(false);
+
+            return [
+                'success' => true,
+                'message' => 'Payment successful',
+                'data' => [
+                    'session_token' => $sessionToken,
+                    'tx_hash' => $txHash,
+                    'amount_uzs' => $paymentAmount,
+                    'amount_crypto' => $cryptoAmount,
+                    'token' => $token,
+                    'merchant_name' => $session['merchant_name'] ?? null,
+                    'branch_name' => $session['branch_name'] ?? null,
+                    'items' => $session['items'] ?? [],
+                ],
+            ];
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'Payment failed: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Get session details for QR payment preview (proxy to sklad).
+     * GET /api/payment/pos-session?token=xxx
+     */
+    public function actionPosSession()
+    {
+        $token = Yii::$app->request->get('token');
+
+        if (!$token) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'token is required'];
+        }
+
+        $skladUrl = Yii::$app->params['skladApiUrl'] ?? 'https://api.warehouse.example.com';
+
+        try {
+            $response = file_get_contents("{$skladUrl}/api/pay/{$token}");
+            return json_decode($response, true);
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 503;
+            return ['success' => false, 'error' => 'Could not fetch session'];
+        }
+    }
+
+    /**
+     * Get latest pending session for a branch (proxy to sklad).
+     * GET /api/payment/pos-branch?branch_id=61
+     * Mobile scans static QR → calls this → gets current order.
+     */
+    public function actionPosBranch()
+    {
+        $branchId = Yii::$app->request->get('branch_id');
+
+        if (!$branchId) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'branch_id is required'];
+        }
+
+        $skladUrl = Yii::$app->params['skladApiUrl'] ?? 'https://api.warehouse.example.com';
+
+        try {
+            $response = @file_get_contents("{$skladUrl}/api/pay/branch/{$branchId}");
+            if ($response === false) {
+                Yii::$app->response->statusCode = 404;
+                return ['success' => false, 'error' => 'No active order for this branch'];
+            }
+            return json_decode($response, true);
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 503;
+            return ['success' => false, 'error' => 'Could not reach sklad'];
+        }
+    }
+
     public function actionNotify() {
         $post = Yii::$app->request->post();
         $service =  new PayKeeperService();
