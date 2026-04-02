@@ -21,7 +21,7 @@ class FilterCreatedEventValidator extends BaseEventValidator
         $payloadModel = DynamicModel::validateData($message['payload'] ?? [], [
             [['sklad_filter_id', 'category_id', 'name_ru', 'type'], 'required'],
             [['id', 'sklad_filter_id', 'yii_filter_id', 'category_id', 'status'], 'integer'],
-            [['name_ru', 'name_uz', 'name_en', 'type'], 'safe'],
+            [['name_ru', 'name_uz', 'name_en', 'type', 'code'], 'safe'],
             [['values'], 'safe'],
         ]);
 

@@ -115,6 +115,11 @@ class CatalogFilterService
             ->all();
     }
 
+    public function getAttributeFilterState(array $state): array
+    {
+        return $state['attribute_filters'] ?? [];
+    }
+
     private function buildBrandFacet(array $state): array
     {
         $rows = $this->buildProductsQuery($state, ['ignoreBrand' => true])
@@ -309,7 +314,13 @@ class CatalogFilterService
         if ($categoryId) {
             foreach ($this->getCategoryRootFilters($categoryId) as $filter) {
                 $availableFilters[(string)$filter->id] = (int)$filter->id;
-                $availableFilters[$this->buildFilterKey($filter)] = (int)$filter->id;
+                if ($filter->code) {
+                    $availableFilters[$filter->code] = (int)$filter->id;
+                }
+
+                foreach ($this->buildLegacyFilterKeys($filter) as $legacyKey) {
+                    $availableFilters[$legacyKey] = (int)$filter->id;
+                }
             }
         }
 
@@ -421,10 +432,33 @@ class CatalogFilterService
 
     private function buildFilterKey(Filter $filter): string
     {
-        $name = $this->pickLocalizedValue($filter->name_ru, $filter->name_uz, $filter->name_en);
-        $slug = Inflector::slug((string)$name);
+        if (!empty($filter->code)) {
+            return (string)$filter->code;
+        }
 
-        return $slug !== '' ? $slug : (string)$filter->id;
+        $legacyKeys = $this->buildLegacyFilterKeys($filter);
+        $legacyKey = reset($legacyKeys);
+
+        return $legacyKey !== '' ? $legacyKey : (string)$filter->id;
+    }
+
+    private function buildLegacyFilterKeys(Filter $filter): array
+    {
+        $slugs = [];
+        foreach ([$filter->name_ru, $filter->name_uz, $filter->name_en] as $name) {
+            $slug = Inflector::slug((string)$name);
+            if ($slug !== '') {
+                $slugs[] = $slug;
+            }
+        }
+
+        $preferred = $this->pickLocalizedValue($filter->name_ru, $filter->name_uz, $filter->name_en);
+        $preferredSlug = Inflector::slug((string)$preferred);
+        if ($preferredSlug !== '') {
+            array_unshift($slugs, $preferredSlug);
+        }
+
+        return array_values(array_unique($slugs));
     }
 
     private function pickLocalizedValue(?string $ru, ?string $uz, ?string $en): ?string

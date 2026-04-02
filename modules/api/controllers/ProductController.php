@@ -30,6 +30,7 @@ use app\models\user\activity\UserActivity;
 use app\models\brand\CategoryBrand; // Added Brand model
 use app\models\Brand; // Added Brand model
 use app\models\Shop; // Added Shop model
+use app\models\stock\Stock;
 
 use Jenssegers\ImageHash\ImageHash;
 use Jenssegers\ImageHash\Implementations\DifferenceHash;
@@ -103,6 +104,35 @@ class ProductController extends Controller
         }
 
         return $this->catalogFilterService;
+    }
+
+    private function applyMarketplaceVisibilityEs(array &$filters): void
+    {
+        $marketplaceStockIds = array_values(array_unique(array_map('intval', Stock::find()
+            ->select('id')
+            ->where(['for_marketplace' => 1])
+            ->column())));
+
+        $visibilityShould = [
+            [
+                'bool' => [
+                    'must_not' => [
+                        ['exists' => ['field' => 'stock_id']],
+                    ],
+                ],
+            ],
+        ];
+
+        if (!empty($marketplaceStockIds)) {
+            $visibilityShould[] = ['terms' => ['stock_id' => $marketplaceStockIds]];
+        }
+
+        $filters[] = [
+            'bool' => [
+                'should' => $visibilityShould,
+                'minimum_should_match' => 1,
+            ],
+        ];
     }
 
     public function beforeAction($action)
@@ -593,7 +623,43 @@ class ProductController extends Controller
 
     private function buildOneNestedFilterClause(int $filterId, $filterValue): array
     {
-        if (is_numeric($filterValue)) {
+        $values = is_array($filterValue) ? $filterValue : explode(',', (string)$filterValue);
+        $values = array_values(array_filter(array_map(static function ($value) {
+            $value = is_string($value) ? trim($value) : $value;
+            return $value === '' ? null : $value;
+        }, $values), static fn($value) => $value !== null));
+
+        if (empty($values)) {
+            return [];
+        }
+
+        $numericValues = [];
+        $textValues = [];
+        foreach ($values as $value) {
+            if (is_numeric($value) && (string)(int)$value === (string)$value) {
+                $numericValues[] = (int)$value;
+            }
+
+            $textValues[] = (string)$value;
+        }
+
+        $should = [];
+        if (!empty($numericValues)) {
+            $should[] = ['terms' => ['filters.pf_id' => array_values(array_unique($numericValues))]];
+        }
+
+        $textValues = array_values(array_unique($textValues));
+        if (!empty($textValues)) {
+            $should[] = ['terms' => ['filters.value_ru' => $textValues]];
+            $should[] = ['terms' => ['filters.value_en' => $textValues]];
+            $should[] = ['terms' => ['filters.value_uz' => $textValues]];
+        }
+
+        if (empty($should)) {
+            return [];
+        }
+
+        if (count($should) === 1) {
             return [
                 'nested' => [
                     'path' => 'filters',
@@ -601,15 +667,13 @@ class ProductController extends Controller
                         'bool' => [
                             'must' => [
                                 ['term' => ['filters.filter_id' => $filterId]],
-                                ['term' => ['filters.pf_id' => (int)$filterValue]],
+                                $should[0],
                             ],
                         ],
                     ],
                 ],
             ];
         }
-
-        $v = trim((string)$filterValue);
 
         return [
             'nested' => [
@@ -619,11 +683,7 @@ class ProductController extends Controller
                         'must' => [
                             ['term' => ['filters.filter_id' => $filterId]],
                         ],
-                        'should' => [
-                            ['term' => ['filters.value_ru' => $v]],
-                            ['term' => ['filters.value_en' => $v]],
-                            ['term' => ['filters.value_uz' => $v]],
-                        ],
+                        'should' => $should,
                         'minimum_should_match' => 1,
                     ],
                 ],
@@ -634,16 +694,17 @@ class ProductController extends Controller
     public function actionIndexEs()
     {
         $req = \Yii::$app->request;
+        $state = $this->getCatalogFilterService()->parseState($req);
         $q = trim((string)$req->get('q', ''));
         $sort = (string)$req->get('sort', 'new');
-        $categoryId = $req->get('category_id');
-        $brandId = $req->get('brand_id');
-        $shopId = $req->get('shop_id');
+        $categoryId = $state['category_id'];
+        $brandIds = $state['brand_ids'];
+        $storeIds = $state['store_ids'];
         $tagId = $req->get('tag_id');
         $perPage = (int)($req->get('per-page', 12));
         $page = max(1, (int)$req->get('page', 1));
-        $filter = $req->get('filter');
-        $filterLogic = $req->get('filter_logic', 'and');
+        $attributeFilters = $this->getCatalogFilterService()->getAttributeFilterState($state);
+        $filterLogic = $state['attribute_logic'] ?? 'and';
 
         $perPage = max(1, min(50, $perPage));
         $from = ($page - 1) * $perPage;
@@ -671,8 +732,9 @@ class ProductController extends Controller
         $filters[] = ['term' => ['status' => 1]];
         $filters[] = ['range' => ['amount' => ['gt' => 0]]];
         $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
-        if ($brandId) $filters[] = ['term' => ['brand_id' => (int)$brandId]];
-        if ($shopId)  $filters[] = ['term' => ['shop_id' => (int)$shopId]];
+        $this->applyMarketplaceVisibilityEs($filters);
+        if (!empty($brandIds)) $filters[] = ['terms' => ['brand_id' => array_values(array_unique(array_map('intval', $brandIds)))]];
+        if (!empty($storeIds))  $filters[] = ['terms' => ['shop_id' => array_values(array_unique(array_map('intval', $storeIds)))]];
         if ($tagId)  $filters[] = ['term' => ['tag_id' => (int)$tagId]];
 
         if ($categoryId) {
@@ -692,9 +754,12 @@ class ProductController extends Controller
 
         $nestedClauses = [];
 
-        if (\is_array($filter)) {
-            foreach ($filter as $filterId => $filterValue) {
-                $nestedClauses[] = $this->buildOneNestedFilterClause((int)$filterId, $filterValue);
+        if (!empty($attributeFilters)) {
+            foreach ($attributeFilters as $filterId => $filterValue) {
+                $clause = $this->buildOneNestedFilterClause((int)$filterId, $filterValue);
+                if (!empty($clause)) {
+                    $nestedClauses[] = $clause;
+                }
             }
         }
 
@@ -807,14 +872,17 @@ class ProductController extends Controller
     public function actionBestProductsEs()
     {
         $req = \Yii::$app->request;
+        $state = $this->getCatalogFilterService()->parseState($req);
         $q = trim((string)$req->get('q', ''));
         $sort = (string)$req->get('sort', 'new');
-        $categoryId = $req->get('category_id');
-        $brandId = $req->get('brand_id');
-        $shopId = $req->get('shop_id');
+        $categoryId = $state['category_id'];
+        $brandIds = $state['brand_ids'];
+        $storeIds = $state['store_ids'];
         $tagId = $req->get('tag_id');
         $perPage = (int)($req->get('per-page', 12));
         $page = max(1, (int)$req->get('page', 1));
+        $attributeFilters = $this->getCatalogFilterService()->getAttributeFilterState($state);
+        $filterLogic = $state['attribute_logic'] ?? 'and';
         $perPage = max(1, min(50, $perPage));
         $from = ($page - 1) * $perPage;
 
@@ -843,8 +911,9 @@ class ProductController extends Controller
         $filters[] = ['term' => ['status' => 1]];
         $filters[] = ['range' => ['amount' => ['gt' => 0]]];
         $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
-        if ($brandId) $filters[] = ['term' => ['brand_id' => (int)$brandId]];
-        if ($shopId)  $filters[] = ['term' => ['shop_id' => (int)$shopId]];
+        $this->applyMarketplaceVisibilityEs($filters);
+        if (!empty($brandIds)) $filters[] = ['terms' => ['brand_id' => array_values(array_unique(array_map('intval', $brandIds)))]];
+        if (!empty($storeIds))  $filters[] = ['terms' => ['shop_id' => array_values(array_unique(array_map('intval', $storeIds)))]];
         if ($tagId)  $filters[] = ['term' => ['tag_id' => (int)$tagId]];
 
         if ($categoryId) {
@@ -854,6 +923,31 @@ class ProductController extends Controller
             foreach ($subcats as $sid) $catIds[] = (int)$sid;
 
             $filters[] = ['terms' => ['category_id' => array_values(array_unique($catIds))]];
+        }
+
+        $nestedClauses = [];
+        if (!empty($attributeFilters)) {
+            foreach ($attributeFilters as $filterId => $filterValue) {
+                $clause = $this->buildOneNestedFilterClause((int)$filterId, $filterValue);
+                if (!empty($clause)) {
+                    $nestedClauses[] = $clause;
+                }
+            }
+        }
+
+        if ($nestedClauses) {
+            if ($filterLogic === 'or') {
+                $filters[] = [
+                    'bool' => [
+                        'should' => $nestedClauses,
+                        'minimum_should_match' => 1,
+                    ],
+                ];
+            } else {
+                foreach ($nestedClauses as $clause) {
+                    $filters[] = $clause;
+                }
+            }
         }
 
         $esSort = [];

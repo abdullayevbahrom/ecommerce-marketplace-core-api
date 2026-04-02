@@ -9,6 +9,7 @@ use app\models\Category;
 use app\models\category\CategoryFilter;
 use app\models\user\User;
 use app\models\filter\FilterUser;
+use yii\helpers\Inflector;
 
 /**
  * This is the model class for table "filter".
@@ -37,6 +38,8 @@ class Filter extends \yii\db\ActiveRecord
 
     public $sub_category_id;
 
+    private ?string $lockedCode = null;
+
     /**
      * {@inheritdoc}
      */
@@ -55,6 +58,9 @@ class Filter extends \yii\db\ActiveRecord
             [['parent_id', 'category_id', 'status', 'is_filter'], 'integer'],
             [['date', 'property_key_ru', 'property_value_ru', 'property_key_uz', 'property_value_uz', 'property_key_en', 'property_value_en', 'sub_category_id'], 'safe'],
             [['type', 'name_ru', 'name_uz', 'name_en', 'value_ru', 'value_uz', 'value_en', 'category_tree'], 'string', 'max' => 255],
+            [['code'], 'string', 'max' => 100],
+            [['code'], 'match', 'pattern' => '/^[a-z0-9]+(?:-[a-z0-9]+)*$/', 'message' => 'Code may only contain lowercase latin letters, digits, and dashes'],
+            [['code'], 'unique'],
             [['category_id'], 'exist', 'skipOnError' => true, 'targetClass' => Category::className(), 'targetAttribute' => ['category_id' => 'id']],
         ];
     }
@@ -69,9 +75,44 @@ class Filter extends \yii\db\ActiveRecord
             'parent_id' => 'Parent ID',
             'category_id' => 'Category ID',
             'type' => 'Type',
+            'code' => 'Code',
             'name' => 'Name',
             'date' => 'Date',
         ];
+    }
+
+    public function afterFind()
+    {
+        parent::afterFind();
+        $this->lockedCode = $this->code;
+    }
+
+    public function beforeValidate()
+    {
+        if (!parent::beforeValidate()) {
+            return false;
+        }
+
+        if ((int)$this->parent_id !== 0) {
+            $this->code = null;
+            return true;
+        }
+
+        if (!$this->isNewRecord && $this->lockedCode !== null && $this->lockedCode !== '') {
+            $this->code = $this->lockedCode;
+            return true;
+        }
+
+        $candidate = trim((string)$this->code);
+        if ($candidate === '') {
+            $candidate = $this->generateStableCode();
+        } else {
+            $candidate = Inflector::slug($candidate);
+        }
+
+        $this->code = $this->ensureUniqueCode($candidate, $this->isNewRecord ? null : (int)$this->id);
+
+        return true;
     }
 
     public function saveObject() {
@@ -180,6 +221,7 @@ class Filter extends \yii\db\ActiveRecord
         $data = [
             'id',
             'type',
+            'code',
             'name' => function() use($language) {return $this->{'name_'.$language} ? $this->{'name_'.$language} : $this->name_ru;},
             'value' => function() use($language) {return $this->{'value_'.$language} ? $this->{'value_'.$language} : $this->value_ru;},
             'categoryFilter',
@@ -272,6 +314,7 @@ class Filter extends \yii\db\ActiveRecord
             'yii_filter_id' => $this->id,
             'category_id' => $this->category_id,
             'type' => $this->type,
+            'code' => $this->code,
             'name_ru' => $this->name_ru,
             'name_uz' => $this->name_uz,
             'name_en' => $this->name_en,
@@ -309,5 +352,37 @@ class Filter extends \yii\db\ActiveRecord
             branchId: null,
             message: $message
         );
+    }
+
+    private function generateStableCode(): string
+    {
+        $base = Inflector::slug((string)($this->name_ru ?: ($this->name_uz ?: ($this->name_en ?: 'filter'))));
+
+        return $base !== '' ? $base : 'filter';
+    }
+
+    private function ensureUniqueCode(string $candidate, ?int $excludeId = null): string
+    {
+        $candidate = $candidate !== '' ? $candidate : 'filter';
+        $code = $candidate;
+        $suffix = 1;
+
+        while ($this->codeExists($code, $excludeId)) {
+            $suffix++;
+            $code = $candidate . '-' . $suffix;
+        }
+
+        return $code;
+    }
+
+    private function codeExists(string $code, ?int $excludeId = null): bool
+    {
+        $query = static::find()->where(['code' => $code]);
+
+        if ($excludeId !== null) {
+            $query->andWhere(['<>', 'id', $excludeId]);
+        }
+
+        return $query->exists();
     }
 }
