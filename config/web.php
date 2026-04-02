@@ -226,6 +226,14 @@ $config = [
                 // Crypto payment execution
                 'POST api/app/pay/order/<orderId:\d+>' => 'api/payment/pay-order',
 
+                // POS QR crypto payment (mobile scans QR at kassa)
+                'POST api/payment/pos-pay' => 'api/payment/pos-pay',
+                'GET api/payment/pos-session' => 'api/payment/pos-session',
+
+                // Wallet extras
+                'GET api/wallet/address' => 'api/wallet/address',
+                'POST api/wallet/pay' => 'api/wallet/pay',
+
             ],
         ],
         'image' => [
