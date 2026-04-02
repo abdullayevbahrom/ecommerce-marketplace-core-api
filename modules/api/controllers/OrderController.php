@@ -26,7 +26,7 @@ use yii\services\BTS;
 use yii\caching\FileCache;
 use yii\helpers\FileHelper;
 use yii\web\BadRequestHttpException;
-use app\services\WalletService;
+
 
 class OrderController extends Controller
 {
@@ -187,12 +187,6 @@ class OrderController extends Controller
             return ['errors' => $model->errors];
         }
 
-        // Check if this is a wallet payment — if so, wrap everything in a DB transaction
-        $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
-        $isWalletPayment = $walletPaymentId && isset($post['payment_id']) && $post['payment_id'] == $walletPaymentId;
-
-        $dbTransaction = $isWalletPayment ? Yii::$app->db->beginTransaction() : null;
-
         $saveResult = $model->saveObject($cart);
         if ($saveResult) {
             $order = Order::find()->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image', 'shop')->where(['id' => $model->id])->one();
@@ -205,44 +199,8 @@ class OrderController extends Controller
                 \app\models\Log::log('didox_order', "Auto-creation exception for Order #{$order->id}", $e->getMessage(), 'error');
             }
 
-            // Process wallet payment if payment_id matches wallet type
-            if ($isWalletPayment) {
-                $walletToken = $post['wallet_token'] ?? Yii::$app->params['walletDefaultToken'] ?? 'USDT';
-                $merchantId = $order->shop ? $order->shop->user_id : null;
-
-                if (!$merchantId) {
-                    $dbTransaction->rollBack();
-                    Yii::$app->response->statusCode = 422;
-                    return ['errors' => ['wallet' => 'Shop owner not found for wallet payment']];
-                }
-
-                try {
-                    $walletService = new WalletService();
-                    $walletService->init();
-                    $result = $walletService->pay($user->id, $merchantId, (string)$order->price, $walletToken);
-
-                    // Payment succeeded — mark as paid and create transaction
-                    $order->status_payment = 1;
-                    $order->save(false);
-
-                    $transaction = new Transaction();
-                    $transaction->user_id = $user->id;
-                    $transaction->order_id = $order->id;
-                    $transaction->shop_id = $order->shop_id;
-                    $transaction->type_transaction = 'payment';
-                    $transaction->type_payment = 'wallet';
-                    $transaction->amount = $order->price;
-                    $transaction->status = 1;
-                    $transaction->save(false);
-
-                    $dbTransaction->commit();
-                } catch (\Exception $e) {
-                    // Wallet payment failed — rollback entire order
-                    $dbTransaction->rollBack();
-                    Yii::$app->response->statusCode = 422;
-                    return ['errors' => ['wallet' => 'Wallet payment failed: ' . $e->getMessage()]];
-                }
-            }
+            // For crypto/wallet payments (payment_id = walletPaymentId), order is created
+            // without payment. Use POST /api/payment/pay with order_id to get pay_url.
 
             Yii::$app->response->statusCode = 200;
             $response = ['data' => $order];
@@ -268,11 +226,6 @@ class OrderController extends Controller
                 }
             }
             return $response;
-        }
-
-        // saveObject failed — rollback if wallet transaction is open
-        if ($dbTransaction) {
-            $dbTransaction->rollBack();
         }
 
         // Check if there are validation errors (like minimum order violations)
