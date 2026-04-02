@@ -411,6 +411,35 @@ class PaymentController extends Controller {
         }
     }
 
+    /**
+     * Get latest pending session for a branch (proxy to sklad).
+     * GET /api/payment/pos-branch?branch_id=61
+     * Mobile scans static QR → calls this → gets current order.
+     */
+    public function actionPosBranch()
+    {
+        $branchId = Yii::$app->request->get('branch_id');
+
+        if (!$branchId) {
+            Yii::$app->response->statusCode = 422;
+            return ['success' => false, 'error' => 'branch_id is required'];
+        }
+
+        $skladUrl = Yii::$app->params['skladApiUrl'] ?? 'https://api.warehouse.example.com';
+
+        try {
+            $response = @file_get_contents("{$skladUrl}/api/pay/branch/{$branchId}");
+            if ($response === false) {
+                Yii::$app->response->statusCode = 404;
+                return ['success' => false, 'error' => 'No active order for this branch'];
+            }
+            return json_decode($response, true);
+        } catch (\Exception $e) {
+            Yii::$app->response->statusCode = 503;
+            return ['success' => false, 'error' => 'Could not reach sklad'];
+        }
+    }
+
     public function actionNotify() {
         $post = Yii::$app->request->post();
         $service =  new PayKeeperService();

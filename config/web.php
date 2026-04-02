@@ -232,6 +232,7 @@ $config = [
                 // POS QR crypto payment (mobile scans QR at kassa)
                 'POST api/payment/pos-pay' => 'api/payment/pos-pay',
                 'GET api/payment/pos-session' => 'api/payment/pos-session',
+                'GET api/payment/pos-branch' => 'api/payment/pos-branch',
 
                 // Wallet extras
                 'GET api/wallet/address' => 'api/wallet/address',
