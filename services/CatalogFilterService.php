@@ -27,6 +27,7 @@ class CatalogFilterService
             'store_ids' => $this->parseIdList($request->get('store_ids'), $request->get('shop_id')),
             'price_min' => $this->toNullableFloat($request->get('price_min')),
             'price_max' => $this->toNullableFloat($request->get('price_max')),
+            'attribute_logic' => strtolower((string)$request->get('filter_logic', 'and')) === 'or' ? 'or' : 'and',
             'attribute_filters' => $this->normalizeAttributeFilters(
                 is_array($attributes) ? $attributes : [],
                 is_array($legacyFilter) ? $legacyFilter : [],
@@ -69,7 +70,12 @@ class CatalogFilterService
             }
         }
 
-        $this->applyAttributeFilters($query, $state['attribute_filters'], $ignoreAttributeFilterIds);
+        $this->applyAttributeFilters(
+            $query,
+            $state['attribute_filters'],
+            $ignoreAttributeFilterIds,
+            $state['attribute_logic'] ?? 'and'
+        );
 
         return $query;
     }
@@ -228,8 +234,10 @@ class CatalogFilterService
         return $result;
     }
 
-    private function applyAttributeFilters(ActiveQuery $query, array $attributeFilters, array $ignoreFilterIds = []): void
+    private function applyAttributeFilters(ActiveQuery $query, array $attributeFilters, array $ignoreFilterIds = [], string $logic = 'and'): void
     {
+        $existsConditions = [];
+
         foreach ($attributeFilters as $filterId => $values) {
             $filterId = (int)$filterId;
             if ($filterId <= 0 || in_array($filterId, $ignoreFilterIds, true)) {
@@ -275,7 +283,21 @@ class CatalogFilterService
             $orConditions[] = ['pf.value_en' => $stringValues];
 
             $subQuery->andWhere($orConditions);
-            $query->andWhere(['exists', $subQuery]);
+            $existsConditions[] = ['exists', $subQuery];
+        }
+
+        if (empty($existsConditions)) {
+            return;
+        }
+
+        if ($logic === 'or') {
+            array_unshift($existsConditions, 'or');
+            $query->andWhere($existsConditions);
+            return;
+        }
+
+        foreach ($existsConditions as $condition) {
+            $query->andWhere($condition);
         }
     }
 

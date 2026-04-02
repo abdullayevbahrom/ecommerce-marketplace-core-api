@@ -1327,64 +1327,10 @@ class ProductController extends Controller
 
     public function actionByFilter()
     {
-        $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1])->marketplaceVisible();
-
-        if ($filter = Yii::$app->request->get('filter')) {
-            // Check if we should use OR logic instead of AND
-            $filterLogic = Yii::$app->request->get('filter_logic', 'and'); // 'and' or 'or'
-
-            $productIds = [];
-            $filterCount = 0;
-
-            foreach ($filter as $filterId => $filterValue) {
-                $filterCount++;
-
-                // Find products that have this filter with the specified value
-                $subQuery = ProductFilter::find()
-                    ->select('product_id')
-                    ->where(['filter_id' => $filterId]);
-
-                // Apply value matching (supports single value or array for checkboxes)
-                if (!empty($filterValue)) {
-                    $subQuery->andWhere([
-                        'or',
-                        ['id' => $filterValue],
-                        ['value_ru' => $filterValue],
-                        ['value_en' => $filterValue],
-                        ['value_uz' => $filterValue]
-                    ]);
-                }
-
-                if ($filterCount === 1) {
-                    $productIds = $subQuery->column();
-                } else {
-                    $currentProductIds = $subQuery->column();
-                    if ($filterLogic === 'or') {
-                        // Union with previous results (OR logic - product can have ANY filter)
-                        $productIds = array_unique(array_merge($productIds, $currentProductIds));
-                    } else {
-                        // Intersect with previous results (AND logic - product must have ALL filters)
-                        $productIds = array_intersect($productIds, $currentProductIds);
-                    }
-                }
-            }
-
-            if (!empty($productIds)) {
-                $products->andWhere(['in', 'product.id', $productIds]);
-            } else {
-                // No products match the filters
-                $products->andWhere(['product.id' => -1]);
-            }
-        }
-
-        if ($category_id = Yii::$app->request->get('category_id')) {
-            $ids1 = ArrayHelper::map(Category::find()->where(['parent_id' => $category_id])->all(), 'id', 'id');
-            $products->andWhere([
-                'or',
-                ['product.category_id' => $category_id],
-                ['in', 'product.category_id', $ids1],
-            ]);
-        }
+        $state = $this->getCatalogFilterService()->parseState(Yii::$app->request);
+        $products = $this->getCatalogFilterService()
+            ->buildProductsQuery($state, ['ignorePrice' => true])
+            ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color');
 
         $this->applyPriceFilterWithBounds($products, 'price');
 
