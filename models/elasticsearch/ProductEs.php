@@ -18,6 +18,7 @@ class ProductEs extends ActiveRecord
         return [
             'id',
             'shop_id',
+            'stock_id',
             'category_id',
             'brand_id',
             'region_id',

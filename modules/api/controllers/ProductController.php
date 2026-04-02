@@ -30,6 +30,7 @@ use app\models\user\activity\UserActivity;
 use app\models\brand\CategoryBrand; // Added Brand model
 use app\models\Brand; // Added Brand model
 use app\models\Shop; // Added Shop model
+use app\models\stock\Stock;
 
 use Jenssegers\ImageHash\ImageHash;
 use Jenssegers\ImageHash\Implementations\DifferenceHash;
@@ -103,6 +104,35 @@ class ProductController extends Controller
         }
 
         return $this->catalogFilterService;
+    }
+
+    private function applyMarketplaceVisibilityEs(array &$filters): void
+    {
+        $marketplaceStockIds = array_values(array_unique(array_map('intval', Stock::find()
+            ->select('id')
+            ->where(['for_marketplace' => 1])
+            ->column())));
+
+        $visibilityShould = [
+            [
+                'bool' => [
+                    'must_not' => [
+                        ['exists' => ['field' => 'stock_id']],
+                    ],
+                ],
+            ],
+        ];
+
+        if (!empty($marketplaceStockIds)) {
+            $visibilityShould[] = ['terms' => ['stock_id' => $marketplaceStockIds]];
+        }
+
+        $filters[] = [
+            'bool' => [
+                'should' => $visibilityShould,
+                'minimum_should_match' => 1,
+            ],
+        ];
     }
 
     public function beforeAction($action)
@@ -702,6 +732,7 @@ class ProductController extends Controller
         $filters[] = ['term' => ['status' => 1]];
         $filters[] = ['range' => ['amount' => ['gt' => 0]]];
         $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
+        $this->applyMarketplaceVisibilityEs($filters);
         if (!empty($brandIds)) $filters[] = ['terms' => ['brand_id' => array_values(array_unique(array_map('intval', $brandIds)))]];
         if (!empty($storeIds))  $filters[] = ['terms' => ['shop_id' => array_values(array_unique(array_map('intval', $storeIds)))]];
         if ($tagId)  $filters[] = ['term' => ['tag_id' => (int)$tagId]];
@@ -880,6 +911,7 @@ class ProductController extends Controller
         $filters[] = ['term' => ['status' => 1]];
         $filters[] = ['range' => ['amount' => ['gt' => 0]]];
         $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
+        $this->applyMarketplaceVisibilityEs($filters);
         if (!empty($brandIds)) $filters[] = ['terms' => ['brand_id' => array_values(array_unique(array_map('intval', $brandIds)))]];
         if (!empty($storeIds))  $filters[] = ['terms' => ['shop_id' => array_values(array_unique(array_map('intval', $storeIds)))]];
         if ($tagId)  $filters[] = ['term' => ['tag_id' => (int)$tagId]];

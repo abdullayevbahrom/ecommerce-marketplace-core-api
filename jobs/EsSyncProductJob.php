@@ -60,6 +60,7 @@ class EsSyncProductJob extends BaseObject implements JobInterface
         $doc = [
             'id' => (int)$p->id,
             'shop_id' => (int)$p->shop_id,
+            'stock_id' => $p->stock_id !== null ? (int)$p->stock_id : null,
             'category_id' => (int)$p->category_id,
             'brand_id' => (int)$p->brand_id,
             'region_id' => (int)$p->region_id,

@@ -45,6 +45,7 @@ class EsController extends Controller
                     'id' => ['type' => 'integer'],
 
                     'shop_id' => ['type' => 'integer'],
+                    'stock_id' => ['type' => 'integer'],
                     'category_id' => ['type' => 'integer'],
                     'brand_id' => ['type' => 'integer'],
                     'region_id' => ['type' => 'integer'],

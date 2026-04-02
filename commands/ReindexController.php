@@ -64,6 +64,7 @@ class ReindexController extends Controller
                     'id' => $docId,
 
                     'shop_id' => $p->shop_id ? (int)$p->shop_id : null,
+                    'stock_id' => $p->stock_id ? (int)$p->stock_id : null,
                     'category_id' => $p->category_id ? (int)$p->category_id : null,
                     'brand_id' => $p->brand_id ? (int)$p->brand_id : null,
                     'region_id' => $p->region_id ? (int)$p->region_id : null,
