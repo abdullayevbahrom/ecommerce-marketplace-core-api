@@ -55,6 +55,10 @@ class ProductController extends Controller
             $result['_meta']['price_max'] = $this->minMaxPrices['max'];
         }
 
+        if (is_array($result) && isset($result['_meta']['totalCount']) && !isset($result['total'])) {
+            $result['total'] = (int)$result['_meta']['totalCount'];
+        }
+
         return $result;
     }
 
@@ -84,10 +88,13 @@ class ProductController extends Controller
         ];
 
         // Apply filters
-        if ($price_min = Yii::$app->request->get('price_min')) {
+        $price_min = Yii::$app->request->get('price_min');
+        if ($price_min !== null && $price_min !== '') {
             $query->andWhere(['>=', $column, $price_min]);
         }
-        if ($price_max = Yii::$app->request->get('price_max')) {
+
+        $price_max = Yii::$app->request->get('price_max');
+        if ($price_max !== null && $price_max !== '') {
             $query->andWhere(['<=', $column, $price_max]);
         }
     }
@@ -104,6 +111,57 @@ class ProductController extends Controller
         }
 
         return $this->catalogFilterService;
+    }
+
+    private function validateCatalogStateOrRespond(array $state): ?array
+    {
+        $validation = $this->getCatalogFilterService()->validateRequest(Yii::$app->request, $state);
+        if ($validation === null) {
+            return null;
+        }
+
+        Yii::$app->response->statusCode = 422;
+
+        return [
+            'message' => $validation['message'],
+            'errors' => [
+                $validation['field'] ?? 'request' => [$validation['message']],
+            ],
+        ];
+    }
+
+    private function resolvePerPageOrRespond(int $default = 12): ?int
+    {
+        $rawPerPage = Yii::$app->request->get('per-page', Yii::$app->request->get('per_page', $default));
+        $perPage = (int)$rawPerPage;
+        if ($perPage <= 0) {
+            $perPage = $default;
+        }
+
+        if ($perPage > 100) {
+            Yii::$app->response->statusCode = 422;
+            Yii::$app->response->data = [
+                'message' => 'per_page: maximum 100 allowed',
+                'errors' => [
+                    'per_page' => ['per_page: maximum 100 allowed'],
+                ],
+            ];
+
+            return null;
+        }
+
+        return $perPage;
+    }
+
+    private function buildFiltersCacheKey(array $state): string
+    {
+        $params = Yii::$app->request->getQueryParams();
+        ksort($params);
+
+        return 'api:filters:' . md5(Json::encode([
+            'state' => $state,
+            'params' => $params,
+        ]));
     }
 
     private function applyMarketplaceVisibilityEs(array &$filters): void
@@ -518,6 +576,14 @@ class ProductController extends Controller
     public function actionIndex()
     {
         $state = $this->getCatalogFilterService()->parseState(Yii::$app->request);
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state)) {
+            return $validationResponse;
+        }
+
+        $perPage = $this->resolvePerPageOrRespond(12);
+        if ($perPage === null) {
+            return Yii::$app->response->data;
+        }
 
         $query = $this->getCatalogFilterService()
             ->buildProductsQuery($state, ['ignorePrice' => true])
@@ -549,7 +615,6 @@ class ProductController extends Controller
         // Price filtering with bounds calculation
         $this->applyPriceFilterWithBounds($query, 'price');
 
-        $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
         foreach ($query->all() as $product) {
             if ($product->status == 2) {
                 $product->delete();
@@ -571,15 +636,15 @@ class ProductController extends Controller
     public function actionFilters()
     {
         $state = $this->getCatalogFilterService()->parseState(Yii::$app->request);
-
-        if (empty($state['category_id'])) {
-            Yii::$app->response->statusCode = 422;
-            return [
-                'message' => 'category_id is required',
-            ];
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state)) {
+            return $validationResponse;
         }
 
-        return $this->getCatalogFilterService()->buildFacets($state);
+        $cacheKey = $this->buildFiltersCacheKey($state);
+
+        return Yii::$app->cache->getOrSet($cacheKey, function () use ($state) {
+            return $this->getCatalogFilterService()->buildFacets($state);
+        }, 60);
     }
 
     protected function applyEsPriceFilterWithBoundsEs(array &$filters, array $must, string $field = 'price'): void
@@ -633,26 +698,20 @@ class ProductController extends Controller
             return [];
         }
 
-        $numericValues = [];
-        $textValues = [];
-        foreach ($values as $value) {
-            if (is_numeric($value) && (string)(int)$value === (string)$value) {
-                $numericValues[] = (int)$value;
-            }
-
-            $textValues[] = (string)$value;
+        $textValues = $this->getCatalogFilterService()->expandAttributeFilterValues($filterId, $values);
+        if (empty($textValues)) {
+            return [];
         }
 
         $should = [];
-        if (!empty($numericValues)) {
-            $should[] = ['terms' => ['filters.pf_id' => array_values(array_unique($numericValues))]];
-        }
-
-        $textValues = array_values(array_unique($textValues));
-        if (!empty($textValues)) {
-            $should[] = ['terms' => ['filters.value_ru' => $textValues]];
-            $should[] = ['terms' => ['filters.value_en' => $textValues]];
-            $should[] = ['terms' => ['filters.value_uz' => $textValues]];
+        $should[] = ['terms' => ['filters.value_ru' => $textValues]];
+        $should[] = ['terms' => ['filters.value_en' => $textValues]];
+        $should[] = ['terms' => ['filters.value_uz' => $textValues]];
+        foreach ($textValues as $textValue) {
+            $wildcardValue = '*' . $this->escapeElasticWildcardValue($textValue) . '*';
+            $should[] = ['wildcard' => ['filters.value_ru' => $wildcardValue]];
+            $should[] = ['wildcard' => ['filters.value_en' => $wildcardValue]];
+            $should[] = ['wildcard' => ['filters.value_uz' => $wildcardValue]];
         }
 
         if (empty($should)) {
@@ -691,22 +750,33 @@ class ProductController extends Controller
         ];
     }
 
+    private function escapeElasticWildcardValue(string $value): string
+    {
+        return str_replace(['\\', '*', '?'], ['\\\\', '\\*', '\\?'], $value);
+    }
+
     public function actionIndexEs()
     {
         $req = \Yii::$app->request;
         $state = $this->getCatalogFilterService()->parseState($req);
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state)) {
+            return $validationResponse;
+        }
         $q = trim((string)$req->get('q', ''));
         $sort = (string)$req->get('sort', 'new');
         $categoryId = $state['category_id'];
         $brandIds = $state['brand_ids'];
         $storeIds = $state['store_ids'];
         $tagId = $req->get('tag_id');
-        $perPage = (int)($req->get('per-page', 12));
+        $perPage = $this->resolvePerPageOrRespond(12);
+        if ($perPage === null) {
+            return Yii::$app->response->data;
+        }
         $page = max(1, (int)$req->get('page', 1));
         $attributeFilters = $this->getCatalogFilterService()->getAttributeFilterState($state);
         $filterLogic = $state['attribute_logic'] ?? 'and';
 
-        $perPage = max(1, min(50, $perPage));
+        $perPage = max(1, min(100, $perPage));
         $from = ($page - 1) * $perPage;
 
         $must = [];
@@ -873,17 +943,23 @@ class ProductController extends Controller
     {
         $req = \Yii::$app->request;
         $state = $this->getCatalogFilterService()->parseState($req);
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state)) {
+            return $validationResponse;
+        }
         $q = trim((string)$req->get('q', ''));
         $sort = (string)$req->get('sort', 'new');
         $categoryId = $state['category_id'];
         $brandIds = $state['brand_ids'];
         $storeIds = $state['store_ids'];
         $tagId = $req->get('tag_id');
-        $perPage = (int)($req->get('per-page', 12));
+        $perPage = $this->resolvePerPageOrRespond(12);
+        if ($perPage === null) {
+            return Yii::$app->response->data;
+        }
         $page = max(1, (int)$req->get('page', 1));
         $attributeFilters = $this->getCatalogFilterService()->getAttributeFilterState($state);
         $filterLogic = $state['attribute_logic'] ?? 'and';
-        $perPage = max(1, min(50, $perPage));
+        $perPage = max(1, min(100, $perPage));
         $from = ($page - 1) * $perPage;
 
         $must = [];

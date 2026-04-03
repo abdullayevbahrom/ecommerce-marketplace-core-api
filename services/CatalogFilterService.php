@@ -16,6 +16,8 @@ use yii\web\Request;
 
 class CatalogFilterService
 {
+    private array $filterOptionMapCache = [];
+
     public function parseState(Request $request): array
     {
         $attributes = $request->get('attributes');
@@ -120,6 +122,82 @@ class CatalogFilterService
         return $state['attribute_filters'] ?? [];
     }
 
+    public function validateState(array $state): ?array
+    {
+        if (
+            $state['price_min'] !== null
+            && $state['price_max'] !== null
+            && $state['price_min'] > $state['price_max']
+        ) {
+            return [
+                'message' => 'price_min cannot be greater than price_max',
+                'field' => 'price',
+            ];
+        }
+
+        return null;
+    }
+
+    public function validateRequest(Request $request, array $state, bool $requireCategory = true): ?array
+    {
+        if ($requireCategory && empty($state['category_id'])) {
+            return [
+                'message' => 'category_id is required',
+                'field' => 'category_id',
+            ];
+        }
+
+        if (count($state['brand_ids'] ?? []) > 20) {
+            return [
+                'message' => 'brand_ids: maximum 20 values allowed',
+                'field' => 'brand_ids',
+            ];
+        }
+
+        if (count($state['store_ids'] ?? []) > 20) {
+            return [
+                'message' => 'store_ids: maximum 20 values allowed',
+                'field' => 'store_ids',
+            ];
+        }
+
+        $rawAttributes = $this->collectRawAttributePayload($request);
+        if (count($rawAttributes) > 10) {
+            return [
+                'message' => 'attributes: maximum 10 keys allowed',
+                'field' => 'attributes',
+            ];
+        }
+
+        foreach ($rawAttributes as $rawKey => $rawValues) {
+            if (mb_strlen(trim((string)$rawKey)) > 100) {
+                return [
+                    'message' => 'attributes: maximum string length is 100',
+                    'field' => 'attributes',
+                ];
+            }
+
+            $values = $this->normalizeValueList($rawValues);
+            if (count($values) > 10) {
+                return [
+                    'message' => "attributes[{$rawKey}]: maximum 10 values allowed",
+                    'field' => 'attributes',
+                ];
+            }
+
+            foreach ($values as $value) {
+                if (mb_strlen(trim((string)$value)) > 100) {
+                    return [
+                        'message' => 'attributes: maximum string length is 100',
+                        'field' => 'attributes',
+                    ];
+                }
+            }
+        }
+
+        return $this->validateState($state);
+    }
+
     private function buildBrandFacet(array $state): array
     {
         $rows = $this->buildProductsQuery($state, ['ignoreBrand' => true])
@@ -140,7 +218,7 @@ class CatalogFilterService
         return array_map(function (array $row) {
             return [
                 'id' => (int)$row['id'],
-                'name' => $this->pickLocalizedValue($row['name_ru'] ?? null, $row['name_uz'] ?? null, $row['name_en'] ?? null),
+                'name' => $this->pickLocalizedValue($row['name_ru'] ?? null, $row['name_uz'] ?? null, $row['name_en'] ?? null) ?? '',
                 'count' => (int)$row['count'],
             ];
         }, $rows);
@@ -166,7 +244,7 @@ class CatalogFilterService
         return array_map(function (array $row) {
             return [
                 'id' => (int)$row['id'],
-                'name' => $this->pickLocalizedValue($row['name_ru'] ?? null, $row['name_uz'] ?? null, $row['name_en'] ?? null),
+                'name' => $this->pickLocalizedValue($row['name_ru'] ?? null, $row['name_uz'] ?? null, $row['name_en'] ?? null) ?? '',
                 'count' => (int)$row['count'],
             ];
         }, $rows);
@@ -194,6 +272,7 @@ class CatalogFilterService
         $result = [];
 
         foreach ($filters as $filter) {
+            $optionMap = $this->getFilterOptionMap((int)$filter->id);
             $rows = $this->buildProductsQuery($state, ['ignoreAttributeFilterIds' => [$filter->id]])
                 ->select([
                     'value_ru' => 'facet_filter.value_ru',
@@ -217,22 +296,45 @@ class CatalogFilterService
                     continue;
                 }
 
-                $options[] = [
-                    'value' => $rawValue,
-                    'label' => $rawValue,
-                    'count' => (int)$row['count'],
-                ];
+                $matchedOption = $this->resolveAttributeOptionByRawValue($optionMap, $row);
+                $label = $matchedOption !== null
+                    ? $this->pickLocalizedValue($matchedOption['value_ru'] ?? null, $matchedOption['value_uz'] ?? null, $matchedOption['value_en'] ?? null)
+                    : $rawValue;
+
+                $optionValue = $matchedOption !== null
+                    ? (int)$matchedOption['id']
+                    : $this->encodeRawFacetValue($rawValue);
+                $optionKey = is_int($optionValue) ? 'id:' . $optionValue : 'raw:' . $optionValue;
+
+                if (!isset($options[$optionKey])) {
+                    $options[$optionKey] = [
+                        'value' => $optionValue,
+                        'label' => $label ?: $rawValue,
+                        'count' => 0,
+                    ];
+                }
+
+                $options[$optionKey]['count'] += (int)$row['count'];
             }
 
             if (empty($options)) {
                 continue;
             }
 
+            usort($options, static function (array $left, array $right) {
+                $countComparison = $right['count'] <=> $left['count'];
+                if ($countComparison !== 0) {
+                    return $countComparison;
+                }
+
+                return strcmp((string)$left['label'], (string)$right['label']);
+            });
+
             $result[] = [
                 'key' => $this->buildFilterKey($filter),
-                'label' => $this->pickLocalizedValue($filter->name_ru, $filter->name_uz, $filter->name_en),
-                'type' => $filter->type === 'checkbox' ? 'multiselect' : $filter->type,
-                'options' => $options,
+                'label' => $this->pickLocalizedValue($filter->name_ru, $filter->name_uz, $filter->name_en) ?? '',
+                'type' => 'multiselect',
+                'options' => array_values($options),
             ];
         }
 
@@ -267,25 +369,21 @@ class CatalogFilterService
                 ->where('pf.product_id = product.id')
                 ->andWhere(['pf.filter_id' => $filterId]);
 
-            $numericValues = [];
-            $textValues = [];
-            foreach ($values as $value) {
-                if (is_numeric($value) && (string)(int)$value === (string)$value) {
-                    $numericValues[] = (int)$value;
-                }
-
-                $textValues[] = (string)$value;
+            $stringValues = $this->expandAttributeFilterValues($filterId, $values);
+            if (empty($stringValues)) {
+                continue;
             }
 
             $orConditions = ['or'];
-            if (!empty($numericValues)) {
-                $orConditions[] = ['pf.id' => array_values(array_unique($numericValues))];
-            }
-
-            $stringValues = array_values(array_unique($textValues));
             $orConditions[] = ['pf.value_ru' => $stringValues];
             $orConditions[] = ['pf.value_uz' => $stringValues];
             $orConditions[] = ['pf.value_en' => $stringValues];
+
+            foreach ($stringValues as $stringValue) {
+                $orConditions[] = ['like', 'pf.value_ru', $stringValue];
+                $orConditions[] = ['like', 'pf.value_uz', $stringValue];
+                $orConditions[] = ['like', 'pf.value_en', $stringValue];
+            }
 
             $subQuery->andWhere($orConditions);
             $existsConditions[] = ['exists', $subQuery];
@@ -327,6 +425,7 @@ class CatalogFilterService
         foreach ($attributes as $rawKey => $rawValues) {
             $filterId = $this->resolveFilterId($rawKey, $availableFilters);
             if ($filterId === null) {
+                Yii::warning('Ignoring unknown attribute filter key: ' . $rawKey, __METHOD__);
                 continue;
             }
 
@@ -339,6 +438,7 @@ class CatalogFilterService
         foreach ($legacyFilter as $rawKey => $rawValues) {
             $filterId = $this->resolveFilterId($rawKey, $availableFilters);
             if ($filterId === null) {
+                Yii::warning('Ignoring unknown legacy filter key: ' . $rawKey, __METHOD__);
                 continue;
             }
 
@@ -430,6 +530,43 @@ class CatalogFilterService
         return array_values(array_unique($categoryIds));
     }
 
+    public function expandAttributeFilterValues(int $filterId, array $values): array
+    {
+        $expanded = [];
+        $optionMap = $this->getFilterOptionMap($filterId);
+
+        foreach ($values as $value) {
+            if (is_numeric($value) && (string)(int)$value === (string)$value) {
+                $optionId = (int)$value;
+                if (isset($optionMap['by_id'][$optionId])) {
+                    $option = $optionMap['by_id'][$optionId];
+                    foreach (['name_ru', 'name_uz', 'name_en', 'value_ru', 'value_uz', 'value_en'] as $field) {
+                        foreach ($this->expandComparableStrings((string)($option[$field] ?? '')) as $candidate) {
+                            $expanded[] = $candidate;
+                        }
+                    }
+                    continue;
+                }
+            }
+
+            if (is_string($value)) {
+                $decodedValue = $this->decodeRawFacetValue($value);
+                if ($decodedValue !== null) {
+                    foreach ($this->expandComparableStrings($decodedValue) as $candidate) {
+                        $expanded[] = $candidate;
+                    }
+                    continue;
+                }
+            }
+
+            foreach ($this->expandComparableStrings((string)$value) as $candidate) {
+                $expanded[] = $candidate;
+            }
+        }
+
+        return array_values(array_unique($expanded));
+    }
+
     private function buildFilterKey(Filter $filter): string
     {
         if (!empty($filter->code)) {
@@ -496,5 +633,125 @@ class CatalogFilterService
         }
 
         return (float)$value;
+    }
+
+    private function getFilterOptionMap(int $filterId): array
+    {
+        if (isset($this->filterOptionMapCache[$filterId])) {
+            return $this->filterOptionMapCache[$filterId];
+        }
+
+        $rows = Filter::find()
+            ->select(['id', 'name_ru', 'name_uz', 'name_en', 'value_ru', 'value_uz', 'value_en'])
+            ->where(['parent_id' => $filterId])
+            ->asArray()
+            ->all();
+
+        $byId = [];
+        $byRaw = [];
+        $byComparable = [];
+
+        foreach ($rows as $row) {
+            $byId[(int)$row['id']] = $row;
+
+            foreach (['name_ru', 'name_uz', 'name_en', 'value_ru', 'value_uz', 'value_en'] as $field) {
+                $raw = trim((string)($row[$field] ?? ''));
+                if ($raw !== '') {
+                    $byRaw[$raw] = $row;
+                    foreach ($this->expandComparableStrings($raw) as $comparable) {
+                        $byComparable[$comparable] = $row;
+                    }
+                }
+            }
+        }
+
+        return $this->filterOptionMapCache[$filterId] = [
+            'by_id' => $byId,
+            'by_raw' => $byRaw,
+            'by_comparable' => $byComparable,
+        ];
+    }
+
+    private function resolveAttributeOptionByRawValue(array $optionMap, array $row): ?array
+    {
+        foreach (['value_ru', 'value_uz', 'value_en'] as $field) {
+            $raw = trim((string)($row[$field] ?? ''));
+            if ($raw !== '' && isset($optionMap['by_raw'][$raw])) {
+                return $optionMap['by_raw'][$raw];
+            }
+
+            foreach ($this->expandComparableStrings($raw) as $comparable) {
+                if ($comparable !== '' && isset($optionMap['by_comparable'][$comparable])) {
+                    return $optionMap['by_comparable'][$comparable];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function encodeRawFacetValue(string $value): string
+    {
+        $encoded = rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+
+        return 'raw:' . $encoded;
+    }
+
+    private function decodeRawFacetValue(string $value): ?string
+    {
+        if (!str_starts_with($value, 'raw:')) {
+            return null;
+        }
+
+        $encoded = substr($value, 4);
+        if ($encoded === '') {
+            return null;
+        }
+
+        $padding = strlen($encoded) % 4;
+        if ($padding !== 0) {
+            $encoded .= str_repeat('=', 4 - $padding);
+        }
+
+        $decoded = base64_decode(strtr($encoded, '-_', '+/'), true);
+        if ($decoded === false) {
+            return null;
+        }
+
+        $decoded = trim($decoded);
+
+        return $decoded === '' ? null : $decoded;
+    }
+
+    private function expandComparableStrings(string $value): array
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return [];
+        }
+
+        $variants = [$value];
+
+        if (preg_match('/^([0-9]+(?:\.[0-9]+)?)/u', $value, $matches)) {
+            $variants[] = $matches[1];
+        }
+
+        return array_values(array_unique(array_filter($variants, static fn($item) => $item !== '')));
+    }
+
+    private function collectRawAttributePayload(Request $request): array
+    {
+        $attributes = $request->get('attributes');
+        $legacyFilter = $request->get('filter');
+
+        $payload = [];
+
+        foreach ([is_array($attributes) ? $attributes : [], is_array($legacyFilter) ? $legacyFilter : []] as $source) {
+            foreach ($source as $key => $value) {
+                $payload[(string)$key] = $value;
+            }
+        }
+
+        return $payload;
     }
 }
