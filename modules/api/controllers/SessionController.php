@@ -5,12 +5,14 @@ namespace app\modules\api\controllers;
 use app\models\session\WebSession;
 use app\models\user\User;
 use Yii;
+use yii\helpers\ArrayHelper;
 use yii\filters\auth\HttpBearerAuth;
 use yii\filters\Cors;
 use yii\filters\VerbFilter;
 use yii\rest\Controller;
 use yii\web\HttpException;
 use yii\web\Response;
+use yii\web\UnauthorizedHttpException;
 
 class SessionController extends Controller
 {
@@ -40,7 +42,7 @@ class SessionController extends Controller
 
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::class,
-            'except' => ['options'],
+            'except' => ['options', 'create-operator'],
         ];
 
         $behaviors['verbs'] = [
@@ -48,6 +50,7 @@ class SessionController extends Controller
             'actions' => [
                 'warehouse' => ['POST'],
                 'operator' => ['POST'],
+                'create-operator' => ['POST'],
                 'options' => ['OPTIONS'],
             ],
         ];
@@ -211,6 +214,107 @@ class SessionController extends Controller
 
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    public function actionCreateOperator()
+    {
+        Yii::$app->response->format = Response::FORMAT_JSON;
+
+        $payload = Yii::$app->request->post();
+        $phone = (string) ArrayHelper::getValue($payload, 'phone', '');
+        $secret = Yii::$app->params['apiSecretKey'] ?? null;
+
+        if (!$secret) {
+            throw new HttpException(500, 'Missing apiSecretKey');
+        }
+
+        $expectedToken = md5($phone . $secret);
+        $providedToken = Yii::$app->request->headers->get('X-Api-Token');
+
+        if (!$providedToken || $providedToken !== $expectedToken) {
+            throw new UnauthorizedHttpException('Invalid X-Api-Token');
+        }
+
+        $email = trim((string) ArrayHelper::getValue($payload, 'email', ''));
+        $name = trim((string) ArrayHelper::getValue($payload, 'name', ''));
+        $password = (string) ArrayHelper::getValue($payload, 'password', '');
+        $isActive = (bool) ArrayHelper::getValue($payload, 'is_active', true);
+
+        if ($phone === '' || $name === '' || $password === '') {
+            Yii::$app->response->statusCode = 422;
+
+            return [
+                'success' => false,
+                'message' => 'name, phone and password are required',
+            ];
+        }
+
+        $user = User::find()
+            ->where(['role' => User::ROLE_OPERATOR])
+            ->andWhere(['or', ['phone' => $phone], ['email' => $email]])
+            ->one();
+
+        if (!$user) {
+            $conflict = User::find()
+                ->andWhere(['or', ['phone' => $phone], ['email' => $email]])
+                ->one();
+
+            if ($conflict) {
+                Yii::$app->response->statusCode = 409;
+
+                return [
+                    'success' => false,
+                    'message' => 'Phone or email already used by another user',
+                ];
+            }
+
+            $user = new User();
+            $user->scenario = User::SIGNUP_ADMIN_USER;
+        } else {
+            $user->scenario = User::UPDATE_ADMIN_USER;
+        }
+
+        $nameParts = preg_split('/\s+/', $name, 3, PREG_SPLIT_NO_EMPTY) ?: [];
+        $user->name = $nameParts[0] ?? $name;
+        $user->lastname = $nameParts[1] ?? null;
+        $user->middlename = $nameParts[2] ?? null;
+        $user->phone = $phone;
+        $user->email = $email;
+        $user->role = User::ROLE_OPERATOR;
+        $user->status = $isActive ? User::STATUS_ACTIVE : User::STATUS_BLOCKED;
+        $user->password = $user->generatePassword($password);
+
+        if (!$user->validate()) {
+            Yii::$app->response->statusCode = 422;
+
+            return [
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $user->errors,
+            ];
+        }
+
+        $savedUser = $user->saveObject(User::ROLE_OPERATOR);
+
+        if (!$savedUser) {
+            Yii::$app->response->statusCode = 500;
+
+            return [
+                'success' => false,
+                'message' => 'Failed to create operator user',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'yii_user_id' => (int) $savedUser->id,
+                'phone' => $savedUser->phone,
+                'email' => $savedUser->email,
+                'role' => (int) $savedUser->role,
+                'status' => (int) $savedUser->status,
+            ],
+        ];
     }
 
 
