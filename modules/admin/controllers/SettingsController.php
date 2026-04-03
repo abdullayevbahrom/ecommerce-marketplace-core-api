@@ -83,13 +83,24 @@ class SettingsController extends Controller{
     }
 
     public function actionDidox() {
+        $didoxService = new \app\services\DidoxService();
+        $pfxValidation = $didoxService->validateConfiguredPfx();
+        $currentTokenStatus = $didoxService->getTokenStatus();
+        if (
+            !$pfxValidation['success']
+            && in_array(($currentTokenStatus['status'] ?? 'manual'), ['active', 'failed'], true)
+        ) {
+            $didoxService->cleanupInvalidAutoRefreshState($pfxValidation['error']);
+        }
+
         // Handle manual token refresh
         if (Yii::$app->request->post('refresh_token')) {
-            $didoxService = new \app\services\DidoxService();
             $result = $didoxService->refreshAndStoreToken();
             
             if ($result['success']) {
                 Yii::$app->session->setFlash('didox_saved', 'Token refreshed successfully! Expires at: ' . $result['expires_at']);
+            } elseif (!empty($result['skipped'])) {
+                Yii::$app->session->setFlash('didox_saved', $result['error']);
             } else {
                 Yii::$app->session->setFlash('error', 'Token refresh failed: ' . $result['error']);
             }
@@ -99,6 +110,14 @@ class SettingsController extends Controller{
         // Handle toggle auto-refresh status
         $toggleAuto = Yii::$app->request->post('toggle_auto');
         if ($toggleAuto) {
+            if ($toggleAuto === 'enable') {
+                if (!$pfxValidation['success']) {
+                    $message = $didoxService->cleanupInvalidAutoRefreshState($pfxValidation['error']);
+                    Yii::$app->session->setFlash('didox_saved', $message);
+                    return $this->redirect(['didox']);
+                }
+            }
+
             $newStatus = $toggleAuto === 'enable' ? 'active' : 'disabled';
             $model = \app\models\Settings::findOne(['type' => 'didox_auto_refresh_status']);
             if (!$model) {
@@ -260,7 +279,8 @@ class SettingsController extends Controller{
         }
 
         return $this->render('didox', [
-            'models' => $models
+            'models' => $models,
+            'pfxValidation' => $pfxValidation,
         ]);
     }
 }

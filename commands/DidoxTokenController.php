@@ -14,6 +14,7 @@ use yii\helpers\Console;
  *   php yii didox-token/status      - Check token status
  *   php yii didox-token/enable      - Enable auto-refresh
  *   php yii didox-token/disable     - Disable auto-refresh
+ *   php yii didox-token/cleanup     - Cleanup invalid auto-refresh state
  */
 class DidoxTokenController extends Controller
 {
@@ -95,6 +96,12 @@ class DidoxTokenController extends Controller
             
             return 0;
         } else {
+            if (!empty($result['skipped'])) {
+                $this->stdout("! Token refresh skipped.\n", Console::FG_YELLOW);
+                $this->stdout("  Message: {$result['error']}\n", Console::FG_YELLOW);
+                return 0;
+            }
+
             $this->stderr("✗ Token refresh failed!\n", Console::FG_RED);
             $this->stderr("  Error: {$result['error']}\n");
             
@@ -163,6 +170,13 @@ class DidoxTokenController extends Controller
     public function actionEnable()
     {
         $service = new DidoxService();
+        $pfxValidation = $service->validateConfiguredPfx();
+        if (!$pfxValidation['success']) {
+            $message = $service->cleanupInvalidAutoRefreshState($pfxValidation['error']);
+            $this->stdout("! {$message}\n", Console::FG_YELLOW);
+            return 0;
+        }
+
         $this->updateSetting('didox_auto_refresh_status', 'active');
         
         $this->stdout("✓ Auto-refresh enabled.\n", Console::FG_GREEN);
@@ -190,6 +204,35 @@ class DidoxTokenController extends Controller
         $this->stdout("Token will NOT be automatically refreshed.\n");
         $this->stdout("You must refresh manually using: php yii didox-token/refresh\n");
         
+        return 0;
+    }
+
+    /**
+     * Cleanup stale auto-refresh state when PFX is missing or invalid
+     *
+     * @return int
+     */
+    public function actionCleanup()
+    {
+        $service = new DidoxService();
+        $status = $service->getTokenStatus();
+        $pfxValidation = $service->validateConfiguredPfx();
+
+        if ($pfxValidation['success']) {
+            $this->stdout("PFX configuration is valid. Cleanup not required.\n", Console::FG_GREEN);
+            return 0;
+        }
+
+        if (!in_array(($status['status'] ?? 'manual'), ['active', 'failed'], true)) {
+            $this->stdout("No stale auto-refresh state found.\n", Console::FG_YELLOW);
+            $this->stdout("Message: {$pfxValidation['error']}\n", Console::FG_YELLOW);
+            return 0;
+        }
+
+        $message = $service->cleanupInvalidAutoRefreshState($pfxValidation['error']);
+        $this->stdout("Cleanup completed.\n", Console::FG_GREEN);
+        $this->stdout("Message: {$message}\n", Console::FG_YELLOW);
+
         return 0;
     }
     

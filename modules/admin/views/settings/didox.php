@@ -2,6 +2,8 @@
 use yii\helpers\Html;
 use yii\bootstrap4\ActiveForm;
 
+/* @var $pfxValidation array */
+
 $this->title = 'Didox & E-IMZO Settings';
 $this->params['breadcrumbs'][] = $this->title;
 ?>
@@ -131,6 +133,11 @@ $this->params['breadcrumbs'][] = $this->title;
                         <div class="alert alert-info">
                             <i class="fa fa-info"></i> Requires a Docker-accessible E-IMZO signer service running (e.g., at http://eimzo-signer:8080/generate).
                         </div>
+                        <?php if (!$pfxValidation['success']): ?>
+                            <div class="alert alert-warning" style="margin-bottom: 0;">
+                                <i class="fa fa-warning"></i> Auto-refresh blocked: <?= Html::encode($pfxValidation['error']); ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <?php $form = ActiveForm::begin(['id' => 'form-auto-auth', 'options' => ['enctype' => 'multipart/form-data']]);?>
                         <div class="box-body">
@@ -170,6 +177,7 @@ $this->params['breadcrumbs'][] = $this->title;
                         $statusClass = $tokenStatus['is_expired'] ? 'danger' : ($tokenStatus['expiring_soon'] ? 'warning' : 'success');
                         $statusIcon = $tokenStatus['is_expired'] ? 'times-circle' : ($tokenStatus['expiring_soon'] ? 'exclamation-triangle' : 'check-circle');
                         $statusText = $tokenStatus['is_expired'] ? 'Expired' : ($tokenStatus['expiring_soon'] ? 'Expiring Soon' : 'Active');
+                        $autoRefreshBlocked = !$pfxValidation['success'];
                         ?>
                         
                         <div class="callout callout-<?=$statusClass;?>">
@@ -255,6 +263,7 @@ $this->params['breadcrumbs'][] = $this->title;
                                         <?=Html::beginForm(['/admin/settings/didox'], 'post', ['style' => 'display: inline;']);?>
                                             <?=Html::hiddenInput('refresh_token', '1');?>
                                             <button type="submit" class="btn btn-primary" 
+                                                <?= $autoRefreshBlocked ? 'disabled title="' . Html::encode($pfxValidation['error']) . '"' : ''; ?>
                                                 onclick="return confirm('Are you sure you want to refresh the token now?');">
                                                 <i class="fa fa-refresh"></i> Refresh Token Now
                                             </button>
@@ -272,10 +281,15 @@ $this->params['breadcrumbs'][] = $this->title;
                                         <?php else: ?>
                                             <?=Html::beginForm(['/admin/settings/didox'], 'post', ['style' => 'display: inline;']);?>
                                                 <?=Html::hiddenInput('toggle_auto', 'enable');?>
-                                                <button type="submit" class="btn btn-success">
+                                                <button type="submit" class="btn btn-success" <?= $autoRefreshBlocked ? 'disabled title="' . Html::encode($pfxValidation['error']) . '"' : ''; ?>>
                                                     <i class="fa fa-play"></i> Enable Auto-Refresh
                                                 </button>
                                             <?=Html::endForm();?>
+                                        <?php endif; ?>
+                                        <?php if ($autoRefreshBlocked): ?>
+                                            <p class="text-muted" style="margin-top: 10px; margin-bottom: 0;">
+                                                Auto-refresh va token refresh faqat PFX fayl yuklangandan keyin ishlaydi.
+                                            </p>
                                         <?php endif; ?>
                                     </div>
                                 </div>

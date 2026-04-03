@@ -90,6 +90,14 @@ class DidoxService
      */
     public function getAuthTokenFromPfx()
     {
+        $pfxValidation = $this->validateConfiguredPfx();
+        if (!$pfxValidation['success']) {
+            return [
+                'success' => false,
+                'error' => $pfxValidation['error'],
+            ];
+        }
+
         $config = $this->getDidoxSettingMap(['didox_seller_inn']);
         $targetTaxId = trim((string)($config['didox_seller_inn'] ?? ''));
 
@@ -215,7 +223,20 @@ class DidoxService
             
             $status = $settings['didox_auto_refresh_status'] ?? 'manual';
             if ($status === 'disabled') {
-                return ['success' => false, 'error' => 'Auto-refresh is disabled', 'token' => null, 'expires_at' => null];
+                return ['success' => false, 'error' => 'Auto-refresh is disabled', 'token' => null, 'expires_at' => null, 'skipped' => true];
+            }
+
+            $pfxValidation = $this->validateConfiguredPfx();
+            if (!$pfxValidation['success']) {
+                $message = $this->cleanupInvalidAutoRefreshState($pfxValidation['error'], $now);
+
+                return [
+                    'success' => false,
+                    'error' => $message,
+                    'token' => null,
+                    'expires_at' => null,
+                    'skipped' => true
+                ];
             }
             
             // Get new token using PFX
@@ -518,6 +539,52 @@ class DidoxService
             'password' => $password,
             'signerUrl' => $signerUrl,
         ];
+    }
+
+    public function validateConfiguredPfx(): array
+    {
+        $settings = $this->getConfiguredPfxSettings();
+
+        if ($settings['pfxPath'] === '') {
+            return [
+                'success' => false,
+                'error' => 'PFX file not uploaded.',
+            ];
+        }
+
+        if ($settings['password'] === '') {
+            return [
+                'success' => false,
+                'error' => 'PFX password not configured.',
+            ];
+        }
+
+        if ($settings['appPfxPath'] === '' || !file_exists($settings['appPfxPath'])) {
+            return [
+                'success' => false,
+                'error' => 'Uploaded PFX file is missing on the server.',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'pfxPath' => $settings['pfxPath'],
+            'appPfxPath' => $settings['appPfxPath'],
+        ];
+    }
+
+    public function cleanupInvalidAutoRefreshState(string $reason, ?string $attemptedAt = null): string
+    {
+        $attemptedAt = $attemptedAt ?: date('Y-m-d H:i:s');
+        $message = 'Auto-refresh disabled: ' . trim($reason);
+
+        $this->updateSetting('didox_auto_refresh_status', 'disabled');
+        $this->updateSetting('didox_auto_refresh_error', $message);
+        $this->updateSetting('didox_auto_refresh_last_attempt', $attemptedAt);
+
+        Yii::warning($message, __METHOD__);
+
+        return $message;
     }
 
     private function signConfiguredPfxPayload(string $data): array
