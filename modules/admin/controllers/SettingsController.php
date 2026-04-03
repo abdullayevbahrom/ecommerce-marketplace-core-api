@@ -86,6 +86,28 @@ class SettingsController extends Controller{
         $didoxService = new \app\services\DidoxService();
         $pfxValidation = $didoxService->validateConfiguredPfx();
         $currentTokenStatus = $didoxService->getTokenStatus();
+
+        if (
+            !Yii::$app->session->get('didox_authenticated')
+            && !empty($currentTokenStatus['has_token'])
+            && empty($currentTokenStatus['is_expired'])
+        ) {
+            $settings = Settings::find()
+                ->where(['type' => ['didox_eimzo_token', 'didox_seller_inn']])
+                ->all();
+            $settingMap = ArrayHelper::map($settings, 'type', 'content');
+
+            $storedToken = trim((string)($settingMap['didox_eimzo_token'] ?? ''));
+            if ($storedToken !== '') {
+                Yii::$app->session->set('didox_authenticated', true);
+                Yii::$app->session->set('didox_token', $storedToken);
+                Yii::$app->session->set('didox_tax_id', trim((string)($settingMap['didox_seller_inn'] ?? '')));
+                Yii::$app->session->set('didox_connection_type', 'token');
+                Yii::$app->session->set('didox_auth_method', 'stored_token');
+                Yii::$app->session->set('didox_user_data', []);
+            }
+        }
+
         if (
             !$pfxValidation['success']
             && in_array(($currentTokenStatus['status'] ?? 'manual'), ['active', 'failed'], true)
@@ -183,10 +205,23 @@ class SettingsController extends Controller{
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0755, true);
                 }
-                
-                $filename = 'key_' . date('Ymd_His') . '.' . $uploadedFile->extension;
+
+                $originalBaseName = preg_replace('/[^A-Za-z0-9._-]/', '_', (string)$uploadedFile->baseName);
+                $originalBaseName = trim((string)$originalBaseName, '._-');
+                if ($originalBaseName === '') {
+                    $originalBaseName = 'didox_key';
+                }
+
+                $extension = strtolower((string)$uploadedFile->extension);
+                $filename = $extension !== ''
+                    ? $originalBaseName . '.' . $extension
+                    : $originalBaseName;
                 $filePath = $uploadDir . DIRECTORY_SEPARATOR . $filename;
-                
+                $previousFilename = trim((string)($models['didox_pfx_path']->content ?? ''));
+                $previousPath = $previousFilename !== ''
+                    ? $uploadDir . DIRECTORY_SEPARATOR . basename(str_replace('\\', '/', $previousFilename))
+                    : '';
+
                 if ($uploadedFile->saveAs($filePath)) {
                     if (isset($models['didox_pfx_path'])) {
                         $models['didox_pfx_path']->content = $filename;
@@ -199,6 +234,11 @@ class SettingsController extends Controller{
                          $models['didox_pfx_path']->date = date('Y-m-d H:i:s');
                          $models['didox_pfx_path']->save();
                     }
+
+                    if ($previousPath !== '' && $previousPath !== $filePath && file_exists($previousPath)) {
+                        @unlink($previousPath);
+                    }
+
                     Yii::$app->session->setFlash('pfx_saved', 'PFX Key uploaded successfully.');
                 }
             }

@@ -95,6 +95,44 @@ class DidoxController extends Controller
                !empty($session->get('didox_token'));
     }
 
+    private function restoreDidoxSessionFromStoredToken(): bool
+    {
+        if ($this->isDidoxAuthenticated()) {
+            return true;
+        }
+
+        $didoxService = new DidoxService();
+        $tokenStatus = $didoxService->getTokenStatus();
+        if (empty($tokenStatus['has_token']) || !empty($tokenStatus['is_expired'])) {
+            return false;
+        }
+
+        $settings = \app\models\Settings::find()
+            ->where(['type' => ['didox_eimzo_token', 'didox_seller_inn']])
+            ->all();
+        $settingMap = ArrayHelper::map($settings, 'type', 'content');
+
+        $token = trim((string)($settingMap['didox_eimzo_token'] ?? ''));
+        if ($token === '') {
+            return false;
+        }
+
+        $taxId = trim((string)($settingMap['didox_seller_inn'] ?? ''));
+        if ($taxId === '') {
+            $taxId = trim((string)($this->user->eimzo_tax_id ?? ''));
+        }
+
+        $session = Yii::$app->session;
+        $session->set('didox_authenticated', true);
+        $session->set('didox_token', $token);
+        $session->set('didox_tax_id', $taxId);
+        $session->set('didox_connection_type', 'token');
+        $session->set('didox_auth_method', 'stored_token');
+        $session->set('didox_user_data', []);
+
+        return true;
+    }
+
     /**
      * Lists all DidoxDocument models.
      * @return mixed
@@ -1718,7 +1756,7 @@ class DidoxController extends Controller
      * E-IMZO authentication login page
      */
     public function actionLogin() {
-        if ($this->isDidoxAuthenticated()) {
+        if ($this->restoreDidoxSessionFromStoredToken()) {
             return $this->redirect(['index']);
         }
 
@@ -1963,6 +2001,14 @@ class DidoxController extends Controller
         }
 
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+
+        if ($this->restoreDidoxSessionFromStoredToken()) {
+            return [
+                'success' => true,
+                'message' => 'Authenticated with stored Didox token',
+                'redirect' => Yii::$app->urlManager->createUrl(['/admin/didox/index'])
+            ];
+        }
 
         $post = Yii::$app->request->post();
         $taxId = trim((string)($post['taxId'] ?? ''));
