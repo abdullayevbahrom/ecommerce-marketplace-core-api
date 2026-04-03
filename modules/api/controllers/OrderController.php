@@ -121,7 +121,10 @@ class OrderController extends Controller
     public function actionDetail($id)
     {
         $user = Yii::$app->user->identity;
-        $data = Order::find()->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image')->where(['id' => $id, 'user_id' => $user->id])->one();
+        $data = Order::find()
+            ->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image', 'didoxDocuments')
+            ->where(['id' => $id, 'user_id' => $user->id])
+            ->one();
 
         if (!$data) {
             Yii::$app->response->statusCode = 404;
@@ -190,14 +193,6 @@ class OrderController extends Controller
         $saveResult = $model->saveObject($cart);
         if ($saveResult) {
             $order = Order::find()->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image', 'shop')->where(['id' => $model->id])->one();
-
-            // Auto-create Didox documents
-            try {
-                \app\services\DidoxOrderService::createDocuments($order);
-            } catch (\Exception $e) {
-                // Log error without failing the API response
-                \app\models\Log::log('didox_order', "Auto-creation exception for Order #{$order->id}", $e->getMessage(), 'error');
-            }
 
             // For crypto/wallet payments (payment_id = walletPaymentId), order is created
             // without payment. Use POST /api/payment/pay with order_id to get pay_url.

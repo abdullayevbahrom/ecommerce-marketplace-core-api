@@ -206,6 +206,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
     {
         $types = [
             self::DOCUMENT_TYPE_INVOICE => 'Счет-фактура',
+            self::DOCUMENT_TYPE_ARBITRARY => 'Договор',
         ];
 
         return isset($types[$this->document_type]) ? $types[$this->document_type] : $this->document_type;

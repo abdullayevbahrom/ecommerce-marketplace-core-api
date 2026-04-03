@@ -3,6 +3,7 @@
 namespace app\models\order;
 
 use Yii;
+use app\models\didox\DidoxDocument;
 use app\models\user\User;
 use app\models\user\cart\UserCart;
 use app\models\user\cart\UserCartFilter;
@@ -484,6 +485,12 @@ class Order extends \yii\db\ActiveRecord
             $data[] = 'orderProducts';
         }
 
+        if ($controller == 'order' && $action == 'detail') {
+            $data['didox_documents'] = function () {
+                return $this->didoxDocuments;
+            };
+        }
+
         return $data;
     }
 
@@ -539,6 +546,12 @@ class Order extends \yii\db\ActiveRecord
 
     public function getOrderReceipt() {
         return $this->hasOne(OrderReceipt::className(), ['order_id'=>'id']);
+    }
+
+    public function getDidoxDocuments()
+    {
+        return $this->hasMany(DidoxDocument::class, ['order_id' => 'id'])
+            ->orderBy(['id' => SORT_ASC]);
     }
 
     /**
