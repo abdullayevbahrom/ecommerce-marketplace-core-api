@@ -521,7 +521,7 @@ class SessionController extends Controller
             'id' => (int) $product->id,
             'name' => (string) ($product->name_uz ?: $product->name_ru ?: $product->name_en),
             'price' => $product->price !== null ? (float) $product->price : null,
-            'image' => $product->getPhoto('small'),
+            'image' => $product->getPhoto('original'),
         ], $extra);
     }
 
