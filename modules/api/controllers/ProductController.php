@@ -113,9 +113,9 @@ class ProductController extends Controller
         return $this->catalogFilterService;
     }
 
-    private function validateCatalogStateOrRespond(array $state): ?array
+    private function validateCatalogStateOrRespond(array $state, bool $requireCategory = false): ?array
     {
-        $validation = $this->getCatalogFilterService()->validateRequest(Yii::$app->request, $state);
+        $validation = $this->getCatalogFilterService()->validateRequest(Yii::$app->request, $state, $requireCategory);
         if ($validation === null) {
             return null;
         }
@@ -576,7 +576,7 @@ class ProductController extends Controller
     public function actionIndex()
     {
         $state = $this->getCatalogFilterService()->parseState(Yii::$app->request);
-        if ($validationResponse = $this->validateCatalogStateOrRespond($state)) {
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state, false)) {
             return $validationResponse;
         }
 
@@ -636,7 +636,7 @@ class ProductController extends Controller
     public function actionFilters()
     {
         $state = $this->getCatalogFilterService()->parseState(Yii::$app->request);
-        if ($validationResponse = $this->validateCatalogStateOrRespond($state)) {
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state, false)) {
             return $validationResponse;
         }
 
@@ -759,7 +759,7 @@ class ProductController extends Controller
     {
         $req = \Yii::$app->request;
         $state = $this->getCatalogFilterService()->parseState($req);
-        if ($validationResponse = $this->validateCatalogStateOrRespond($state)) {
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state, false)) {
             return $validationResponse;
         }
         $q = trim((string)$req->get('q', ''));
@@ -943,7 +943,7 @@ class ProductController extends Controller
     {
         $req = \Yii::$app->request;
         $state = $this->getCatalogFilterService()->parseState($req);
-        if ($validationResponse = $this->validateCatalogStateOrRespond($state)) {
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state, false)) {
             return $validationResponse;
         }
         $q = trim((string)$req->get('q', ''));
