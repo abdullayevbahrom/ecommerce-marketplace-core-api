@@ -234,7 +234,20 @@ class ProductUpsertHandler
             return null;
         }
 
-        return Stock::find()->select('id')->where(['id' => (int) $stockId])->scalar() ?: null;
+        // Incoming product payload from sklad must already contain shop.stock.id.
+        $resolvedId = Stock::find()
+            ->select('id')
+            ->where(['id' => (int) $stockId])
+            ->scalar();
+
+        if (!$resolvedId) {
+            Yii::warning(
+                sprintf('Stock not resolved for incoming product payload stock_id=%s', (string) $stockId),
+                __METHOD__
+            );
+        }
+
+        return $resolvedId ? (int) $resolvedId : null;
     }
 
     protected function resolveCategoryId($categoryId): ?int
