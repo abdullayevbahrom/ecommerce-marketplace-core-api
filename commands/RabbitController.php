@@ -71,7 +71,12 @@ class RabbitController extends Controller
         foreach ($events as $event) {
             try {
                 $publisher->publish($event);
+                $event->markPublished();
                 $this->stdout("Published: {$event->event_id}\n");
+                Yii::info([
+                    'message' => 'Event published',
+                    'event_id' => $event->event_id,
+                ], __METHOD__);
             } catch (\Throwable $e) {
                 $event->markFailed($e->getMessage());
 
