@@ -77,9 +77,9 @@ class Order extends \yii\db\ActiveRecord
             [['phone', 'address', 'comment', 'inn', 'account', 'bank_id'], 'string'],
             [['date'], 'safe'],
             [['name', 'lastname', 'email'], 'string', 'max' => 255],
-            [['delivery_id'], 'exist', 'skipOnError' => true, 'targetClass' => Delivery::className(), 'targetAttribute' => ['delivery_id' => 'id']],
-            [['payment_id'], 'exist', 'skipOnError' => true, 'targetClass' => Category::className(), 'targetAttribute' => ['payment_id' => 'id']],
-            [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::className(), 'targetAttribute' => ['user_id' => 'id']],
+            [['delivery_id'], 'exist', 'skipOnError' => true, 'targetClass' => Delivery::class, 'targetAttribute' => ['delivery_id' => 'id']],
+            [['payment_id'], 'exist', 'skipOnError' => true, 'targetClass' => Category::class, 'targetAttribute' => ['payment_id' => 'id']],
+            [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::class, 'targetAttribute' => ['user_id' => 'id']],
         ];
     }
 
@@ -121,7 +121,7 @@ class Order extends \yii\db\ActiveRecord
      */
     public function getPromocode()
     {
-        return $this->hasOne(\app\models\Promocode::className(), ['id' => 'promocode_id']);
+        return $this->hasOne(\app\models\Promocode::class, ['id' => 'promocode_id']);
     }
     
     // Note: OrderReview relationship commented out as the model doesn't exist
@@ -129,7 +129,7 @@ class Order extends \yii\db\ActiveRecord
     /*
     public function getOrderReview()
     {
-        return $this->hasOne(OrderReview::className(), ['order_id' => 'id']);
+        return $this->hasOne(OrderReview::class, ['order_id' => 'id']);
     }
     */
 
@@ -501,7 +501,7 @@ class Order extends \yii\db\ActiveRecord
      */
     public function getDelivery()
     {
-        return $this->hasOne(Delivery::className(), ['id' => 'delivery_id']);
+        return $this->hasOne(Delivery::class, ['id' => 'delivery_id']);
     }
 
     /**
@@ -511,7 +511,7 @@ class Order extends \yii\db\ActiveRecord
      */
     public function getOrderProducts()
     {
-        return $this->hasMany(OrderProduct::className(), ['order_id' => 'id']);
+        return $this->hasMany(OrderProduct::class, ['order_id' => 'id']);
     }
 
     /**
@@ -521,7 +521,7 @@ class Order extends \yii\db\ActiveRecord
      */
     public function getPayment()
     {
-        return $this->hasOne(Category::className(), ['id' => 'payment_id']);
+        return $this->hasOne(Category::class, ['id' => 'payment_id']);
     }
 
     /**
@@ -531,21 +531,21 @@ class Order extends \yii\db\ActiveRecord
      */
     public function getUser()
     {
-        return $this->hasOne(User::className(), ['id' => 'user_id']);
+        return $this->hasOne(User::class, ['id' => 'user_id']);
     }
 
     public function getLogist()
     {
-        return $this->hasOne(Logist::className(), ['id' => 'logist_id']);
+        return $this->hasOne(Logist::class, ['id' => 'logist_id']);
     }
 
     public function getShop()
     {
-        return $this->hasOne(Shop::className(), ['id' => 'shop_id']);
+        return $this->hasOne(Shop::class, ['id' => 'shop_id']);
     }
 
     public function getOrderReceipt() {
-        return $this->hasOne(OrderReceipt::className(), ['order_id'=>'id']);
+        return $this->hasOne(OrderReceipt::class, ['order_id'=>'id']);
     }
 
     public function getDidoxDocuments()

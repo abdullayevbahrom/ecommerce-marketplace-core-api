@@ -46,7 +46,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
 
     const DOCUMENT_TYPE_INVOICE = 'invoice';
     const DOCUMENT_TYPE_ARBITRARY = 'arbitrary';
-    
+
     // DIDOX Status Constants
     const STATUS_DRAFT = 0;
     const STATUS_WAITING_PARTNER_SIGNATURE = 1;
@@ -66,7 +66,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
     const STATUS_RETURNED_BY_RESPONSIBLE = 150;
     const STATUS_DELIVERED = 160;
     const STATUS_RETURNED_BY_RESPONSIBLE_2 = 190;
-    
+
     // Local Status Constants
     const LOCAL_STATUS_INACTIVE = 0;
     const LOCAL_STATUS_ACTIVE = 1;
@@ -211,7 +211,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
 
         return isset($types[$this->document_type]) ? $types[$this->document_type] : $this->document_type;
     }
-    
+
     /**
      * Check if document is an invoice
      * @return bool
@@ -374,7 +374,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
         if ($path) {
             return Yii::getAlias('@webroot') . DIRECTORY_SEPARATOR . $path;
         }
-        
+
         // Fallback: return standard path if didox_id exists
         if ($this->didox_id) {
             $standardPath = Yii::getAlias('@webroot') . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'didox' . DIRECTORY_SEPARATOR . $this->didox_id . '_' . $lang . '.pdf';
@@ -382,7 +382,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
                 return $standardPath;
             }
         }
-        
+
         return null;
     }
 
@@ -401,6 +401,29 @@ class DidoxDocument extends \yii\db\ActiveRecord
     }
 
     /**
+     * Get URL to PDF
+     * @param string $lang - Language code
+     * @return string|null - URL or null
+     */
+    public function getNewPdfUrl($lang = 'uz')
+    {
+        $baseUrl = Yii::$app->request->hostInfo;
+        if ($this->didox_id) {
+            $return = [
+                'uz' => $baseUrl . '/api/didox/get-document-pdf?didox_id=' . $this->didox_id . '&lang=uz',
+                'ru' => $baseUrl . '/api/didox/get-document-pdf?didox_id=' . $this->didox_id . '&lang=ru',
+            ];
+            $docData['pdf_cached'] = [
+                'uz' => $this->hasPdf('uz'),
+                'ru' => $this->hasPdf('ru'),
+            ];
+        } else {
+            $docData['pdf_urls'] = null;
+            $docData['pdf_cached'] = null;
+        }
+    }
+
+    /**
      * Check if PDF exists for language
      * @param string $lang - Language code
      * @return bool
@@ -412,13 +435,13 @@ class DidoxDocument extends \yii\db\ActiveRecord
         if ($fullPath && file_exists($fullPath)) {
             return true;
         }
-        
+
         // Fallback: check standard path even if column doesn't exist
         if ($this->didox_id) {
             $standardPath = Yii::getAlias('@webroot') . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'didox' . DIRECTORY_SEPARATOR . $this->didox_id . '_' . $lang . '.pdf';
             return file_exists($standardPath);
         }
-        
+
         return false;
     }
 
@@ -489,7 +512,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
     public function downloadPdfFromDidox($languages = ['uz', 'ru'])
     {
         $result = [];
-        
+
         if (empty($this->didox_id)) {
             \app\models\Log::log('didox_pdf', "Cannot download PDF: No didox_id for document #{$this->id}", null, 'warning');
             return ['success' => false, 'error' => 'No didox_id'];
@@ -497,13 +520,13 @@ class DidoxDocument extends \yii\db\ActiveRecord
 
         try {
             $didoxService = new \app\services\DidoxService();
-            
+
             // Get user-key from DB setting
             $userKey = '';
             $sysSettings = \app\models\Settings::find()
                 ->where(['type' => 'didox_eimzo_token'])
                 ->one();
-            
+
             if ($sysSettings && !empty($sysSettings->content)) {
                 $userKey = $sysSettings->content;
             }
@@ -517,11 +540,11 @@ class DidoxDocument extends \yii\db\ActiveRecord
                     }
 
                     $pdfResult = $didoxService->getDocumentPdf($this->didox_id, $userKey, $lang);
-                    
+
                     if ($pdfResult['success']) {
                         $saved = $this->savePdfLocally($pdfResult['data'], $lang);
                         $result[$lang] = ['success' => $saved];
-                        
+
                         if ($saved) {
                             \app\models\Log::log('didox_pdf', "PDF downloaded successfully for document #{$this->id} ({$lang})", [
                                 'didox_id' => $this->didox_id,
@@ -531,7 +554,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
                     } else {
                         $error = isset($pdfResult['error']) ? $pdfResult['error'] : 'Unknown error';
                         $result[$lang] = ['success' => false, 'error' => $error];
-                        
+
                         \app\models\Log::log('didox_pdf', "Failed to download PDF for document #{$this->id} ({$lang})", [
                             'didox_id' => $this->didox_id,
                             'lang' => $lang,
@@ -569,7 +592,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
 
         // Try different possible locations for the document ID
         $documentId = null;
-        
+
         // First priority: _id field (MongoDB-style ID from DIDOX)
         if (isset($responseData['_id'])) {
             $documentId = $responseData['_id'];
@@ -585,11 +608,9 @@ class DidoxDocument extends \yii\db\ActiveRecord
         // Fourth priority: facturaid in various nested locations
         elseif (isset($responseData['pending_document']['document_json']['facturaid'])) {
             $documentId = $responseData['pending_document']['document_json']['facturaid'];
-        }
-        elseif (isset($responseData['facturaid'])) {
+        } elseif (isset($responseData['facturaid'])) {
             $documentId = $responseData['facturaid'];
-        }
-        elseif (isset($responseData['document_json']['facturaid'])) {
+        } elseif (isset($responseData['document_json']['facturaid'])) {
             $documentId = $responseData['document_json']['facturaid'];
         }
 
@@ -749,7 +770,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
     public function afterSave($insert, $changedAttributes)
     {
         parent::afterSave($insert, $changedAttributes);
-        
+
         // Auto-create invoice record for invoice documents if it doesn't exist
         if ($this->isInvoice() && !$this->invoice) {
             $invoice = new DidoxDocumentInvoice();
@@ -775,8 +796,31 @@ class DidoxDocument extends \yii\db\ActiveRecord
             'order_id',
             'created_at',
             'updated_at',
-            'didox_status_label' => function() { return $this->getDidoxStatusLabel(); },
-            'document_type_label' => function() { return $this->getDocumentTypeLabel(); },
+            'didox_status_label' => function () {
+                return $this->getDidoxStatusLabel();
+            },
+            'document_type_label' => function () {
+                return $this->getDocumentTypeLabel();
+            },
+            'pdf_urls' => function () {
+                if ($this->didox_id) {
+                    $baseUrl = Yii::$app->request->hostInfo;
+                    return [
+                        'uz' => $baseUrl . '/api/didox/get-document-pdf?didox_id=' . $this->didox_id . '&lang=uz',
+                        'ru' => $baseUrl . '/api/didox/get-document-pdf?didox_id=' . $this->didox_id . '&lang=ru',
+                    ];
+                }
+                return null;
+            },
+            'pdf_cached' => function () {
+                if ($this->didox_id) {
+                    return [
+                        'uz' => $this->hasPdf('uz'),
+                        'ru' => $this->hasPdf('ru'),
+                    ];
+                }
+                return null;
+            },
         ];
     }
 
@@ -791,16 +835,16 @@ class DidoxDocument extends \yii\db\ActiveRecord
         if (!$orderId) {
             return null;
         }
-        
+
         $query = self::find()
             ->where(['order_id' => $orderId]);
-            
+
         if ($excludeDocumentId) {
             $query->andWhere(['!=', 'id', $excludeDocumentId]);
         }
-        
+
         $document = $query->one();
-        
+
         if ($document) {
             return [
                 'id' => $document->id,
@@ -813,7 +857,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
                 'created_at' => $document->created_at,
             ];
         }
-        
+
         return null;
     }
 
@@ -826,14 +870,14 @@ class DidoxDocument extends \yii\db\ActiveRecord
     {
         $query = self::find()
             ->where(['is not', 'order_id', null]);
-            
+
         if ($excludeDocumentId) {
             $query->andWhere(['!=', 'id', $excludeDocumentId]);
         }
-        
+
         $documents = $query->all();
         $connectedOrders = [];
-        
+
         foreach ($documents as $document) {
             if ($document->order_id) {
                 $connectedOrders[$document->order_id] = [
@@ -848,7 +892,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
                 ];
             }
         }
-        
+
         return $connectedOrders;
     }
 
@@ -860,11 +904,11 @@ class DidoxDocument extends \yii\db\ActiveRecord
     public static function getOrderConnectionStatus($orderId)
     {
         $connection = self::isOrderConnectedToDidox($orderId);
-        
+
         if (!$connection) {
             return 'Заказ не связан с документами DIDOX';
         }
-        
+
         $statusIcon = '🟡'; // Default yellow circle
         switch ($connection['didox_status']) {
             case self::STATUS_SIGNED:
@@ -879,7 +923,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
                 $statusIcon = '🟠'; // Orange circle for waiting
                 break;
         }
-        
+
         return "{$statusIcon} Связан с документом \"{$connection['name']}\" ({$connection['document_type_label']}) - {$connection['didox_status_label']}";
     }
 
@@ -893,7 +937,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
         if (!$this->isDidoxDocument()) {
             return false;
         }
-        
+
         // Check status - only allow signing for specific statuses
         $allowedStatuses = [
             self::STATUS_DRAFT,
@@ -901,10 +945,10 @@ class DidoxDocument extends \yii\db\ActiveRecord
             self::STATUS_WAITING_AGENT_SIGNATURE,
             self::STATUS_WAITING_AGENT_SIGNATURE_2,
         ];
-        
+
         return in_array($this->didox_status, $allowedStatuses);
     }
-    
+
     /**
      * Get signing status message for display
      * @return string
@@ -914,55 +958,55 @@ class DidoxDocument extends \yii\db\ActiveRecord
         if (!$this->isDidoxDocument()) {
             return 'Документ не подключен к системе DIDOX. Подписание недоступно.';
         }
-        
+
         switch ($this->didox_status) {
             case self::STATUS_WAITING_PARTNER_SIGNATURE:
                 return 'Документ ожидает подписи партнера. Вы не можете подписать документ в данный момент.';
-                
+
             case self::STATUS_SIGNED:
                 return 'Документ уже подписан всеми сторонами.';
-                
+
             case self::STATUS_REJECTED:
                 return 'Документ был отклонен. Подписание недоступно.';
-                
+
             case self::STATUS_DELETED:
                 return 'Документ был удален из системы DIDOX.';
-                
+
             case self::STATUS_CANCELED:
                 return 'Документ был отменен.';
-                
+
             case self::STATUS_INVALID:
                 return 'Документ имеет недействительный статус.';
-                
+
             case self::STATUS_SENT:
                 return 'Документ уже отправлен и обработан.';
-                
+
             case self::STATUS_DELIVERED:
                 return 'Документ доставлен получателю.';
-                
+
             case self::STATUS_SIGNED_BY_AGENT:
                 return 'Документ подписан агентом. Дальнейшие подписи не требуются.';
-                
+
             case self::STATUS_ACCEPTED_BY_RESPONSIBLE:
                 return 'Документ принят ответственным лицом.';
-                
+
             case self::STATUS_REJECTED_BY_RESPONSIBLE:
                 return 'Документ отклонен ответственным лицом.';
-                
+
             case self::STATUS_RETURNED_BY_RESPONSIBLE:
             case self::STATUS_RETURNED_BY_RESPONSIBLE_2:
                 return 'Документ возвращен ответственным лицом для доработки.';
-                
+
             case self::STATUS_DRAFT:
                 return 'Документ в статусе черновика. Вы можете подписать и отправить документ.';
-                
+
             case self::STATUS_WAITING_YOUR_SIGNATURE:
                 return 'Документ ожидает вашей подписи. Вы можете подписать документ.';
-                
+
             case self::STATUS_WAITING_AGENT_SIGNATURE:
             case self::STATUS_WAITING_AGENT_SIGNATURE_2:
                 return 'Документ ожидает подписи агента. Вы можете подписать документ как агент.';
-                
+
             default:
                 return 'Неизвестный статус документа. Подписание может быть недоступно.';
         }
@@ -1034,16 +1078,16 @@ class DidoxDocument extends \yii\db\ActiveRecord
                 'MeasureId' => $product->measure_id,
                 'PackageCode' => $product->package_code ?: '',
                 'PackageName' => $product->package_name ?: '',
-                'Count' => (string)($product->count ?: 1),
-                'Summa' => (string)($product->summa ?: 0),
+                'Count' => (string) ($product->count ?: 1),
+                'Summa' => (string) ($product->summa ?: 0),
                 'DeliverySum' => number_format($product->delivery_sum ?: 0, 2, '.', ''),
-                'VatRate' => (string)($product->vat_rate ?: 12),
+                'VatRate' => (string) ($product->vat_rate ?: 12),
                 'VatSum' => number_format($product->vat_sum ?: 0, 2, '.', ''),
                 'ExciseRate' => $product->excise_rate ?: 0,
                 'ExciseSum' => $product->excise_sum ?: 0,
                 'DeliverySumWithVat' => number_format($product->delivery_sum_with_vat ?: 0, 2, '.', ''),
-                'WithoutVat' => (bool)$product->without_vat,
-                'WithoutExcise' => (bool)$product->without_excise,
+                'WithoutVat' => (bool) $product->without_vat,
+                'WithoutExcise' => (bool) $product->without_excise,
                 'LgotaType' => $product->lgota_type,
                 'LgotaName' => $product->lgota_name,
                 'LgotaVatSum' => $product->lgota_vat_sum ?: 0,
@@ -1055,8 +1099,8 @@ class DidoxDocument extends \yii\db\ActiveRecord
         return [
             'Version' => 1,
             'WaybillLocalIds' => [],
-            'HasMarking' => (bool)$invoice->has_marking,
-            'HasRent' => (bool)$invoice->has_rent,
+            'HasMarking' => (bool) $invoice->has_marking,
+            'HasRent' => (bool) $invoice->has_rent,
             'FacturaRentDoc' => null,
             'FacturaType' => $invoice->factura_type ?: 0,
             'ProductList' => [
@@ -1131,4 +1175,4 @@ class DidoxDocument extends \yii\db\ActiveRecord
             ],
         ];
     }
-} 
+}
