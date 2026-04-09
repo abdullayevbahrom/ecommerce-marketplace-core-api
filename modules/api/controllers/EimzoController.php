@@ -452,9 +452,48 @@ class EimzoController extends Controller
 
         $service = new EimzoService();
         $userIp = Yii::$app->request->userIP ?? '127.0.0.1';
+
+        // Avoid calling backend/mobile/authenticate while the mobile flow is
+        // still pending, because upstream may return opaque server errors.
+        $statusResult = $service->mobileStatus($documentId);
+        if (!$statusResult['success']) {
+            Yii::warning([
+                'message' => 'Mobile auth result requested for expired or invalid documentId',
+                'documentId' => $documentId,
+                'statusResult' => $statusResult,
+                'userIp' => $userIp,
+            ], 'eimzo');
+
+            return $this->sendError(
+                ErrorCodes::ERROR_EIMZO_MOBILE_EXPIRED,
+                $statusResult['error'] ?? 'Mobile signing session expired'
+            );
+        }
+
+        if (($statusResult['status'] ?? null) !== 1) {
+            Yii::info([
+                'message' => 'Mobile auth result requested before signature completion',
+                'documentId' => $documentId,
+                'status' => $statusResult['status'] ?? null,
+                'userIp' => $userIp,
+            ], 'eimzo');
+
+            return $this->sendError(
+                ErrorCodes::ERROR_EIMZO_MOBILE_PENDING,
+                'Mobile signing is still pending'
+            );
+        }
+
         $authResult = $service->mobileAuthenticate($documentId, $userIp);
 
         if (!$authResult['success']) {
+            Yii::warning([
+                'message' => 'Mobile authenticate failed',
+                'documentId' => $documentId,
+                'authResult' => $authResult,
+                'userIp' => $userIp,
+            ], 'eimzo');
+
             return $this->sendError(ErrorCodes::ERROR_EIMZO_AUTH_FAILED, $authResult['error']);
         }
 

@@ -13,6 +13,13 @@ class MainController extends Controller
         return $this->render('index');
     }
 
+    public function actionEimzoMobileCheck()
+    {
+        $this->layout = false;
+
+        return $this->render('eimzo-mobile-check');
+    }
+
     public function actionLogOut()
     {
         Yii::$app->user->logout();
