@@ -79,6 +79,7 @@ class Order extends \yii\db\ActiveRecord
             [['name', 'lastname', 'email'], 'string', 'max' => 255],
             [['delivery_id'], 'exist', 'skipOnError' => true, 'targetClass' => Delivery::class, 'targetAttribute' => ['delivery_id' => 'id']],
             [['payment_id'], 'exist', 'skipOnError' => true, 'targetClass' => Category::class, 'targetAttribute' => ['payment_id' => 'id']],
+            [['payment_id'], 'validatePaymentCategory'],
             [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::class, 'targetAttribute' => ['user_id' => 'id']],
         ];
     }
@@ -112,6 +113,18 @@ class Order extends \yii\db\ActiveRecord
             'promocode_id' => 'Promocode',
             'discount_amount' => 'Discount Amount',
         ];
+    }
+
+    public function validatePaymentCategory($attribute, $params)
+    {
+        if (empty($this->$attribute)) {
+            return;
+        }
+
+        $payment = Category::findOne($this->$attribute);
+        if (!$payment || $payment->type !== 'payment') {
+            $this->addError($attribute, 'Invalid payment method selected.');
+        }
     }
 
     /**
