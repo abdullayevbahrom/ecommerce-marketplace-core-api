@@ -445,66 +445,51 @@ $this->params['breadcrumbs'][] = $this->title;
                         <?php endif; ?>
                         
                         <?php if ($model->didox_error_data): ?>
+                        <?php
+                        $errorData = json_decode($model->didox_error_data, true);
+                        $viewErrorMessage = 'Неизвестная ошибка';
+                        $viewErrorOperation = null;
+                        $viewErrorTimestamp = null;
+                        $viewErrorHttpCode = null;
+                        $viewErrorDetails = null;
+
+                        if (is_array($errorData)) {
+                            $viewErrorMessage = $errorData['error_message']
+                                ?? $errorData['error']
+                                ?? ($errorData['didox_response']['data']['message'] ?? null)
+                                ?? ($errorData['didox_response']['message'] ?? null)
+                                ?? $viewErrorMessage;
+                            $viewErrorOperation = $errorData['action'] ?? $errorData['operation'] ?? null;
+                            $viewErrorTimestamp = $errorData['timestamp'] ?? null;
+                            $viewErrorHttpCode = $errorData['didox_http_code'] ?? null;
+                            $viewErrorDetails = json_encode($errorData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                        } else {
+                            $viewErrorMessage = trim((string)$model->didox_error_data) !== '' ? $model->didox_error_data : $viewErrorMessage;
+                            $viewErrorDetails = $model->didox_error_data;
+                        }
+                        ?>
                         <div class="alert alert-danger" style="margin-top: 20px;">
                             <h4><i class="fa fa-exclamation-triangle"></i> Детали ошибки DIDOX</h4>
-                            
-                            <?php
-                            $errorData = json_decode($model->didox_error_data, true);
-                            if (is_array($errorData) && isset($errorData['debug_info'])):
-                                $debugInfo = $errorData['debug_info'];
-                            ?>
-                            
-                            <!-- Main Error Message -->
                             <div style="background: #fff; padding: 10px; border-radius: 4px; margin: 10px 0;">
-                                <strong>Ошибка:</strong> <?= Html::encode($errorData['error_message'] ?? 'Неизвестная ошибка') ?>
+                                <strong>Ошибка:</strong> <?= Html::encode($viewErrorMessage) ?>
                             </div>
-                            
-                            <!-- Signature Information -->
-                            <?php if (isset($errorData['signature_full'])): ?>
-                            <div style="background: #e3f2fd; padding: 10px; border-radius: 4px; margin: 10px 0;">
-                                <h5><i class="fa fa-key"></i> Информация о подписи</h5>
-                                <strong>Длина подписи:</strong> <code><?= Html::encode($errorData['signature_length'] ?? strlen($errorData['signature_full'])) ?> символов</code><br>
-                                <strong>Полная подпись:</strong>
-                                <pre style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin: 5px 0; max-height: 300px; overflow-y: auto; font-size: 9px; word-wrap: break-word; white-space: pre-wrap;"><?= Html::encode($errorData['signature_full']) ?></pre>
-                            </div>
-                            <?php endif; ?>
-                            
-                            <!-- Request Details -->
-                            <?php if (isset($debugInfo['request_url'])): ?>
-                            <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0;">
-                                <h5><i class="fa fa-globe"></i> Детали запроса</h5>
-                                <strong>URL:</strong> <code><?= Html::encode($debugInfo['request_url']) ?></code><br>
-                                <strong>Метод:</strong> <code><?= Html::encode($debugInfo['request_method'] ?? 'POST') ?></code><br>
-                                <?php if (isset($debugInfo['request_body'])): ?>
-                                <strong>Тело запроса (<?= strlen($debugInfo['request_body']) ?> символов):</strong>
-                                <pre style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin: 5px 0; max-height: 400px; overflow-y: auto; font-size: 10px; word-wrap: break-word; white-space: pre-wrap;"><?= Html::encode($debugInfo['request_body']) ?></pre>
+                            <div class="text-muted" style="font-size: 12px;">
+                                <?php if ($viewErrorOperation): ?>
+                                <div><strong>Операция:</strong> <?= Html::encode($viewErrorOperation) ?></div>
+                                <?php endif; ?>
+                                <?php if ($viewErrorHttpCode): ?>
+                                <div><strong>HTTP код:</strong> <?= Html::encode($viewErrorHttpCode) ?></div>
+                                <?php endif; ?>
+                                <?php if ($viewErrorTimestamp): ?>
+                                <div><strong>Время:</strong> <?= Html::encode($viewErrorTimestamp) ?></div>
                                 <?php endif; ?>
                             </div>
+                            <?php if ($viewErrorDetails): ?>
+                            <details style="margin-top: 12px;">
+                                <summary style="cursor: pointer;">Подробности</summary>
+                                <pre style="margin-top: 10px; max-height: 260px; overflow-y: auto; background: #f8f9fa; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 10px; white-space: pre-wrap; word-break: break-word;"><?= Html::encode($viewErrorDetails) ?></pre>
+                            </details>
                             <?php endif; ?>
-                            
-                            <!-- Response Details -->
-                            <?php if (isset($debugInfo['response_raw'])): ?>
-                            <div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0;">
-                                <h5><i class="fa fa-reply"></i> Детали ответа</h5>
-                                <strong>HTTP код:</strong> <code><?= Html::encode($errorData['didox_http_code'] ?? 'Н/Д') ?></code><br>
-                                <strong>Сырой ответ (<?= strlen($debugInfo['response_raw']) ?> символов):</strong>
-                                <pre style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin: 5px 0; max-height: 400px; overflow-y: auto; font-size: 10px; word-wrap: break-word; white-space: pre-wrap;"><?= Html::encode($debugInfo['response_raw']) ?></pre>
-                            </div>
-                            <?php endif; ?>
-                            
-                            <!-- Full Error Data (Collapsible) -->
-                            <div style="margin-top: 15px;">
-                                <button type="button" class="btn btn-sm btn-default" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none';">
-                                    <i class="fa fa-code"></i> Показать/Скрыть полные данные об ошибке
-                                </button>
-                                <pre style="display: none; margin-top: 10px; max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 10px;"><?= Html::encode($model->didox_error_data) ?></pre>
-                            </div>
-                            
-                            <?php else: ?>
-                            <!-- Fallback for non-JSON error data -->
-                            <pre style="margin-top: 10px; max-height: 300px; overflow-y: auto;"><?= Html::encode($model->didox_error_data) ?></pre>
-                            <?php endif; ?>
-                            
                         </div>
                         <?php endif; ?>
                     </div>
@@ -635,31 +620,23 @@ $this->params['breadcrumbs'][] = $this->title;
  * This implementation follows the official DIDOX API documentation for 
  * "6. Подписание/Подтверждение исходящего документа" process:
  * 
- * ✅ ALL LOGIC IS HANDLED ON FRONTEND - NO BACKEND PHP ENDPOINTS NEEDED
- * ✅ USES INITIAL DATA FROM BACKEND: didox_id, user_token, partner_token
- * ✅ MAKES DIRECT CALLS TO DIDOX API ENDPOINTS FROM BROWSER
+ * Uses frontend E-IMZO signing, but keeps Didox API calls on the backend.
  * 
  * DIDOX API Steps (all executed in frontend JavaScript):
  * Step 1: Получить список ключей (Get list of keys) - E-IMZO WebSocket
  * Step 2: Получить keyId (Get keyId) - E-IMZO WebSocket  
- * Step 3: Получить значение data.json с респонса GET /v1/documents/{didox_id}?owner=1 - Direct DIDOX API call
+ * Step 3: Получить значение data.json с респонса GET /v1/documents/{didox_id}?owner=1 - Backend proxy call
  * Step 4: Преобразовать data.json с 3го шага в base64 (Convert data.json from step 3 to base64) - Frontend
  * Step 5: Создать подпись (Create signature - first argument is base64 from step 4) - E-IMZO WebSocket
- * Step 6: Прикрепить timestamp к подписи (Attach timestamp to signature) - Direct DIDOX API call
+ * Step 6: Прикрепить timestamp к подписи (Attach timestamp to signature) - Backend proxy call
  * Step 7: Получить значение timeStampTokenB64 с респонса 6го шага - Frontend
- * Step 8: Отправить значение timeStampTokenB64 на эндпоинт POST /v1/documents/{didox_id}/sign - Direct DIDOX API call
- * 
- * Benefits of Frontend Implementation:
- * ✅ No need for additional PHP backend endpoints
- * ✅ Reduced server complexity and maintenance
- * ✅ Direct DIDOX API communication
- * ✅ Reduced server load and complexity
+ * Step 8: Отправить значение timeStampTokenB64 на backend sign endpoint
+ *
+ * Benefits of this implementation:
+ * ✅ E-IMZO signing stays on frontend where the certificate lives
+ * ✅ Didox user/partner tokens stay on the backend
  * ✅ Real-time status updates
  * ✅ Better error handling and debugging
- * 
- * Required Initial Data (passed from PHP to JavaScript):
- * - documentData: {id, name, didox_id, status}
- * - didoxConfig: {api_base, user_token, partner_token, user_authenticated}
  * 
  * Reference: https://api-docs.einvoice.example.com/ru/integrators-documents
  */
@@ -676,8 +653,12 @@ if (!crypto.randomUUID) {
 }
 
 // E-IMZO Constants and Variables
-const DIDOX_API_BASE = 'https://stage.goodsign.biz';
 const EIMZO_WEBSOCKET = 'wss://127.0.0.1:64443/service/cryptapi';
+const BACKEND_ROUTES = {
+    getDocumentForSigning: <?= json_encode(\yii\helpers\Url::to(['/admin/didox/get-document-for-signing'])) ?>,
+    createTimestamp: <?= json_encode(\yii\helpers\Url::to(['/admin/didox/create-timestamp'])) ?>,
+    signDocument: <?= json_encode(\yii\helpers\Url::to(['/admin/didox/sign-document'])) ?>,
+};
 
 let ws = null;
 let certificates = [];
@@ -692,9 +673,6 @@ let documentData = <?= json_encode([
 ]) ?>;
 
 let didoxConfig = <?= json_encode([
-    'api_base' => 'https://stage.goodsign.biz',
-    'user_token' => Yii::$app->session->get('didox_token', ''),
-    'partner_token' => Yii::$app->params['didoxPartnerToken'] ?? '',
     'user_authenticated' => Yii::$app->session->get('didox_authenticated', false)
 ]) ?>;
 
@@ -1022,28 +1000,25 @@ async function getDocumentDataFromDidox() {
         console.log('Document ID:', documentData.id);
         console.log('DIDOX ID:', documentData.didox_id);
         console.log('User authenticated:', didoxConfig.user_authenticated);
-        console.log('User token available:', !!didoxConfig.user_token);
         
         if (!documentData.didox_id) {
             updateStatus("❌ DIDOX ID отсутствует. Документ должен быть подключен к DIDOX.", "error");
             throw new Error('DIDOX ID not found. Document must be connected to DIDOX first.');
         }
         
-        if (!didoxConfig.user_authenticated || !didoxConfig.user_token) {
+        if (!didoxConfig.user_authenticated) {
             updateStatus("❌ Пользователь не аутентифицирован в DIDOX. Необходимо войти в систему.", "error");
             throw new Error('User not authenticated with DIDOX. Please login first.');
         }
-        
-        const didoxUrl = `${didoxConfig.api_base}/v1/documents/${documentData.didox_id}?owner=1`;
-        console.log('Making direct DIDOX API call:', didoxUrl);
-        
-        const response = await fetch(didoxUrl, {
-            method: 'GET',
+
+        const response = await fetch(BACKEND_ROUTES.getDocumentForSigning, {
+            method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'user-key': didoxConfig.user_token,
-                'Partner-Authorization': didoxConfig.partner_token
-            }
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                didox_id: documentData.didox_id
+            })
         });
         
         console.log('DIDOX API Response status:', response.status);
@@ -1056,22 +1031,21 @@ async function getDocumentDataFromDidox() {
         }
         
         const responseJson = await response.json();
-        const documentJson = responseJson.data.json;
-        console.log('DIDOX API Response data:', documentJson);
-        
-        // Exclude doctype from the document JSON for signing
-        if (documentJson && documentJson.hasOwnProperty('doctype')) {
-            delete documentJson.doctype;
-            console.log('✅ Doctype excluded from document JSON for signing');
+        if (!responseJson.success || !responseJson.data) {
+            throw new Error(responseJson.message || 'Failed to fetch signable document payload');
         }
-        
-        // Store document data from DIDOX API response
+
+        const documentJsonRaw = responseJson.data.document_json;
+        const documentBase64 = responseJson.data.document_base64;
+        const documentJson = typeof documentJsonRaw === 'string' ? JSON.parse(documentJsonRaw) : documentJsonRaw;
+        console.log('DIDOX API Response data:', documentJson);
+
         loginData.documentJson = documentJson;
-        loginData.documentBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(documentJson))));
+        loginData.documentBase64 = documentBase64;
         
         console.log('✅ DIDOX Step 3 COMPLETED: JSON retrieved directly from DIDOX API');
         console.log('✅ DIDOX Step 4 COMPLETED: JSON converted to base64');
-        console.log('DIDOX API endpoint called:', didoxUrl);
+        console.log('Backend endpoint called:', BACKEND_ROUTES.getDocumentForSigning);
         console.log('DIDOX ID used:', documentData.didox_id);
         console.log('Document JSON from DIDOX (length):', JSON.stringify(documentJson).length);
         console.log('Document JSON from DIDOX:', documentJson);
@@ -1167,7 +1141,7 @@ async function addTimestampToSignature() {
             signatureHex: loginData.signature_hex?.substring(0, 100) + '... (length: ' + (loginData.signature_hex?.length || 0) + ')'
         });
         
-        const response = await fetch(`${DIDOX_API_BASE}/v1/dsvs/timestamp`, {
+        const response = await fetch(BACKEND_ROUTES.createTimestamp, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1182,8 +1156,9 @@ async function addTimestampToSignature() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const data = await response.json();
-        console.log('Timestamp response data:', data);
+        const timestampResponse = await response.json();
+        const data = timestampResponse.data || {};
+        console.log('Timestamp response data:', timestampResponse);
         
         if (data.timeStampTokenB64) {
             console.log('✅ DIDOX Step 6 COMPLETED: Timestamp attached to signature');
@@ -1255,28 +1230,25 @@ async function sendToDidox() {
             throw new Error('No signature available to send');
         }
         
-        // Direct call to DIDOX API for signing
-        const didoxSignUrl = `${didoxConfig.api_base}/v1/documents/${documentData.didox_id}/sign`;
-        console.log('Making direct DIDOX API signing call:', didoxSignUrl);
-        
         const requestBody = {
-            signature: signature
+            documentId: documentData.id,
+            signature: signature,
+            taxId: loginData.taxId,
+            certificateInfo: selectedCertificate || null,
+            autoSendToPartner: true
         };
         
-        console.log('DIDOX API signing request:', {
-            url: didoxSignUrl,
+        console.log('Backend sign request:', {
+            url: BACKEND_ROUTES.signDocument,
             signature_length: signature.length,
             signature_preview: signature.substring(0, 100) + '...',
-            user_token: didoxConfig.user_token ? 'provided' : 'missing',
-            partner_token: didoxConfig.partner_token ? 'provided' : 'missing'
+            auto_send_to_partner: true
         });
         
-        const response = await fetch(didoxSignUrl, {
+        const response = await fetch(BACKEND_ROUTES.signDocument, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'user-key': didoxConfig.user_token,
-                'Partner-Authorization': didoxConfig.partner_token
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(requestBody)
         });
@@ -1286,17 +1258,17 @@ async function sendToDidox() {
         
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('DIDOX API signing error response:', errorText);
-            throw new Error(`DIDOX API signing failed with status ${response.status}: ${errorText}`);
+            console.error('Backend signing error response:', errorText);
+            throw new Error(`Signing failed with status ${response.status}: ${errorText}`);
         }
         
         const result = await response.json();
-        console.log('DIDOX API signing response data:', result);
+        console.log('Backend signing response data:', result);
         
-        console.log('✅ DIDOX Step 8 COMPLETED: timeStampTokenB64 successfully sent to DIDOX API!');
-        console.log('Final DIDOX API result:', result);
+        console.log('✅ DIDOX Step 8 COMPLETED: timeStampTokenB64 successfully sent through backend!');
+        console.log('Final signing result:', result);
         
-        updateStatus("Документ успешно подписан и отправлен в DIDOX API!", "success");
+        updateStatus(result.message || "Документ успешно обработан через backend!", "success");
         updateEIMZOStep(5, true);
         
         // Refresh page to show updated status
@@ -1305,8 +1277,7 @@ async function sendToDidox() {
         }, 2000);
         
     } catch (error) {
-        console.error("❌ DIDOX Step 8 EXCEPTION: Direct DIDOX API signing error:", error);
-        console.error("DIDOX Config:", didoxConfig);
+        console.error("❌ DIDOX Step 8 EXCEPTION: Backend signing error:", error);
         console.error("Signature data:", {
             signature_available: !!loginData.timestampedSignature,
             pkcs7_available: !!loginData.pkcs7_64,

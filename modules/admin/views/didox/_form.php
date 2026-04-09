@@ -170,28 +170,50 @@ foreach ($existingDocs as $doc) {
 
     <!-- DIDOX API Errors -->
     <?php if ($model->hasDidoxErrors()): ?>
+    <?php
+    $didoxErrors = json_decode($model->didox_error_data, true);
+    $didoxErrorMessage = 'Не удалось синхронизировать документ с DIDOX.';
+    $didoxErrorOperation = null;
+    $didoxErrorTimestamp = $model->didox_last_attempt ? date('d.m.Y H:i:s', strtotime($model->didox_last_attempt)) : null;
+    $didoxErrorHttpCode = null;
+    $didoxErrorDetails = null;
+
+    if (is_array($didoxErrors)) {
+        $didoxErrorMessage = $didoxErrors['error_message']
+            ?? $didoxErrors['error']
+            ?? ($didoxErrors['didox_response']['data']['message'] ?? null)
+            ?? ($didoxErrors['didox_response']['message'] ?? null)
+            ?? $didoxErrorMessage;
+        $didoxErrorOperation = $didoxErrors['action'] ?? $didoxErrors['operation'] ?? null;
+        $didoxErrorTimestamp = $didoxErrors['timestamp'] ?? $didoxErrorTimestamp;
+        $didoxErrorHttpCode = $didoxErrors['didox_http_code']
+            ?? ($didoxErrors['didox_details']['http_code'] ?? null)
+            ?? null;
+        $didoxErrorDetails = json_encode($didoxErrors, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } elseif (is_string($model->didox_error_data) && trim($model->didox_error_data) !== '') {
+        $didoxErrorMessage = $model->didox_error_data;
+        $didoxErrorDetails = $model->didox_error_data;
+    }
+    ?>
     <div class="callout callout-warning">
         <h4><i class="fa fa-exclamation-triangle"></i> Ошибки DIDOX API</h4>
-        <p>При последней попытке отправки документа в DIDOX произошли ошибки:</p>
-        <?php 
-        $didoxErrors = json_decode($model->didox_error_data, true);
-        if (is_array($didoxErrors)): ?>
-            <ul class="list-unstyled" style="margin-bottom: 0;">
-            <?php foreach ($didoxErrors as $error): ?>
-                <li><i class="fa fa-circle-o"></i> 
-                <?php if (is_array($error)): ?>
-                    <?= Html::encode($error['message'] ?? $error['error'] ?? json_encode($error)) ?>
-                <?php else: ?>
-                    <?= Html::encode($error) ?>
-                <?php endif; ?>
-                </li>
-            <?php endforeach; ?>
-            </ul>
-        <?php else: ?>
-            <p style="margin-bottom: 0;"><?= Html::encode($model->didox_error_data) ?></p>
-        <?php endif; ?>
-        <?php if ($model->didox_last_attempt): ?>
-            <p><small class="text-muted">Последняя попытка: <?= date('d.m.Y H:i:s', strtotime($model->didox_last_attempt)) ?></small></p>
+        <p style="margin-bottom: 8px;"><?= Html::encode($didoxErrorMessage) ?></p>
+        <div class="text-muted" style="font-size: 12px;">
+            <?php if ($didoxErrorOperation): ?>
+                <div><strong>Операция:</strong> <?= Html::encode($didoxErrorOperation) ?></div>
+            <?php endif; ?>
+            <?php if ($didoxErrorHttpCode): ?>
+                <div><strong>HTTP код:</strong> <?= Html::encode($didoxErrorHttpCode) ?></div>
+            <?php endif; ?>
+            <?php if ($didoxErrorTimestamp): ?>
+                <div><strong>Последняя попытка:</strong> <?= Html::encode($didoxErrorTimestamp) ?></div>
+            <?php endif; ?>
+        </div>
+        <?php if ($didoxErrorDetails): ?>
+            <details style="margin-top: 10px;">
+                <summary style="cursor: pointer;">Подробности</summary>
+                <pre style="margin-top: 10px; max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; background: #fff; border: 1px solid #e5e5e5; border-radius: 4px; padding: 10px; font-size: 11px;"><?= Html::encode($didoxErrorDetails) ?></pre>
+            </details>
         <?php endif; ?>
     </div>
     <?php endif; ?>

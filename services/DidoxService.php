@@ -600,7 +600,9 @@ class DidoxService
             'password' => $settings['password'],
             'alias' => '',
             'data' => $data,
+            'dataBase64' => true,
             'attached' => true,
+            'includeChain' => false,
         ];
 
         $ch = curl_init();
@@ -1120,8 +1122,8 @@ class DidoxService
                 $headers[] = 'user-key: ' . $userKey;
             }
             
-            // Send document to partner
-            $response = $this->makeRequestWithHeaders('POST', "/v1/documents/{$docId}/send", [], $headers);
+            // Didox expects PUT for the send transition.
+            $response = $this->makeRequestWithHeaders('PUT', "/v1/documents/{$docId}/send", [], $headers);
             
             return [
                 'success' => $response['isOk'],
@@ -1428,6 +1430,181 @@ class DidoxService
             'success' => true,
             'documentJson' => $documentJson,
             'documentBase64' => base64_encode($documentJson),
+        ];
+    }
+
+    /**
+     * Extract seller TIN from outgoing document payload returned by Didox.
+     *
+     * @param array $responseData
+     * @return string|null
+     */
+    public function extractOutgoingSellerTin(array $responseData): ?string
+    {
+        $documentJsonData = $this->extractOutgoingDocumentJson($responseData);
+        if ($documentJsonData === null) {
+            return null;
+        }
+
+        $candidates = [
+            $documentJsonData['sellertin'] ?? null,
+            $documentJsonData['SellerTin'] ?? null,
+            $documentJsonData['data']['sellertin'] ?? null,
+            $documentJsonData['data']['SellerTin'] ?? null,
+            $documentJsonData['seller']['tin'] ?? null,
+            $documentJsonData['seller']['Tin'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $value = trim((string)$candidate);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Automatically sign and send an outgoing Didox document using the configured PFX signer.
+     *
+     * @param string $docId
+     * @return array
+     */
+    public function autoSignAndSendDocumentWithConfiguredPfx(string $docId): array
+    {
+        $docId = trim($docId);
+        if ($docId === '') {
+            return ['success' => false, 'error' => 'Document ID is required.'];
+        }
+
+        $pfxValidation = $this->validateConfiguredPfx();
+        if (!$pfxValidation['success']) {
+            return ['success' => false, 'error' => $pfxValidation['error'], 'stage' => 'validate_pfx'];
+        }
+
+        $authResult = $this->getAuthTokenFromPfx();
+        if (empty($authResult['success']) || empty($authResult['token'])) {
+            return [
+                'success' => false,
+                'error' => $authResult['error'] ?? 'Failed to authenticate with configured PFX.',
+                'stage' => 'authenticate',
+                'auth_result' => $authResult,
+            ];
+        }
+
+        $userKey = $authResult['token'];
+        $documentForSigning = $this->getDocumentForSigning($docId, $userKey);
+        if (empty($documentForSigning['success']) || empty($documentForSigning['data']) || !is_array($documentForSigning['data'])) {
+            return [
+                'success' => false,
+                'error' => $documentForSigning['error'] ?? 'Failed to fetch document for signing.',
+                'stage' => 'get_document_for_signing',
+                'document_result' => $documentForSigning,
+            ];
+        }
+
+        $sellerTin = $this->extractOutgoingSellerTin($documentForSigning['data']);
+        $signerTaxId = trim((string)($authResult['taxId'] ?? ''));
+        if ($sellerTin !== null && $signerTaxId !== '' && $sellerTin !== $signerTaxId) {
+            return [
+                'success' => false,
+                'error' => "Configured signer tax ID {$signerTaxId} does not match document seller TIN {$sellerTin}.",
+                'stage' => 'identity_check',
+                'seller_tin' => $sellerTin,
+                'signer_tax_id' => $signerTaxId,
+            ];
+        }
+
+        $payload = $this->buildOutgoingDocumentSignaturePayload($documentForSigning['data']);
+        if (empty($payload['success']) || empty($payload['documentBase64'])) {
+            return [
+                'success' => false,
+                'error' => $payload['error'] ?? 'Failed to build signing payload.',
+                'stage' => 'build_payload',
+                'payload_result' => $payload,
+            ];
+        }
+
+        $signed = $this->signConfiguredPfxPayload($payload['documentBase64']);
+        if (empty($signed['success'])) {
+            return [
+                'success' => false,
+                'error' => $signed['error'] ?? 'Configured signer failed to sign the payload.',
+                'stage' => 'sign_payload',
+                'sign_result' => $signed,
+            ];
+        }
+
+        $timestampRes = $this->createTimestamp($signed['pkcs7'], $signed['signature']);
+        if (empty($timestampRes['success']) || empty($timestampRes['data']['timeStampTokenB64'])) {
+            return [
+                'success' => false,
+                'error' => $timestampRes['error'] ?? 'Failed to create timestamp for Didox signature.',
+                'stage' => 'create_timestamp',
+                'timestamp_result' => $timestampRes,
+            ];
+        }
+
+        $finalSignature = $timestampRes['data']['timeStampTokenB64'];
+        $signResult = $this->signDocument($docId, $finalSignature, $userKey);
+        if (empty($signResult['success'])) {
+            return [
+                'success' => false,
+                'error' => $signResult['error'] ?? 'Failed to sign Didox document.',
+                'stage' => 'didox_sign',
+                'didox_sign_result' => $signResult,
+                'seller_tin' => $sellerTin,
+                'signer_tax_id' => $signerTaxId,
+            ];
+        }
+
+        $sendResult = $this->sendDocumentToPartner($docId, $userKey);
+        if (empty($sendResult['success'])) {
+            $documentState = $this->getDocument($docId, $userKey);
+            $stateDocument = $documentState['data']['data']['document'] ?? ($documentState['data']['document'] ?? null);
+            $stateStatus = is_array($stateDocument)
+                ? (isset($stateDocument['doc_status']) ? (int)$stateDocument['doc_status'] : (isset($stateDocument['status']) ? (int)$stateDocument['status'] : null))
+                : null;
+
+            // Some Didox flows move the document to waiting-partner state as part of signing,
+            // and an explicit /send request then returns "Нет такого документа".
+            if (!empty($documentState['success']) && $stateStatus === \app\models\didox\DidoxDocument::STATUS_WAITING_PARTNER_SIGNATURE) {
+                return [
+                    'success' => true,
+                    'stage' => 'completed',
+                    'token_tax_id' => $signerTaxId,
+                    'seller_tin' => $sellerTin,
+                    'auth_result' => $authResult,
+                    'sign_result' => $signResult,
+                    'send_result' => $sendResult,
+                    'document_state' => $documentState,
+                    'note' => 'Didox moved the document to waiting partner signature during sign; explicit send was not required.',
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $sendResult['error'] ?? 'Document signed, but failed to send to partner.',
+                'stage' => 'didox_send',
+                'sign_result' => $signResult,
+                'send_result' => $sendResult,
+                'seller_tin' => $sellerTin,
+                'signer_tax_id' => $signerTaxId,
+            ];
+        }
+
+        $documentState = $this->getDocument($docId, $userKey);
+
+        return [
+            'success' => true,
+            'stage' => 'completed',
+            'token_tax_id' => $signerTaxId,
+            'seller_tin' => $sellerTin,
+            'auth_result' => $authResult,
+            'sign_result' => $signResult,
+            'send_result' => $sendResult,
+            'document_state' => $documentState,
         ];
     }
 

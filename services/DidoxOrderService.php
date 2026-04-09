@@ -18,6 +18,52 @@ use app\models\Log;
 class DidoxOrderService
 {
     /**
+     * Attempt to auto sign and send a freshly created Didox document.
+     */
+    protected static function autoSignCreatedDocument(DidoxService $didoxService, DidoxDocument $document, array &$result, string $label)
+    {
+        if (empty($document->didox_id)) {
+            return;
+        }
+
+        $autoResult = $didoxService->autoSignAndSendDocumentWithConfiguredPfx($document->didox_id);
+
+        Log::log('didox_order', "[AUTO SIGN {$label}] Didox document #{$document->id}", [
+            'document_id' => $document->id,
+            'didox_id' => $document->didox_id,
+            'result' => $autoResult,
+        ], !empty($autoResult['success']) ? 'info' : 'warning');
+
+        if (!empty($autoResult['success'])) {
+            $documentState = $autoResult['document_state'] ?? null;
+            if (is_array($documentState)) {
+                $document->setDidoxData($documentState);
+                if (isset($documentState['status'])) {
+                    $document->didox_status = (int)$documentState['status'];
+                }
+            }
+            $document->didox_signed_at = date('Y-m-d H:i:s');
+            $document->didox_error_data = null;
+            $document->save(false);
+
+            $result['messages'][] = "{$label} signed automatically.";
+            return;
+        }
+
+        $errorMessage = self::formatError($autoResult['error'] ?? 'Automatic signing failed.');
+        $result['messages'][] = "{$label} created, but auto-sign failed: {$errorMessage}";
+
+        $document->didox_error_data = json_encode([
+            'action' => 'order_auto_sign',
+            'label' => $label,
+            'error' => $errorMessage,
+            'details' => $autoResult,
+            'timestamp' => date('Y-m-d H:i:s'),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $document->save(false);
+    }
+
+    /**
      * Create Didox documents (Invoice and Arbitrary Contract) for an order
      * 
      * @param Order $order
@@ -194,6 +240,8 @@ class DidoxOrderService
                             } catch (\Exception $pdfEx) {
                                 Log::log('didox_order', "PDF download failed for Invoice #{$invoiceDoc->id}", $pdfEx->getMessage(), 'warning');
                             }
+
+                            self::autoSignCreatedDocument($didoxService, $invoiceDoc, $result, 'Invoice');
                         } else {
                             // Helper to stringify error
                             $errorVal = $uploadResult['error'];
@@ -276,6 +324,8 @@ class DidoxOrderService
                             } catch (\Exception $pdfEx) {
                                 Log::log('didox_order', "PDF download failed for Contract #{$contractDoc->id}", $pdfEx->getMessage(), 'warning');
                             }
+
+                            self::autoSignCreatedDocument($didoxService, $contractDoc, $result, 'Contract');
                         } else {
                             // Helper to stringify error
                             $errorVal = $uploadResult['error'];
@@ -444,6 +494,8 @@ class DidoxOrderService
                     Log::log('didox_order', "[AUTO INVOICE] Success for Order #{$order->id}", [
                         'didox_id' => $invoiceDoc->didox_id
                     ]);
+
+                    self::autoSignCreatedDocument($didoxService, $invoiceDoc, $result, 'Invoice');
                 } else {
                     $errorMsg = self::formatError($uploadResult['error'] ?? 'Unknown error');
                     $transaction->rollBack();
@@ -552,6 +604,8 @@ class DidoxOrderService
                         $transaction->commit();
                         $result['documents'][] = 'contract';
                         $result['messages'][] = "Contract uploaded to DIDOX successfully (ID: {$contractDoc->didox_id}).";
+
+                        self::autoSignCreatedDocument($didoxService, $contractDoc, $result, 'Contract');
                     } else {
                         $errorMsg = self::formatError($uploadResult['error']);
                         $transaction->rollBack();

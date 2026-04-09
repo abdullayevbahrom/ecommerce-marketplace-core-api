@@ -60,6 +60,31 @@
             gap: 20px;
         }
 
+        .mapping {
+            margin-top: 18px;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+
+        .mapping-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .mapping-table th,
+        .mapping-table td {
+            text-align: left;
+            vertical-align: top;
+            padding: 9px 10px;
+            border-bottom: 1px solid #ece5d8;
+        }
+
+        .mapping-table th {
+            color: var(--muted);
+            font-weight: normal;
+        }
+
         .card {
             background: var(--card);
             border: 1px solid var(--border);
@@ -243,6 +268,40 @@
                     <div class="small">Auth Result</div>
                     <pre id="resultBox">No result yet.</pre>
                 </div>
+
+                <div class="mapping">
+                    <div class="small" style="margin-bottom: 10px;">Demo endpoint mapping</div>
+                    <table class="mapping-table">
+                        <thead>
+                        <tr>
+                            <th>Demo</th>
+                            <th>This page</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <td class="mono">/frontend/mobile/auth</td>
+                            <td class="mono">POST /api/eimzo/mobile/auth</td>
+                        </tr>
+                        <tr>
+                            <td class="mono">/frontend/mobile/status</td>
+                            <td class="mono">POST /api/eimzo/mobile/status</td>
+                        </tr>
+                        <tr>
+                            <td class="mono">/backend/mobile/authenticate/{documentId}</td>
+                            <td class="mono">POST /api/eimzo/mobile/auth-result</td>
+                        </tr>
+                        <tr>
+                            <td class="mono">/backend/mobile/verify</td>
+                            <td class="mono">Not used on this auth check page</td>
+                        </tr>
+                        <tr>
+                            <td class="mono">UPLOAD URL</td>
+                            <td class="mono">/v1/integration/eimzo -> /frontend/mobile/upload</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div class="card">
@@ -262,6 +321,8 @@
         </div>
     </div>
 
+    <script src="/eimzo-mobile-pkcs.js"></script>
+    <script src="/eimzo-mobile-crc32.js"></script>
     <script src="/eimzo-auth.js"></script>
     <script>
         const auth = new EIMZOYii2Auth(window.location.origin);
@@ -362,7 +423,7 @@
                 els.startBtn.disabled = true;
                 setStatus("Starting mobile auth session...", "info");
                 const init = await auth.startMobileAuth();
-                const digestHex = await auth.getDigestHex(init.challenge);
+                const digestHex = auth.hashMobilePayload(init.challenge);
                 const qr = auth.buildMobileQrPayload({
                     siteId: init.siteId,
                     documentId: init.documentId,
