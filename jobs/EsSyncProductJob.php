@@ -8,6 +8,7 @@ use app\models\elasticsearch\ProductEs;
 use yii\base\BaseObject;
 use yii\queue\JobInterface;
 use yii\helpers\Json;
+use app\models\filter\Filter;
 use app\models\product\Product;
 use app\models\product\ProductFilter;
 
@@ -37,7 +38,9 @@ class EsSyncProductJob extends BaseObject implements JobInterface
         }
 
         $pfRows = ProductFilter::find()
-            ->select(['id', 'filter_id', 'value_ru', 'value_en', 'value_uz'])
+            ->alias('pf')
+            ->select(['pf.id', 'pf.filter_id', 'pf.value_ru', 'pf.value_en', 'pf.value_uz', 'f.code AS filter_code'])
+            ->leftJoin(['f' => Filter::tableName()], 'f.id = pf.filter_id')
             ->where(['product_id' => (int)$p->id])
             ->asArray()
             ->all();
@@ -46,6 +49,7 @@ class EsSyncProductJob extends BaseObject implements JobInterface
         foreach ($pfRows as $r) {
             $nestedFilters[] = [
                 'filter_id' => (int)$r['filter_id'],
+                'filter_code' => (string)($r['filter_code'] ?? ''),
                 'pf_id'     => (int)$r['id'],
                 'value_ru'  => (string)($r['value_ru'] ?? ''),
                 'value_en'  => (string)($r['value_en'] ?? ''),
@@ -56,6 +60,7 @@ class EsSyncProductJob extends BaseObject implements JobInterface
         $doc = [
             'id' => (int)$p->id,
             'shop_id' => (int)$p->shop_id,
+            'stock_id' => $p->stock_id !== null ? (int)$p->stock_id : null,
             'category_id' => (int)$p->category_id,
             'brand_id' => (int)$p->brand_id,
             'region_id' => (int)$p->region_id,
@@ -70,6 +75,7 @@ class EsSyncProductJob extends BaseObject implements JobInterface
             'price_small' => (float)$p->price_small,
             'price_opt' => (float)$p->price_opt,
             'discount' => (float)$p->discount,
+            'amount' => (float)$p->amount,
 
             'name_uz' => (string)$p->name_uz,
             'name_ru' => (string)$p->name_ru,

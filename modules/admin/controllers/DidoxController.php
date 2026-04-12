@@ -22,6 +22,29 @@ use app\services\DidoxService;
 class DidoxController extends Controller
 {
     public $user;
+
+    private function buildDidoxSignerContext($taxId, array $didoxResult = []): array
+    {
+        $session = Yii::$app->session;
+        $userData = (array)$session->get('didox_user_data', []);
+
+        return [
+            'certificate_tax_id' => $taxId !== null ? trim((string)$taxId) : null,
+            'session_didox_tax_id' => $session->get('didox_tax_id', null),
+            'session_connection_type' => $session->get('didox_connection_type', null),
+            'session_auth_method' => $session->get('didox_auth_method', null),
+            'session_original_individual_taxid' => $userData['original_individual_taxid'] ?? null,
+            'session_individual_tax_id' => $userData['individual_tax_id'] ?? null,
+            'document_seller_tin' => $didoxResult['seller_tin'] ?? null,
+        ];
+    }
+
+    private function canUseAutomaticDidoxFlow(): bool
+    {
+        $didoxService = new DidoxService();
+        $validation = $didoxService->validateConfiguredPfx();
+        return !empty($validation['success']);
+    }
     
     public function behaviors()
     {
@@ -93,6 +116,44 @@ class DidoxController extends Controller
                $session->get('didox_authenticated') === true &&
                $session->has('didox_token') &&
                !empty($session->get('didox_token'));
+    }
+
+    private function restoreDidoxSessionFromStoredToken(): bool
+    {
+        if ($this->isDidoxAuthenticated()) {
+            return true;
+        }
+
+        $didoxService = new DidoxService();
+        $tokenStatus = $didoxService->getTokenStatus();
+        if (empty($tokenStatus['has_token']) || !empty($tokenStatus['is_expired'])) {
+            return false;
+        }
+
+        $settings = \app\models\Settings::find()
+            ->where(['type' => ['didox_eimzo_token', 'didox_seller_inn']])
+            ->all();
+        $settingMap = ArrayHelper::map($settings, 'type', 'content');
+
+        $token = trim((string)($settingMap['didox_eimzo_token'] ?? ''));
+        if ($token === '') {
+            return false;
+        }
+
+        $taxId = trim((string)($settingMap['didox_seller_inn'] ?? ''));
+        if ($taxId === '') {
+            $taxId = trim((string)($this->user->eimzo_tax_id ?? ''));
+        }
+
+        $session = Yii::$app->session;
+        $session->set('didox_authenticated', true);
+        $session->set('didox_token', $token);
+        $session->set('didox_tax_id', $taxId);
+        $session->set('didox_connection_type', 'token');
+        $session->set('didox_auth_method', 'stored_token');
+        $session->set('didox_user_data', []);
+
+        return true;
     }
 
     /**
@@ -242,7 +303,7 @@ class DidoxController extends Controller
                         
                         // Try to create document in DIDOX if authenticated, otherwise save locally only
                         $didoxCreated = false;
-                        if ($this->isDidoxAuthenticated()) {
+                        if ($this->isDidoxAuthenticated() || $this->canUseAutomaticDidoxFlow()) {
                             $didoxCreated = $this->createDidoxDocument($model, $invoiceModel, null);
                         }
                         
@@ -252,9 +313,15 @@ class DidoxController extends Controller
                         $transaction->commit();
                         
                         if ($didoxCreated) {
-                            Yii::$app->session->setFlash('success', 'Счет-фактура создана и отправлена в DIDOX');
+                            if ($model->hasDidoxErrors()) {
+                                Yii::$app->session->setFlash('warning', 'Счет-фактура создана в DIDOX, но автоматическая подпись или отправка не удалась. Проверьте детали ошибки ниже.');
+                            } elseif ((int)$model->didox_status === DidoxDocument::STATUS_WAITING_PARTNER_SIGNATURE || !empty($model->didox_signed_at)) {
+                                Yii::$app->session->setFlash('success', 'Счет-фактура создана, автоматически подписана и отправлена партнеру в DIDOX');
+                            } else {
+                                Yii::$app->session->setFlash('success', 'Счет-фактура создана и отправлена в DIDOX');
+                            }
                         } else {
-                            if ($this->isDidoxAuthenticated()) {
+                            if ($this->isDidoxAuthenticated() || $this->canUseAutomaticDidoxFlow()) {
                                 if ($model->hasDidoxErrors()) {
                                     Yii::$app->session->setFlash('warning', 'Счет-фактура сохранена локально, но отправка в DIDOX не удалась. Проверьте детали ошибки ниже.');
                                 } else {
@@ -373,7 +440,7 @@ class DidoxController extends Controller
                         
                         // Try to create document in DIDOX if authenticated
                         $didoxCreated = false;
-                        if ($this->isDidoxAuthenticated()) {
+                        if ($this->isDidoxAuthenticated() || $this->canUseAutomaticDidoxFlow()) {
                             $didoxCreated = $this->createDidoxDocument($model, null, $arbitraryModel);
                         }
                         
@@ -383,9 +450,15 @@ class DidoxController extends Controller
                         $transaction->commit();
                         
                         if ($didoxCreated) {
-                            Yii::$app->session->setFlash('success', 'Произвольный договор создан и отправлен в DIDOX');
+                            if ($model->hasDidoxErrors()) {
+                                Yii::$app->session->setFlash('warning', 'Договор создан в DIDOX, но автоматическая подпись или отправка не удалась. Проверьте детали ошибки ниже.');
+                            } elseif ((int)$model->didox_status === DidoxDocument::STATUS_WAITING_PARTNER_SIGNATURE || !empty($model->didox_signed_at)) {
+                                Yii::$app->session->setFlash('success', 'Договор создан, автоматически подписан и отправлен партнеру в DIDOX');
+                            } else {
+                                Yii::$app->session->setFlash('success', 'Произвольный договор создан и отправлен в DIDOX');
+                            }
                         } else {
-                            if ($this->isDidoxAuthenticated()) {
+                            if ($this->isDidoxAuthenticated() || $this->canUseAutomaticDidoxFlow()) {
                                 if ($model->hasDidoxErrors()) {
                                     Yii::$app->session->setFlash('warning', 'Договор сохранен локально, но отправка в DIDOX не удалась. Проверьте детали ошибки ниже.');
                                 } else {
@@ -447,6 +520,18 @@ class DidoxController extends Controller
         $didoxCreated = false;
 
         if ($model->load(Yii::$app->request->post()) && $invoiceModel->load(Yii::$app->request->post())) {
+            $editableDidoxStatuses = [
+                DidoxDocument::STATUS_DRAFT,
+                DidoxDocument::STATUS_WAITING_YOUR_SIGNATURE,
+                DidoxDocument::STATUS_WAITING_AGENT_SIGNATURE,
+                DidoxDocument::STATUS_WAITING_AGENT_SIGNATURE_2,
+            ];
+
+            if ($model->isDidoxDocument() && !in_array((int)$model->didox_status, $editableDidoxStatuses, true)) {
+                Yii::$app->session->setFlash('warning', 'DIDOX hujjatini joriy statusda tahrirlab bo\'lmaydi: ' . $model->getDidoxStatusLabel());
+                return $this->redirect(['view', 'id' => $model->id]);
+            }
+
             // Handle order selection from form POST data
             $selectedOrderId = Yii::$app->request->post('selected_order_id');
             if ($selectedOrderId && $selectedOrderId != $model->order_id) {
@@ -483,7 +568,7 @@ class DidoxController extends Controller
                         $this->saveDocumentProducts($model);
                         
                         // Handle DIDOX integration based on document state
-                        if ($this->isDidoxAuthenticated()) {
+                        if ($this->isDidoxAuthenticated() || $this->canUseAutomaticDidoxFlow()) {
                             if ($model->isDidoxDocument()) {
                                 // Document exists in DIDOX - update it
                                 $didoxUpdated = $this->updateDidoxDocument($model, $invoiceModel);
@@ -503,9 +588,9 @@ class DidoxController extends Controller
                             Yii::$app->session->setFlash('success', 'Счет-фактура обновлена и успешно отправлена в DIDOX');
                         } elseif ($didoxUpdated) {
                             Yii::$app->session->setFlash('success', 'Счет-фактура успешно обновлена в локальной базе и на платформе DIDOX');
-                        } elseif ($model->isDidoxDocument() && !$this->isDidoxAuthenticated()) {
+                        } elseif ($model->isDidoxDocument() && !$this->isDidoxAuthenticated() && !$this->canUseAutomaticDidoxFlow()) {
                             Yii::$app->session->setFlash('warning', 'Счет-фактура обновлена локально. Войдите в DIDOX для синхронизации изменений');
-                        } elseif (!$this->isDidoxAuthenticated()) {
+                        } elseif (!$this->isDidoxAuthenticated() && !$this->canUseAutomaticDidoxFlow()) {
                             Yii::$app->session->setFlash('info', 'Счет-фактура обновлена локально. Войдите в DIDOX для отправки на платформу');
                         } else {
                             // DIDOX authenticated but update/create failed
@@ -546,6 +631,18 @@ class DidoxController extends Controller
         $didoxCreated = false;
 
         if ($model->load(Yii::$app->request->post()) && $arbitraryModel->load(Yii::$app->request->post())) {
+            $editableDidoxStatuses = [
+                DidoxDocument::STATUS_DRAFT,
+                DidoxDocument::STATUS_WAITING_YOUR_SIGNATURE,
+                DidoxDocument::STATUS_WAITING_AGENT_SIGNATURE,
+                DidoxDocument::STATUS_WAITING_AGENT_SIGNATURE_2,
+            ];
+
+            if ($model->isDidoxDocument() && !in_array((int)$model->didox_status, $editableDidoxStatuses, true)) {
+                Yii::$app->session->setFlash('warning', 'DIDOX hujjatini joriy statusda tahrirlab bo\'lmaydi: ' . $model->getDidoxStatusLabel());
+                return $this->redirect(['view', 'id' => $model->id]);
+            }
+
             // Handle order selection from form POST data
             $selectedOrderId = Yii::$app->request->post('selected_order_id');
             if ($selectedOrderId && $selectedOrderId != $model->order_id) {
@@ -588,7 +685,7 @@ class DidoxController extends Controller
                         $arbitraryModel->save(false); // Save PDF data
                         
                         // Handle DIDOX integration based on document state
-                        if ($this->isDidoxAuthenticated()) {
+                        if ($this->isDidoxAuthenticated() || $this->canUseAutomaticDidoxFlow()) {
                             if ($model->isDidoxDocument()) {
                                 // Document exists in DIDOX - update it
                                 $didoxUpdated = $this->updateDidoxDocument($model, null, $arbitraryModel);
@@ -608,9 +705,9 @@ class DidoxController extends Controller
                             Yii::$app->session->setFlash('success', 'Произвольный договор обновлен и успешно отправлен в DIDOX');
                         } elseif ($didoxUpdated) {
                             Yii::$app->session->setFlash('success', 'Произвольный договор успешно обновлен в локальной базе и на платформе DIDOX');
-                        } elseif ($model->isDidoxDocument() && !$this->isDidoxAuthenticated()) {
+                        } elseif ($model->isDidoxDocument() && !$this->isDidoxAuthenticated() && !$this->canUseAutomaticDidoxFlow()) {
                             Yii::$app->session->setFlash('warning', 'Произвольный договор обновлен локально. Войдите в DIDOX для синхронизации изменений');
-                        } elseif (!$this->isDidoxAuthenticated()) {
+                        } elseif (!$this->isDidoxAuthenticated() && !$this->canUseAutomaticDidoxFlow()) {
                             Yii::$app->session->setFlash('info', 'Произвольный договор обновлен локально. Войдите в DIDOX для отправки на платформу');
                         } else {
                             // DIDOX authenticated but update/create failed
@@ -884,6 +981,7 @@ class DidoxController extends Controller
 
                 $documentJson = $payload['documentJson'];
                 $documentBase64 = $payload['documentBase64'];
+                $sellerTin = $didoxService->extractOutgoingSellerTin($result['data']);
 
                 Yii::info('Successfully converted DIDOX data.json to base64. Length: ' . strlen($documentBase64), 'didox-debug');
                 
@@ -897,6 +995,7 @@ class DidoxController extends Controller
                         'document_json' => $documentJson, // This is DIDOX data.json converted to JSON
                         'document_base64' => $documentBase64, // This is DIDOX data.json converted to base64
                         'base64_length' => strlen($documentBase64),
+                        'seller_tin' => $sellerTin,
                         'source' => 'DIDOX_API_DIRECT_CALL',
                         'sign_source' => 'data.json'
                     ]
@@ -969,6 +1068,7 @@ class DidoxController extends Controller
         $signature = $data['signature'] ?? null;
         $taxId = $data['taxId'] ?? null;
         $certificateInfo = $data['certificateInfo'] ?? null;
+        $autoSendToPartner = !empty($data['autoSendToPartner']);
         
         if (!$documentId || !$signature || !$taxId) {
             Yii::$app->response->statusCode = 400; // Bad Request
@@ -1030,6 +1130,17 @@ class DidoxController extends Controller
                     ]
                 ];
             }
+
+            $signingDocumentResult = $didoxService->getDocumentForSigning($model->didox_id, $userKey);
+            $signingSellerTin = null;
+            if (!empty($signingDocumentResult['success']) && !empty($signingDocumentResult['data']) && is_array($signingDocumentResult['data'])) {
+                $signingSellerTin = $didoxService->extractOutgoingSellerTin($signingDocumentResult['data']);
+            }
+
+            $signerContext = $this->buildDidoxSignerContext($taxId, [
+                'seller_tin' => $signingSellerTin,
+            ]);
+            Yii::info('DIDOX signing identity context: ' . json_encode($signerContext), 'didox-debug');
             
             // Sign document using DIDOX service
             $result = $didoxService->signDocument($model->didox_id, $signature, $userKey);
@@ -1055,6 +1166,7 @@ class DidoxController extends Controller
                 // Update document status from Didox response
                 $model->didox_status = $newStatus;
                 $model->didox_signed_at = date('Y-m-d H:i:s');
+                $model->didox_error_data = null;
                 
                 // Store certificate info if provided
                 if ($certificateInfo) {
@@ -1074,6 +1186,32 @@ class DidoxController extends Controller
                 $model->setDidoxData($mergedData);
                 
                 if ($model->save(false)) {
+                    $sentToPartner = false;
+                    $sendPartnerResult = null;
+
+                    if ($autoSendToPartner) {
+                        $sendPartnerResult = $didoxService->sendDocumentToPartner($model->didox_id, $userKey);
+                        if ($sendPartnerResult['success']) {
+                            $sendResponseData = $sendPartnerResult['data'];
+                            $sendDocData = isset($sendResponseData['data']['document']) ? $sendResponseData['data']['document'] :
+                                (isset($sendResponseData['document']) ? $sendResponseData['document'] : $sendResponseData);
+
+                            if (isset($sendDocData['doc_status'])) {
+                                $model->didox_status = (int)$sendDocData['doc_status'];
+                            } elseif (isset($sendDocData['status'])) {
+                                $model->didox_status = (int)$sendDocData['status'];
+                            }
+
+                            $model->extractAndSetDidoxDocumentId($sendPartnerResult['data']);
+                            $existingData = $model->getDidoxDataArray();
+                            $mergedData = array_merge($existingData, $sendPartnerResult['data']);
+                            $model->setDidoxData($mergedData);
+                            $model->didox_error_data = null;
+                            $model->save(false);
+                            $sentToPartner = true;
+                        }
+                    }
+
                     // Auto-download PDF after signing (silent - errors logged)
                     $pdfDownloaded = false;
                     try {
@@ -1087,18 +1225,27 @@ class DidoxController extends Controller
                         \app\models\Log::log('didox_pdf', "PDF download failed after signing document #{$model->id}", $pdfEx->getMessage(), 'warning');
                     }
                     
+                    $message = 'Document signed successfully';
+                    if ($autoSendToPartner) {
+                        $message = $sentToPartner
+                            ? 'Document signed and sent to partner successfully'
+                            : 'Document signed successfully, but sending to partner failed';
+                    }
+
                     // Success - HTTP 200
                     Yii::$app->response->statusCode = 200;
                     return [
                         'success' => true, 
-                        'message' => 'Document signed successfully',
+                        'message' => $message,
                         'data' => [
                             'document_id' => $model->id,
                             'didox_id' => $model->didox_id,
                             'status' => $model->didox_status,
                             'status_from_didox' => $newStatus,
                             'signed_at' => $model->didox_signed_at,
-                            'pdf_downloaded' => $pdfDownloaded
+                            'pdf_downloaded' => $pdfDownloaded,
+                            'sent_to_partner' => $sentToPartner,
+                            'send_result' => $sendPartnerResult,
                         ]
                     ];
                 } else {
@@ -1154,7 +1301,8 @@ class DidoxController extends Controller
                     'signature_full' => $signature,
                     'signature_length' => strlen($signature),
                     'request_url' => '/v1/documents/' . $model->didox_id . '/sign',
-                    'debug_info' => $debugInfo
+                    'debug_info' => $debugInfo,
+                    'identity_context' => $signerContext,
                 ];
                 
                 $model->didox_error_data = json_encode($errorData, JSON_PRETTY_PRINT);
@@ -1173,7 +1321,8 @@ class DidoxController extends Controller
                         'user_key_exists' => !empty($userKey),
                         'signature_length' => strlen($signature),
                         'signature_full' => $signature,
-                        'tax_id' => $taxId
+                        'tax_id' => $taxId,
+                        'identity_context' => $signerContext,
                     ],
                     'debug_info' => [
                         'full_didox_result' => $result,
@@ -1188,7 +1337,8 @@ class DidoxController extends Controller
                                 'signature' => $signature
                             ]
                         ],
-                        'didox_debug' => $debugInfo
+                        'didox_debug' => $debugInfo,
+                        'identity_context' => $signerContext,
                     ]
                 ];
             }
@@ -1211,7 +1361,8 @@ class DidoxController extends Controller
                     'error_file' => $e->getFile(),
                     'error_line' => $e->getLine(),
                     'tax_id' => $taxId ?? 'unknown',
-                    'document_id' => $model->didox_id ?? 'unknown'
+                    'document_id' => $model->didox_id ?? 'unknown',
+                    'identity_context' => isset($signerContext) ? $signerContext : null,
                 ];
                 
                 $model->didox_error_data = json_encode($errorData, JSON_PRETTY_PRINT);
@@ -1229,6 +1380,54 @@ class DidoxController extends Controller
                 ]
             ];
         }
+    }
+
+    public function actionCreateTimestamp()
+    {
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+
+        if (!Yii::$app->request->isPost) {
+            Yii::$app->response->statusCode = 405;
+            return ['success' => false, 'message' => 'Only POST requests allowed'];
+        }
+
+        $rawInput = file_get_contents('php://input');
+        $data = json_decode($rawInput, true);
+
+        if (!$data) {
+            Yii::$app->response->statusCode = 400;
+            return ['success' => false, 'message' => 'Invalid JSON data'];
+        }
+
+        $pkcs7 = $data['pkcs7'] ?? null;
+        $signatureHex = $data['signatureHex'] ?? null;
+
+        if (!$pkcs7 || !$signatureHex) {
+            Yii::$app->response->statusCode = 400;
+            return [
+                'success' => false,
+                'message' => 'Missing required parameters',
+                'required' => ['pkcs7', 'signatureHex'],
+            ];
+        }
+
+        $didoxService = new DidoxService();
+        $result = $didoxService->createTimestamp($pkcs7, $signatureHex);
+
+        if (!$result['success']) {
+            Yii::$app->response->statusCode = $result['httpCode'] ?? 422;
+            return [
+                'success' => false,
+                'message' => $result['error'] ?? 'Failed to create timestamp',
+                'data' => $result['data'] ?? null,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Timestamp created successfully',
+            'data' => $result['data'] ?? [],
+        ];
     }
 
     /**
@@ -1718,7 +1917,7 @@ class DidoxController extends Controller
      * E-IMZO authentication login page
      */
     public function actionLogin() {
-        if ($this->isDidoxAuthenticated()) {
+        if ($this->restoreDidoxSessionFromStoredToken()) {
             return $this->redirect(['index']);
         }
 
@@ -1963,6 +2162,14 @@ class DidoxController extends Controller
         }
 
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+
+        if ($this->restoreDidoxSessionFromStoredToken()) {
+            return [
+                'success' => true,
+                'message' => 'Authenticated with stored Didox token',
+                'redirect' => Yii::$app->urlManager->createUrl(['/admin/didox/index'])
+            ];
+        }
 
         $post = Yii::$app->request->post();
         $taxId = trim((string)($post['taxId'] ?? ''));
@@ -2589,6 +2796,12 @@ class DidoxController extends Controller
 
             $session = Yii::$app->session;
             $userKey = $session->get('didox_token', '');
+            if ($userKey === '') {
+                $authResult = $didoxService->getAuthTokenFromPfx();
+                if (!empty($authResult['success']) && !empty($authResult['token'])) {
+                    $userKey = $authResult['token'];
+                }
+            }
             $result = $didoxService->createDocument($documentData, $userKey);
 
             if ($result['success']) {
@@ -2604,6 +2817,38 @@ class DidoxController extends Controller
                 
                 // Clear any previous errors
                 $model->clearDidoxErrors();
+
+                $autoSignResult = $didoxService->autoSignAndSendDocumentWithConfiguredPfx($model->didox_id);
+                if (!empty($autoSignResult['success'])) {
+                    $documentState = $autoSignResult['document_state']['data'] ?? null;
+                    if (is_array($documentState)) {
+                        $stateDocument = isset($documentState['data']['document']) ? $documentState['data']['document'] :
+                            (isset($documentState['document']) ? $documentState['document'] : $documentState);
+
+                        if (isset($stateDocument['doc_status'])) {
+                            $model->didox_status = (int)$stateDocument['doc_status'];
+                        } elseif (isset($stateDocument['status'])) {
+                            $model->didox_status = (int)$stateDocument['status'];
+                        } else {
+                            $model->didox_status = DidoxDocument::STATUS_WAITING_PARTNER_SIGNATURE;
+                        }
+
+                        $model->setDidoxData($documentState);
+                    } else {
+                        $model->didox_status = DidoxDocument::STATUS_WAITING_PARTNER_SIGNATURE;
+                    }
+
+                    $model->didox_signed_at = date('Y-m-d H:i:s');
+                    $model->clearDidoxErrors();
+                } else {
+                    $model->setDidoxErrorData([
+                        'operation' => 'auto_sign_send',
+                        'error_message' => $autoSignResult['error'] ?? 'Auto sign/send failed.',
+                        'full_response' => $autoSignResult,
+                        'didox_id' => $model->didox_id,
+                    ]);
+                    Yii::warning('Automatic Didox sign/send failed for document #' . $model->id . ': ' . json_encode($autoSignResult), __METHOD__);
+                }
                 
                 // Log successful creation for debugging
                 Yii::info("DIDOX document created successfully. Local ID: {$model->id}, DIDOX ID: {$model->didox_id}", __METHOD__);
@@ -2648,6 +2893,12 @@ class DidoxController extends Controller
             $didoxService = new DidoxService();
             $session = Yii::$app->session;
             $userKey = $session->get('didox_token', '');
+            if ($userKey === '') {
+                $authResult = $didoxService->getAuthTokenFromPfx();
+                if (!empty($authResult['success']) && !empty($authResult['token'])) {
+                    $userKey = $authResult['token'];
+                }
+            }
             
             // For invoice documents, use the invoice model to generate DIDOX JSON
             if ($model->isInvoice() && $invoiceModel) {
@@ -2656,7 +2907,7 @@ class DidoxController extends Controller
                 $documentData['doctype'] = $model->didox_doc_type ?: '002';
             } elseif ($model->isArbitrary() && $arbitraryModel) {
                 // For arbitrary documents, use the arbitrary model to generate DIDOX JSON
-                $documentData = $arbitraryModel->generateDidoxJson();
+                $documentData = $arbitraryModel->generateDidoxApiStructure();
                 // Ensure doctype is set from model
                 $documentData['doctype'] = $model->didox_doc_type ?: '000';
             } else {
@@ -2697,6 +2948,20 @@ class DidoxController extends Controller
                 
                 // Save the complete DIDOX API response
                 $model->setDidoxData($result['data']);
+                $syncResult = $didoxService->getDocument($model->didox_id, $userKey);
+                if ($syncResult['success']) {
+                    $didoxData = $syncResult['data'];
+                    $documentState = isset($didoxData['data']['document']) ? $didoxData['data']['document'] :
+                        (isset($didoxData['document']) ? $didoxData['document'] : $didoxData);
+
+                    if (isset($documentState['doc_status'])) {
+                        $model->didox_status = (int)$documentState['doc_status'];
+                    } elseif (isset($documentState['status'])) {
+                        $model->didox_status = (int)$documentState['status'];
+                    }
+
+                    $model->setDidoxData($didoxData);
+                }
                 $model->clearDidoxErrors();
                 
                 // Log successful update for debugging

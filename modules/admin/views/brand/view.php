@@ -9,31 +9,32 @@ $this->params['breadcrumbs'][] = $this->title;
 
 <div class="content-wrapper">
     <section class="content-header">
-        <h1><?=mb_substr($this->title, 0, 50, 'utf-8');?></h1>
-        
+        <h1><?= mb_substr($this->title, 0, 50, 'utf-8'); ?></h1>
+
         <ol class="breadcrumb">
-            <li><a href="<?=Yii::$app->urlManager->createUrl(['/admin/'])?>"><i class="fa fa-dashboard"></i> Home</a></li>
-            <li class="active"><?=mb_substr($this->title, 0, 50, 'utf-8');?></li>
+            <li><a href="<?= Yii::$app->urlManager->createUrl(['/admin/']) ?>"><i class="fa fa-dashboard"></i> Home</a>
+            </li>
+            <li class="active"><?= mb_substr($this->title, 0, 50, 'utf-8'); ?></li>
         </ol>
     </section>
     <section class="content">
-        <?php if (Yii::$app->session->hasFlash('brand_saved')) {?>
+        <?php if (Yii::$app->session->hasFlash('brand_saved')) { ?>
             <div class="callout callout-success text-center">
-                <?=Yii::$app->session->getFlash('brand_saved');?>
+                <?= Yii::$app->session->getFlash('brand_saved'); ?>
             </div>
-        <?php }?>
-        <?php if (Yii::$app->session->hasFlash('brand_locked')) {?>
+        <?php } ?>
+        <?php if (Yii::$app->session->hasFlash('brand_locked')) { ?>
             <div class="callout callout-success text-center">
-                <?=Yii::$app->session->getFlash('brand_locked');?>
+                <?= Yii::$app->session->getFlash('brand_locked'); ?>
             </div>
-        <?php }?>
+        <?php } ?>
         <div class="row">
             <div class="col-sm-3">
-                <?=AdminBrandMenu::widget();?>
+                <?= AdminBrandMenu::widget(); ?>
             </div>
             <div class="col-sm-9">
-                <?=AdminLanguageTab::widget();?>
-                <br/>
+                <?= AdminLanguageTab::widget(); ?>
+                <br />
                 <div class="box box-info color-palette-box">
                     <div class="box-header">
                         Info brand
@@ -42,33 +43,29 @@ $this->params['breadcrumbs'][] = $this->title;
                         <table class="table table-striped">
                             <tr>
                                 <td>ID</td>
-                                <td><?=$model->id ? $model->id : '-';?></td>
+                                <td><?= $model->id ? $model->id : '-'; ?></td>
                             </tr>
                             <tr>
                                 <td>Status</td>
                                 <td>
                                     <?php
-                                        if ($model->status == 2) {
-                                            echo '<small class="label bg-red">Blocked</small>';
-                                        }
-                                        if ($model->status == 1) {
-                                            echo '<small class="label bg-green">Active</small>';
-                                        }
+                                    if ($model->status == 2) {
+                                        echo '<small class="label bg-red">Blocked</small>';
+                                    }
+                                    if ($model->status == 1) {
+                                        echo '<small class="label bg-green">Active</small>';
+                                    }
                                     ?>
                                 </td>
                             </tr>
                             <?php if (Yii::$app->user->identity->role === \app\models\user\User::ROLE_MODERATOR): ?>
                                 <hr>
                                 <h4><i class="fa fa-comment"></i> Комментарий модератора</h4>
-                                <form method="post" action="<?=Yii::$app->urlManager->createUrl(['/admin/brand/comment', 'id'=>$model->id])?>">
+                                <form method="post"
+                                    action="<?= Yii::$app->urlManager->createUrl(['/admin/brand/comment', 'id' => $model->id]) ?>">
                                     <?= Html::csrfMetaTags() ?>
-                                    <textarea
-                                        name="comment"
-                                        class="form-control"
-                                        rows="4"
-                                        required
-                                        placeholder="Укажите причину, почему бренд остаётся заблокированным"
-                                    ></textarea>
+                                    <textarea name="comment" class="form-control" rows="4" required
+                                        placeholder="Укажите причину, почему бренд остаётся заблокированным"></textarea>
                                     <br>
                                     <button type="submit" class="btn btn-warning btn-sm">
                                         <i class="fa fa-paper-plane"></i> Отправить комментарий
@@ -78,34 +75,37 @@ $this->params['breadcrumbs'][] = $this->title;
                             <tr>
                                 <td>Category</td>
                                 <td>
-                                    <?=$model->category ? $model->category->name_ru : '-';?>
+                                    <?= $model->category ? $model->category->name_ru : '-'; ?>
                                 </td>
                             </tr>
                             <tr>
                                 <td>Name</td>
                                 <td>
                                     <div class="lang-block lang-block-ru">
-                                        <?=($model->name_ru) ? $model->name_ru : '-';?>
+                                        <?= ($model->name_ru) ? $model->name_ru : '-'; ?>
                                     </div>
                                     <div class="lang-block lang-block-uz">
-                                        <?=($model->name_uz) ? $model->name_uz : '-';?>
+                                        <?= ($model->name_uz) ? $model->name_uz : '-'; ?>
                                     </div>
                                     <div class="lang-block lang-block-en">
-                                        <?=($model->name_en) ? $model->name_en : '-';?>
+                                        <?= ($model->name_en) ? $model->name_en : '-'; ?>
                                     </div>
                                 </td>
                             </tr>
                             <tr>
                                 <td>Date</td>
                                 <td>
-                                    <?=$model->date ? $model->date : '-';?>
+                                    <?= $model->date ? $model->date : '-'; ?>
                                 </td>
                             </tr>
                             <tr>
                                 <td><strong>Комментарий модератора:</strong></td>
                                 <td>
-                                    <?php if (!empty($model->moderationComments)): ?>
-                                        <?php $lastComment = end($model->moderationComments); ?>
+                                    <?php
+                                    $comments = $model->moderationComments;
+                                    if (!empty($comments)):
+                                        $lastComment = end($comments);
+                                        ?>
                                         <?= Html::encode($lastComment->comment) ?>
                                         <br>
                                         <small class="text-muted">
@@ -118,20 +118,20 @@ $this->params['breadcrumbs'][] = $this->title;
                             </tr>
                         </table>
                     </div>
-                </div> 
+                </div>
                 <div class="box box-info color-palette-box">
                     <div class="box-header">
-                        Description 
+                        Description
                     </div>
                     <div class="box-body">
                         <div class="lang-block lang-block-ru">
-                            <?=$model->description_ru ? $model->description_ru : '<div class="alert alert-warning text-center">No data</div>';?>
+                            <?= $model->description_ru ? $model->description_ru : '<div class="alert alert-warning text-center">No data</div>'; ?>
                         </div>
                         <div class="lang-block lang-block-uz">
-                            <?=$model->description_uz ? $model->description_uz : '<div class="alert alert-warning text-center">No data</div>';?>
+                            <?= $model->description_uz ? $model->description_uz : '<div class="alert alert-warning text-center">No data</div>'; ?>
                         </div>
                         <div class="lang-block lang-block-en">
-                            <?=$model->description_en ? $model->description_en : '<div class="alert alert-warning text-center">No data</div>';?>
+                            <?= $model->description_en ? $model->description_en : '<div class="alert alert-warning text-center">No data</div>'; ?>
                         </div>
                     </div>
                 </div>

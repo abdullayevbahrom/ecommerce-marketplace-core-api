@@ -12,6 +12,7 @@ use yii\data\ArrayDataProvider;
 use yii\helpers\ArrayHelper;
 use yii\helpers\Json;
 use yii\helpers\Url;
+use app\services\CatalogFilterService;
 use yii\filters\auth\HttpBearerAuth;
 
 use app\models\Images;
@@ -29,6 +30,7 @@ use app\models\user\activity\UserActivity;
 use app\models\brand\CategoryBrand; // Added Brand model
 use app\models\Brand; // Added Brand model
 use app\models\Shop; // Added Shop model
+use app\models\stock\Stock;
 
 use Jenssegers\ImageHash\ImageHash;
 use Jenssegers\ImageHash\Implementations\DifferenceHash;
@@ -42,6 +44,7 @@ class ProductController extends Controller
     use ApiResponseTrait;
 
     public $minMaxPrices = [];
+    private ?CatalogFilterService $catalogFilterService = null;
 
     protected function serializeData($data)
     {
@@ -50,6 +53,10 @@ class ProductController extends Controller
         if (is_array($result) && isset($result['_meta']) && !empty($this->minMaxPrices)) {
             $result['_meta']['price_min'] = $this->minMaxPrices['min'];
             $result['_meta']['price_max'] = $this->minMaxPrices['max'];
+        }
+
+        if (is_array($result) && isset($result['_meta']['totalCount']) && !isset($result['total'])) {
+            $result['total'] = (int)$result['_meta']['totalCount'];
         }
 
         return $result;
@@ -81,10 +88,13 @@ class ProductController extends Controller
         ];
 
         // Apply filters
-        if ($price_min = Yii::$app->request->get('price_min')) {
+        $price_min = Yii::$app->request->get('price_min');
+        if ($price_min !== null && $price_min !== '') {
             $query->andWhere(['>=', $column, $price_min]);
         }
-        if ($price_max = Yii::$app->request->get('price_max')) {
+
+        $price_max = Yii::$app->request->get('price_max');
+        if ($price_max !== null && $price_max !== '') {
             $query->andWhere(['<=', $column, $price_max]);
         }
     }
@@ -92,6 +102,95 @@ class ProductController extends Controller
     protected function applyMarketplaceVisibility($query)
     {
         return $query->marketplaceVisible();
+    }
+
+    protected function getCatalogFilterService(): CatalogFilterService
+    {
+        if ($this->catalogFilterService === null) {
+            $this->catalogFilterService = new CatalogFilterService();
+        }
+
+        return $this->catalogFilterService;
+    }
+
+    private function validateCatalogStateOrRespond(array $state, bool $requireCategory = false): ?array
+    {
+        $validation = $this->getCatalogFilterService()->validateRequest(Yii::$app->request, $state, $requireCategory);
+        if ($validation === null) {
+            return null;
+        }
+
+        Yii::$app->response->statusCode = 422;
+
+        return [
+            'message' => $validation['message'],
+            'errors' => [
+                $validation['field'] ?? 'request' => [$validation['message']],
+            ],
+        ];
+    }
+
+    private function resolvePerPageOrRespond(int $default = 12): ?int
+    {
+        $rawPerPage = Yii::$app->request->get('per-page', Yii::$app->request->get('per_page', $default));
+        $perPage = (int)$rawPerPage;
+        if ($perPage <= 0) {
+            $perPage = $default;
+        }
+
+        if ($perPage > 100) {
+            Yii::$app->response->statusCode = 422;
+            Yii::$app->response->data = [
+                'message' => 'per_page: maximum 100 allowed',
+                'errors' => [
+                    'per_page' => ['per_page: maximum 100 allowed'],
+                ],
+            ];
+
+            return null;
+        }
+
+        return $perPage;
+    }
+
+    private function buildFiltersCacheKey(array $state): string
+    {
+        $params = Yii::$app->request->getQueryParams();
+        ksort($params);
+
+        return 'api:filters:' . md5(Json::encode([
+            'state' => $state,
+            'params' => $params,
+        ]));
+    }
+
+    private function applyMarketplaceVisibilityEs(array &$filters): void
+    {
+        $marketplaceStockIds = array_values(array_unique(array_map('intval', Stock::find()
+            ->select('id')
+            ->where(['for_marketplace' => 1])
+            ->column())));
+
+        $visibilityShould = [
+            [
+                'bool' => [
+                    'must_not' => [
+                        ['exists' => ['field' => 'stock_id']],
+                    ],
+                ],
+            ],
+        ];
+
+        if (!empty($marketplaceStockIds)) {
+            $visibilityShould[] = ['terms' => ['stock_id' => $marketplaceStockIds]];
+        }
+
+        $filters[] = [
+            'bool' => [
+                'should' => $visibilityShould,
+                'minimum_should_match' => 1,
+            ],
+        ];
     }
 
     public function beforeAction($action)
@@ -114,7 +213,7 @@ class ProductController extends Controller
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
-            'optional' => ['index', 'index-es', 'best-products-es', 'by-category', 'by-brand', 'by-shop', 'by-filter', 'search', 'search-suggestions', 'detail', 'reviews', 'recently-viewed', 'related-products', 'by-photo', 'for-you', 'best-products'], // Removed 'request' - now requires auth
+            'optional' => ['index', 'filters', 'index-es', 'best-products-es', 'by-category', 'by-brand', 'by-shop', 'by-filter', 'search', 'search-suggestions', 'detail', 'reviews', 'recently-viewed', 'related-products', 'by-photo', 'for-you', 'best-products'], // Removed 'request' - now requires auth
         ];
 
         $auth = $behaviors['authenticator'];
@@ -476,11 +575,24 @@ class ProductController extends Controller
     // general product methods
     public function actionIndex()
     {
-        $query = Product::find()
+        $state = $this->getCatalogFilterService()->parseState(Yii::$app->request);
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state, false)) {
+            return $validationResponse;
+        }
+
+        $perPage = $this->resolvePerPageOrRespond(12);
+        if ($perPage === null) {
+            return Yii::$app->response->data;
+        }
+
+        $query = $this->getCatalogFilterService()
+            ->buildProductsQuery($state, ['ignorePrice' => true])
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
-            ->where(['product.status' => 1])
-            ->marketplaceVisible()
             ->orderBy('id desc');
+
+        if ($tag_id = Yii::$app->request->get('tag_id')) {
+            $query->andWhere(['product.tag_id' => $tag_id]);
+        }
 
         if ($sort = Yii::$app->request->get('sort')) {
             if (($sort == 'new') || ($sort == 'recently')) {
@@ -500,78 +612,9 @@ class ProductController extends Controller
             }
         }
 
-        if ($category_id = Yii::$app->request->get('category_id')) {
-            // Get all subcategories for the given category_id
-            $categoryIds = [$category_id];
-            $subcategories = Category::find()->where(['parent_id' => $category_id])->all();
-            foreach ($subcategories as $subcat) {
-                $categoryIds[] = $subcat->id;
-            }
-            $query->andWhere(['in', 'category_id', $categoryIds]);
-        }
-
-        if ($tag_id = Yii::$app->request->get('tag_id')) {
-            $query->andWhere(['tag_id' => $tag_id]);
-        }
-
-        if ($brand_id = Yii::$app->request->get('brand_id')) {
-            $query->andWhere(['brand_id' => $brand_id]);
-        }
-
-        if ($shop_id = Yii::$app->request->get('shop_id')) {
-            $query->andWhere(['shop_id' => $shop_id]);
-        }
-
-        if ($filter = Yii::$app->request->get('filter')) {
-            // Check if we should use OR logic instead of AND
-            $filterLogic = Yii::$app->request->get('filter_logic', 'and'); // 'and' or 'or'
-
-            // For each filter, find products that match the specified values
-            $productIds = [];
-            $filterCount = 0;
-
-            foreach ($filter as $filterId => $filterValue) {
-                $filterCount++;
-
-                // Find products that have this filter_id with the specified value
-                // The value can be either a ProductFilter ID or a text value
-                $subQuery = ProductFilter::find()
-                    ->select('product_id')
-                    ->where(['filter_id' => $filterId])
-                    ->andWhere([
-                        'or',
-                        ['id' => $filterValue],           // Match by ProductFilter ID
-                        ['value_ru' => $filterValue],     // Match by text value
-                        ['value_en' => $filterValue],     // Match by text value (English)
-                        ['value_uz' => $filterValue]      // Match by text value (Uzbek)
-                    ]);
-
-                if ($filterCount === 1) {
-                    $productIds = $subQuery->column();
-                } else {
-                    $currentProductIds = $subQuery->column();
-                    if ($filterLogic === 'or') {
-                        // Union with previous results (OR logic - product can have ANY filter)
-                        $productIds = array_unique(array_merge($productIds, $currentProductIds));
-                    } else {
-                        // Intersect with previous results (AND logic - product must have ALL filters)
-                        $productIds = array_intersect($productIds, $currentProductIds);
-                    }
-                }
-            }
-
-            if (!empty($productIds)) {
-                $query->andWhere(['in', 'product.id', $productIds]);
-            } else {
-                // No products match the filters
-                $query->andWhere(['product.id' => -1]);
-            }
-        }
-
         // Price filtering with bounds calculation
         $this->applyPriceFilterWithBounds($query, 'price');
 
-        $perPage = Yii::$app->request->get('per-page') ? Yii::$app->request->get('per-page') : 12;
         foreach ($query->all() as $product) {
             if ($product->status == 2) {
                 $product->delete();
@@ -588,6 +631,20 @@ class ProductController extends Controller
         ]);
 
         return $dataProvider;
+    }
+
+    public function actionFilters()
+    {
+        $state = $this->getCatalogFilterService()->parseState(Yii::$app->request);
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state, false)) {
+            return $validationResponse;
+        }
+
+        $cacheKey = $this->buildFiltersCacheKey($state);
+
+        return Yii::$app->cache->getOrSet($cacheKey, function () use ($state) {
+            return $this->getCatalogFilterService()->buildFacets($state);
+        }, 60);
     }
 
     protected function applyEsPriceFilterWithBoundsEs(array &$filters, array $must, string $field = 'price'): void
@@ -631,7 +688,37 @@ class ProductController extends Controller
 
     private function buildOneNestedFilterClause(int $filterId, $filterValue): array
     {
-        if (is_numeric($filterValue)) {
+        $values = is_array($filterValue) ? $filterValue : explode(',', (string)$filterValue);
+        $values = array_values(array_filter(array_map(static function ($value) {
+            $value = is_string($value) ? trim($value) : $value;
+            return $value === '' ? null : $value;
+        }, $values), static fn($value) => $value !== null));
+
+        if (empty($values)) {
+            return [];
+        }
+
+        $textValues = $this->getCatalogFilterService()->expandAttributeFilterValues($filterId, $values);
+        if (empty($textValues)) {
+            return [];
+        }
+
+        $should = [];
+        $should[] = ['terms' => ['filters.value_ru' => $textValues]];
+        $should[] = ['terms' => ['filters.value_en' => $textValues]];
+        $should[] = ['terms' => ['filters.value_uz' => $textValues]];
+        foreach ($textValues as $textValue) {
+            $wildcardValue = '*' . $this->escapeElasticWildcardValue($textValue) . '*';
+            $should[] = ['wildcard' => ['filters.value_ru' => $wildcardValue]];
+            $should[] = ['wildcard' => ['filters.value_en' => $wildcardValue]];
+            $should[] = ['wildcard' => ['filters.value_uz' => $wildcardValue]];
+        }
+
+        if (empty($should)) {
+            return [];
+        }
+
+        if (count($should) === 1) {
             return [
                 'nested' => [
                     'path' => 'filters',
@@ -639,15 +726,13 @@ class ProductController extends Controller
                         'bool' => [
                             'must' => [
                                 ['term' => ['filters.filter_id' => $filterId]],
-                                ['term' => ['filters.pf_id' => (int)$filterValue]],
+                                $should[0],
                             ],
                         ],
                     ],
                 ],
             ];
         }
-
-        $v = trim((string)$filterValue);
 
         return [
             'nested' => [
@@ -657,11 +742,7 @@ class ProductController extends Controller
                         'must' => [
                             ['term' => ['filters.filter_id' => $filterId]],
                         ],
-                        'should' => [
-                            ['term' => ['filters.value_ru' => $v]],
-                            ['term' => ['filters.value_en' => $v]],
-                            ['term' => ['filters.value_uz' => $v]],
-                        ],
+                        'should' => $should,
                         'minimum_should_match' => 1,
                     ],
                 ],
@@ -669,21 +750,33 @@ class ProductController extends Controller
         ];
     }
 
+    private function escapeElasticWildcardValue(string $value): string
+    {
+        return str_replace(['\\', '*', '?'], ['\\\\', '\\*', '\\?'], $value);
+    }
+
     public function actionIndexEs()
     {
         $req = \Yii::$app->request;
+        $state = $this->getCatalogFilterService()->parseState($req);
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state, false)) {
+            return $validationResponse;
+        }
         $q = trim((string)$req->get('q', ''));
         $sort = (string)$req->get('sort', 'new');
-        $categoryId = $req->get('category_id');
-        $brandId = $req->get('brand_id');
-        $shopId = $req->get('shop_id');
+        $categoryId = $state['category_id'];
+        $brandIds = $state['brand_ids'];
+        $storeIds = $state['store_ids'];
         $tagId = $req->get('tag_id');
-        $perPage = (int)($req->get('per-page', 12));
+        $perPage = $this->resolvePerPageOrRespond(12);
+        if ($perPage === null) {
+            return Yii::$app->response->data;
+        }
         $page = max(1, (int)$req->get('page', 1));
-        $filter = $req->get('filter');
-        $filterLogic = $req->get('filter_logic', 'and');
+        $attributeFilters = $this->getCatalogFilterService()->getAttributeFilterState($state);
+        $filterLogic = $state['attribute_logic'] ?? 'and';
 
-        $perPage = max(1, min(50, $perPage));
+        $perPage = max(1, min(100, $perPage));
         $from = ($page - 1) * $perPage;
 
         $must = [];
@@ -709,8 +802,9 @@ class ProductController extends Controller
         $filters[] = ['term' => ['status' => 1]];
         $filters[] = ['range' => ['amount' => ['gt' => 0]]];
         $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
-        if ($brandId) $filters[] = ['term' => ['brand_id' => (int)$brandId]];
-        if ($shopId)  $filters[] = ['term' => ['shop_id' => (int)$shopId]];
+        $this->applyMarketplaceVisibilityEs($filters);
+        if (!empty($brandIds)) $filters[] = ['terms' => ['brand_id' => array_values(array_unique(array_map('intval', $brandIds)))]];
+        if (!empty($storeIds))  $filters[] = ['terms' => ['shop_id' => array_values(array_unique(array_map('intval', $storeIds)))]];
         if ($tagId)  $filters[] = ['term' => ['tag_id' => (int)$tagId]];
 
         if ($categoryId) {
@@ -730,9 +824,12 @@ class ProductController extends Controller
 
         $nestedClauses = [];
 
-        if (\is_array($filter)) {
-            foreach ($filter as $filterId => $filterValue) {
-                $nestedClauses[] = $this->buildOneNestedFilterClause((int)$filterId, $filterValue);
+        if (!empty($attributeFilters)) {
+            foreach ($attributeFilters as $filterId => $filterValue) {
+                $clause = $this->buildOneNestedFilterClause((int)$filterId, $filterValue);
+                if (!empty($clause)) {
+                    $nestedClauses[] = $clause;
+                }
             }
         }
 
@@ -845,15 +942,24 @@ class ProductController extends Controller
     public function actionBestProductsEs()
     {
         $req = \Yii::$app->request;
+        $state = $this->getCatalogFilterService()->parseState($req);
+        if ($validationResponse = $this->validateCatalogStateOrRespond($state, false)) {
+            return $validationResponse;
+        }
         $q = trim((string)$req->get('q', ''));
         $sort = (string)$req->get('sort', 'new');
-        $categoryId = $req->get('category_id');
-        $brandId = $req->get('brand_id');
-        $shopId = $req->get('shop_id');
+        $categoryId = $state['category_id'];
+        $brandIds = $state['brand_ids'];
+        $storeIds = $state['store_ids'];
         $tagId = $req->get('tag_id');
-        $perPage = (int)($req->get('per-page', 12));
+        $perPage = $this->resolvePerPageOrRespond(12);
+        if ($perPage === null) {
+            return Yii::$app->response->data;
+        }
         $page = max(1, (int)$req->get('page', 1));
-        $perPage = max(1, min(50, $perPage));
+        $attributeFilters = $this->getCatalogFilterService()->getAttributeFilterState($state);
+        $filterLogic = $state['attribute_logic'] ?? 'and';
+        $perPage = max(1, min(100, $perPage));
         $from = ($page - 1) * $perPage;
 
         $must = [];
@@ -881,8 +987,9 @@ class ProductController extends Controller
         $filters[] = ['term' => ['status' => 1]];
         $filters[] = ['range' => ['amount' => ['gt' => 0]]];
         $filters[] = ['bool' => ['must_not' => [['exists' => ['field' => 'deleted_at']]]]];
-        if ($brandId) $filters[] = ['term' => ['brand_id' => (int)$brandId]];
-        if ($shopId)  $filters[] = ['term' => ['shop_id' => (int)$shopId]];
+        $this->applyMarketplaceVisibilityEs($filters);
+        if (!empty($brandIds)) $filters[] = ['terms' => ['brand_id' => array_values(array_unique(array_map('intval', $brandIds)))]];
+        if (!empty($storeIds))  $filters[] = ['terms' => ['shop_id' => array_values(array_unique(array_map('intval', $storeIds)))]];
         if ($tagId)  $filters[] = ['term' => ['tag_id' => (int)$tagId]];
 
         if ($categoryId) {
@@ -892,6 +999,31 @@ class ProductController extends Controller
             foreach ($subcats as $sid) $catIds[] = (int)$sid;
 
             $filters[] = ['terms' => ['category_id' => array_values(array_unique($catIds))]];
+        }
+
+        $nestedClauses = [];
+        if (!empty($attributeFilters)) {
+            foreach ($attributeFilters as $filterId => $filterValue) {
+                $clause = $this->buildOneNestedFilterClause((int)$filterId, $filterValue);
+                if (!empty($clause)) {
+                    $nestedClauses[] = $clause;
+                }
+            }
+        }
+
+        if ($nestedClauses) {
+            if ($filterLogic === 'or') {
+                $filters[] = [
+                    'bool' => [
+                        'should' => $nestedClauses,
+                        'minimum_should_match' => 1,
+                    ],
+                ];
+            } else {
+                foreach ($nestedClauses as $clause) {
+                    $filters[] = $clause;
+                }
+            }
         }
 
         $esSort = [];
@@ -1365,64 +1497,10 @@ class ProductController extends Controller
 
     public function actionByFilter()
     {
-        $products = Product::find()->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')->where(['product.status' => 1])->marketplaceVisible();
-
-        if ($filter = Yii::$app->request->get('filter')) {
-            // Check if we should use OR logic instead of AND
-            $filterLogic = Yii::$app->request->get('filter_logic', 'and'); // 'and' or 'or'
-
-            $productIds = [];
-            $filterCount = 0;
-
-            foreach ($filter as $filterId => $filterValue) {
-                $filterCount++;
-
-                // Find products that have this filter with the specified value
-                $subQuery = ProductFilter::find()
-                    ->select('product_id')
-                    ->where(['filter_id' => $filterId]);
-
-                // Apply value matching (supports single value or array for checkboxes)
-                if (!empty($filterValue)) {
-                    $subQuery->andWhere([
-                        'or',
-                        ['id' => $filterValue],
-                        ['value_ru' => $filterValue],
-                        ['value_en' => $filterValue],
-                        ['value_uz' => $filterValue]
-                    ]);
-                }
-
-                if ($filterCount === 1) {
-                    $productIds = $subQuery->column();
-                } else {
-                    $currentProductIds = $subQuery->column();
-                    if ($filterLogic === 'or') {
-                        // Union with previous results (OR logic - product can have ANY filter)
-                        $productIds = array_unique(array_merge($productIds, $currentProductIds));
-                    } else {
-                        // Intersect with previous results (AND logic - product must have ALL filters)
-                        $productIds = array_intersect($productIds, $currentProductIds);
-                    }
-                }
-            }
-
-            if (!empty($productIds)) {
-                $products->andWhere(['in', 'product.id', $productIds]);
-            } else {
-                // No products match the filters
-                $products->andWhere(['product.id' => -1]);
-            }
-        }
-
-        if ($category_id = Yii::$app->request->get('category_id')) {
-            $ids1 = ArrayHelper::map(Category::find()->where(['parent_id' => $category_id])->all(), 'id', 'id');
-            $products->andWhere([
-                'or',
-                ['product.category_id' => $category_id],
-                ['in', 'product.category_id', $ids1],
-            ]);
-        }
+        $state = $this->getCatalogFilterService()->parseState(Yii::$app->request);
+        $products = $this->getCatalogFilterService()
+            ->buildProductsQuery($state, ['ignorePrice' => true])
+            ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color');
 
         $this->applyPriceFilterWithBounds($products, 'price');
 

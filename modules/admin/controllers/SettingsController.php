@@ -83,6 +83,80 @@ class SettingsController extends Controller{
     }
 
     public function actionDidox() {
+        $didoxService = new \app\services\DidoxService();
+        $pfxValidation = $didoxService->validateConfiguredPfx();
+        $currentTokenStatus = $didoxService->getTokenStatus();
+
+        if (
+            !Yii::$app->session->get('didox_authenticated')
+            && !empty($currentTokenStatus['has_token'])
+            && empty($currentTokenStatus['is_expired'])
+        ) {
+            $settings = Settings::find()
+                ->where(['type' => ['didox_eimzo_token', 'didox_seller_inn']])
+                ->all();
+            $settingMap = ArrayHelper::map($settings, 'type', 'content');
+
+            $storedToken = trim((string)($settingMap['didox_eimzo_token'] ?? ''));
+            if ($storedToken !== '') {
+                Yii::$app->session->set('didox_authenticated', true);
+                Yii::$app->session->set('didox_token', $storedToken);
+                Yii::$app->session->set('didox_tax_id', trim((string)($settingMap['didox_seller_inn'] ?? '')));
+                Yii::$app->session->set('didox_connection_type', 'token');
+                Yii::$app->session->set('didox_auth_method', 'stored_token');
+                Yii::$app->session->set('didox_user_data', []);
+            }
+        }
+
+        if (
+            !$pfxValidation['success']
+            && in_array(($currentTokenStatus['status'] ?? 'manual'), ['active', 'failed'], true)
+        ) {
+            $didoxService->cleanupInvalidAutoRefreshState($pfxValidation['error']);
+        }
+
+        // Handle manual token refresh
+        if (Yii::$app->request->post('refresh_token')) {
+            $result = $didoxService->refreshAndStoreToken();
+            
+            if ($result['success']) {
+                Yii::$app->session->setFlash('didox_saved', 'Token refreshed successfully! Expires at: ' . $result['expires_at']);
+            } elseif (!empty($result['skipped'])) {
+                Yii::$app->session->setFlash('didox_saved', $result['error']);
+            } else {
+                Yii::$app->session->setFlash('error', 'Token refresh failed: ' . $result['error']);
+            }
+            return $this->redirect(['didox']);
+        }
+        
+        // Handle toggle auto-refresh status
+        $toggleAuto = Yii::$app->request->post('toggle_auto');
+        if ($toggleAuto) {
+            if ($toggleAuto === 'enable') {
+                if (!$pfxValidation['success']) {
+                    $message = $didoxService->cleanupInvalidAutoRefreshState($pfxValidation['error']);
+                    Yii::$app->session->setFlash('didox_saved', $message);
+                    return $this->redirect(['didox']);
+                }
+            }
+
+            $newStatus = $toggleAuto === 'enable' ? 'active' : 'disabled';
+            $model = \app\models\Settings::findOne(['type' => 'didox_auto_refresh_status']);
+            if (!$model) {
+                $model = new \app\models\Settings();
+                $model->type = 'didox_auto_refresh_status';
+            }
+            $model->content = $newStatus;
+            $model->date = date('Y-m-d H:i:s');
+            if ($model->save()) {
+                Yii::$app->session->setFlash('didox_saved', 'Auto-refresh ' . ($toggleAuto === 'enable' ? 'enabled' : 'disabled'));
+            } else {
+                Yii::$app->session->setFlash('error', 'Failed to update auto-refresh status');
+            }
+            return $this->redirect(['didox']);
+        }
+        
+        // Update types array to include auto-refresh fields
         $types = [
             'didox_seller_inn', 
             'didox_seller_name', 
@@ -96,7 +170,11 @@ class SettingsController extends Controller{
             'didox_eimzo_certificate',
             'didox_pfx_path',
             'didox_pfx_password',
-            'didox_signer_url'
+            'didox_signer_url',
+            'didox_token_expires_at',
+            'didox_auto_refresh_status',
+            'didox_auto_refresh_error',
+            'didox_auto_refresh_last_attempt'
         ];
         
         $settings = Settings::find()->where(['type' => $types])->all();
@@ -127,10 +205,23 @@ class SettingsController extends Controller{
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0755, true);
                 }
-                
-                $filename = 'key_' . date('Ymd_His') . '.' . $uploadedFile->extension;
+
+                $originalBaseName = preg_replace('/[^A-Za-z0-9._-]/', '_', (string)$uploadedFile->baseName);
+                $originalBaseName = trim((string)$originalBaseName, '._-');
+                if ($originalBaseName === '') {
+                    $originalBaseName = 'didox_key';
+                }
+
+                $extension = strtolower((string)$uploadedFile->extension);
+                $filename = $extension !== ''
+                    ? $originalBaseName . '.' . $extension
+                    : $originalBaseName;
                 $filePath = $uploadDir . DIRECTORY_SEPARATOR . $filename;
-                
+                $previousFilename = trim((string)($models['didox_pfx_path']->content ?? ''));
+                $previousPath = $previousFilename !== ''
+                    ? $uploadDir . DIRECTORY_SEPARATOR . basename(str_replace('\\', '/', $previousFilename))
+                    : '';
+
                 if ($uploadedFile->saveAs($filePath)) {
                     if (isset($models['didox_pfx_path'])) {
                         $models['didox_pfx_path']->content = $filename;
@@ -143,6 +234,11 @@ class SettingsController extends Controller{
                          $models['didox_pfx_path']->date = date('Y-m-d H:i:s');
                          $models['didox_pfx_path']->save();
                     }
+
+                    if ($previousPath !== '' && $previousPath !== $filePath && file_exists($previousPath)) {
+                        @unlink($previousPath);
+                    }
+
                     Yii::$app->session->setFlash('pfx_saved', 'PFX Key uploaded successfully.');
                 }
             }
@@ -223,7 +319,8 @@ class SettingsController extends Controller{
         }
 
         return $this->render('didox', [
-            'models' => $models
+            'models' => $models,
+            'pfxValidation' => $pfxValidation,
         ]);
     }
 }

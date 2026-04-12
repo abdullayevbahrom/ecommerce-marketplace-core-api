@@ -90,6 +90,14 @@ class DidoxService
      */
     public function getAuthTokenFromPfx()
     {
+        $pfxValidation = $this->validateConfiguredPfx();
+        if (!$pfxValidation['success']) {
+            return [
+                'success' => false,
+                'error' => $pfxValidation['error'],
+            ];
+        }
+
         $config = $this->getDidoxSettingMap(['didox_seller_inn']);
         $targetTaxId = trim((string)($config['didox_seller_inn'] ?? ''));
 
@@ -194,6 +202,219 @@ class DidoxService
             'permissions' => $companyLoginResult['permissions'] ?? null,
             'data' => $companyLoginResult['data'] ?? null,
         ];
+    }
+
+    /**
+     * Refresh and store Didox token automatically using configured PFX
+     * Called by console command or queue job every 3 hours
+     * 
+     * @return array ['success' => bool, 'token' => string|null, 'expires_at' => string|null, 'error' => string|null]
+     */
+    public function refreshAndStoreToken(): array
+    {
+        $now = date('Y-m-d H:i:s');
+        
+        try {
+            // Check if auto-refresh is enabled
+            $settings = $this->getDidoxSettingMap([
+                'didox_auto_refresh_status',
+                'didox_seller_inn',
+            ]);
+            
+            $status = $settings['didox_auto_refresh_status'] ?? 'manual';
+            if ($status === 'disabled') {
+                return ['success' => false, 'error' => 'Auto-refresh is disabled', 'token' => null, 'expires_at' => null, 'skipped' => true];
+            }
+
+            $pfxValidation = $this->validateConfiguredPfx();
+            if (!$pfxValidation['success']) {
+                $message = $this->cleanupInvalidAutoRefreshState($pfxValidation['error'], $now);
+
+                return [
+                    'success' => false,
+                    'error' => $message,
+                    'token' => null,
+                    'expires_at' => null,
+                    'skipped' => true
+                ];
+            }
+            
+            // Get new token using PFX
+            $result = $this->getAuthTokenFromPfx();
+            
+            // Update last attempt timestamp
+            $this->updateSetting('didox_auto_refresh_last_attempt', $now);
+            
+            if (!$result['success']) {
+                // Log error
+                $this->updateSetting('didox_auto_refresh_status', 'failed');
+                $this->updateSetting('didox_auto_refresh_error', $result['error'] ?? 'Unknown error');
+                
+                Yii::error('Didox token refresh failed: ' . ($result['error'] ?? 'Unknown error'), __METHOD__);
+                
+                return [
+                    'success' => false,
+                    'error' => $result['error'] ?? 'Failed to get token from PFX',
+                    'token' => null,
+                    'expires_at' => null
+                ];
+            }
+            
+            // Calculate expiry (3 hours from now)
+            $expiresAt = date('Y-m-d H:i:s', strtotime('+3 hours'));
+            
+            // Save token and metadata to settings
+            $this->updateSetting('didox_eimzo_token', $result['token']);
+            $this->updateSetting('didox_eimzo_tax_id', $result['taxId'] ?? '');
+            $this->updateSetting('didox_eimzo_last_login', $now);
+            $this->updateSetting('didox_token_expires_at', $expiresAt);
+            $this->updateSetting('didox_auto_refresh_status', 'active');
+            $this->updateSetting('didox_auto_refresh_error', ''); // Clear any previous error
+            
+            // Save certificate info if available
+            if (isset($result['data']['certificate'])) {
+                $this->updateSetting('didox_eimzo_certificate', json_encode($result['data']['certificate']));
+            }
+            
+            Yii::info('Didox token refreshed successfully. Expires at: ' . $expiresAt, __METHOD__);
+            
+            return [
+                'success' => true,
+                'token' => $result['token'],
+                'expires_at' => $expiresAt,
+                'tax_id' => $result['taxId'] ?? null,
+                'error' => null
+            ];
+            
+        } catch (\Throwable $e) {
+            $error = 'Exception during token refresh: ' . $e->getMessage();
+            
+            $this->updateSetting('didox_auto_refresh_status', 'failed');
+            $this->updateSetting('didox_auto_refresh_error', $error);
+            $this->updateSetting('didox_auto_refresh_last_attempt', $now);
+            
+            Yii::error($error, __METHOD__);
+            
+            return [
+                'success' => false,
+                'error' => $error,
+                'token' => null,
+                'expires_at' => null
+            ];
+        }
+    }
+    
+    /**
+     * Update or create a setting value
+     * 
+     * @param string $type
+     * @param string $content
+     * @return bool
+     */
+    private function updateSetting(string $type, string $content): bool
+    {
+        try {
+            $model = \app\models\Settings::findOne(['type' => $type]);
+            
+            if (!$model) {
+                $model = new \app\models\Settings();
+                $model->type = $type;
+            }
+            
+            $model->content = $content;
+            $model->date = date('Y-m-d H:i:s');
+            
+            return $model->save(false);
+        } catch (\Throwable $e) {
+            Yii::error("Failed to update setting {$type}: " . $e->getMessage(), __METHOD__);
+            return false;
+        }
+    }
+    
+    /**
+     * Check if token is expired or about to expire (within 10 minutes)
+     * 
+     * @return bool
+     */
+    public function isTokenExpiringSoon(): bool
+    {
+        $settings = $this->getDidoxSettingMap(['didox_token_expires_at', 'didox_eimzo_token']);
+        
+        // No token exists
+        if (empty($settings['didox_eimzo_token'])) {
+            return true;
+        }
+        
+        // No expiry set
+        if (empty($settings['didox_token_expires_at'])) {
+            return true;
+        }
+        
+        $expiresAt = strtotime($settings['didox_token_expires_at']);
+        $now = time();
+        $tenMinutes = 600; // 10 minutes buffer
+        
+        return ($expiresAt - $now) <= $tenMinutes;
+    }
+    
+    /**
+     * Get token status info for admin panel
+     * 
+     * @return array
+     */
+    public function getTokenStatus(): array
+    {
+        $settings = $this->getDidoxSettingMap([
+            'didox_eimzo_token',
+            'didox_token_expires_at',
+            'didox_eimzo_last_login',
+            'didox_auto_refresh_status',
+            'didox_auto_refresh_error',
+            'didox_auto_refresh_last_attempt',
+            'didox_seller_inn'
+        ]);
+        
+        $expiresAt = $settings['didox_token_expires_at'] ?? null;
+        $hasToken = !empty($settings['didox_eimzo_token']);
+        $isExpired = $expiresAt ? strtotime($expiresAt) <= time() : !$hasToken;
+        $expiringSoon = $this->isTokenExpiringSoon();
+        
+        return [
+            'has_token' => $hasToken,
+            'is_expired' => $isExpired,
+            'expiring_soon' => $expiringSoon && !$isExpired,
+            'expires_at' => $expiresAt,
+            'expires_in' => $expiresAt ? $this->formatTimeRemaining($expiresAt) : null,
+            'last_login' => $settings['didox_eimzo_last_login'] ?? null,
+            'status' => $settings['didox_auto_refresh_status'] ?? 'manual',
+            'last_error' => $settings['didox_auto_refresh_error'] ?? null,
+            'last_attempt' => $settings['didox_auto_refresh_last_attempt'] ?? null,
+            'seller_inn' => $settings['didox_seller_inn'] ?? null,
+        ];
+    }
+    
+    /**
+     * Format time remaining for display
+     * 
+     * @param string $expiresAt
+     * @return string
+     */
+    private function formatTimeRemaining(string $expiresAt): string
+    {
+        $diff = strtotime($expiresAt) - time();
+        
+        if ($diff <= 0) {
+            return 'Expired';
+        }
+        
+        $hours = floor($diff / 3600);
+        $minutes = floor(($diff % 3600) / 60);
+        
+        if ($hours > 0) {
+            return "{$hours}h {$minutes}m";
+        }
+        
+        return "{$minutes}m";
     }
 
     /**
@@ -320,6 +541,52 @@ class DidoxService
         ];
     }
 
+    public function validateConfiguredPfx(): array
+    {
+        $settings = $this->getConfiguredPfxSettings();
+
+        if ($settings['pfxPath'] === '') {
+            return [
+                'success' => false,
+                'error' => 'PFX file not uploaded.',
+            ];
+        }
+
+        if ($settings['password'] === '') {
+            return [
+                'success' => false,
+                'error' => 'PFX password not configured.',
+            ];
+        }
+
+        if ($settings['appPfxPath'] === '' || !file_exists($settings['appPfxPath'])) {
+            return [
+                'success' => false,
+                'error' => 'Uploaded PFX file is missing on the server.',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'pfxPath' => $settings['pfxPath'],
+            'appPfxPath' => $settings['appPfxPath'],
+        ];
+    }
+
+    public function cleanupInvalidAutoRefreshState(string $reason, ?string $attemptedAt = null): string
+    {
+        $attemptedAt = $attemptedAt ?: date('Y-m-d H:i:s');
+        $message = 'Auto-refresh disabled: ' . trim($reason);
+
+        $this->updateSetting('didox_auto_refresh_status', 'disabled');
+        $this->updateSetting('didox_auto_refresh_error', $message);
+        $this->updateSetting('didox_auto_refresh_last_attempt', $attemptedAt);
+
+        Yii::warning($message, __METHOD__);
+
+        return $message;
+    }
+
     private function signConfiguredPfxPayload(string $data): array
     {
         $settings = $this->getConfiguredPfxSettings();
@@ -333,7 +600,9 @@ class DidoxService
             'password' => $settings['password'],
             'alias' => '',
             'data' => $data,
+            'dataBase64' => true,
             'attached' => true,
+            'includeChain' => false,
         ];
 
         $ch = curl_init();
@@ -853,8 +1122,8 @@ class DidoxService
                 $headers[] = 'user-key: ' . $userKey;
             }
             
-            // Send document to partner
-            $response = $this->makeRequestWithHeaders('POST', "/v1/documents/{$docId}/send", [], $headers);
+            // Didox expects PUT for the send transition.
+            $response = $this->makeRequestWithHeaders('PUT', "/v1/documents/{$docId}/send", [], $headers);
             
             return [
                 'success' => $response['isOk'],
@@ -1161,6 +1430,181 @@ class DidoxService
             'success' => true,
             'documentJson' => $documentJson,
             'documentBase64' => base64_encode($documentJson),
+        ];
+    }
+
+    /**
+     * Extract seller TIN from outgoing document payload returned by Didox.
+     *
+     * @param array $responseData
+     * @return string|null
+     */
+    public function extractOutgoingSellerTin(array $responseData): ?string
+    {
+        $documentJsonData = $this->extractOutgoingDocumentJson($responseData);
+        if ($documentJsonData === null) {
+            return null;
+        }
+
+        $candidates = [
+            $documentJsonData['sellertin'] ?? null,
+            $documentJsonData['SellerTin'] ?? null,
+            $documentJsonData['data']['sellertin'] ?? null,
+            $documentJsonData['data']['SellerTin'] ?? null,
+            $documentJsonData['seller']['tin'] ?? null,
+            $documentJsonData['seller']['Tin'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $value = trim((string)$candidate);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Automatically sign and send an outgoing Didox document using the configured PFX signer.
+     *
+     * @param string $docId
+     * @return array
+     */
+    public function autoSignAndSendDocumentWithConfiguredPfx(string $docId): array
+    {
+        $docId = trim($docId);
+        if ($docId === '') {
+            return ['success' => false, 'error' => 'Document ID is required.'];
+        }
+
+        $pfxValidation = $this->validateConfiguredPfx();
+        if (!$pfxValidation['success']) {
+            return ['success' => false, 'error' => $pfxValidation['error'], 'stage' => 'validate_pfx'];
+        }
+
+        $authResult = $this->getAuthTokenFromPfx();
+        if (empty($authResult['success']) || empty($authResult['token'])) {
+            return [
+                'success' => false,
+                'error' => $authResult['error'] ?? 'Failed to authenticate with configured PFX.',
+                'stage' => 'authenticate',
+                'auth_result' => $authResult,
+            ];
+        }
+
+        $userKey = $authResult['token'];
+        $documentForSigning = $this->getDocumentForSigning($docId, $userKey);
+        if (empty($documentForSigning['success']) || empty($documentForSigning['data']) || !is_array($documentForSigning['data'])) {
+            return [
+                'success' => false,
+                'error' => $documentForSigning['error'] ?? 'Failed to fetch document for signing.',
+                'stage' => 'get_document_for_signing',
+                'document_result' => $documentForSigning,
+            ];
+        }
+
+        $sellerTin = $this->extractOutgoingSellerTin($documentForSigning['data']);
+        $signerTaxId = trim((string)($authResult['taxId'] ?? ''));
+        if ($sellerTin !== null && $signerTaxId !== '' && $sellerTin !== $signerTaxId) {
+            return [
+                'success' => false,
+                'error' => "Configured signer tax ID {$signerTaxId} does not match document seller TIN {$sellerTin}.",
+                'stage' => 'identity_check',
+                'seller_tin' => $sellerTin,
+                'signer_tax_id' => $signerTaxId,
+            ];
+        }
+
+        $payload = $this->buildOutgoingDocumentSignaturePayload($documentForSigning['data']);
+        if (empty($payload['success']) || empty($payload['documentBase64'])) {
+            return [
+                'success' => false,
+                'error' => $payload['error'] ?? 'Failed to build signing payload.',
+                'stage' => 'build_payload',
+                'payload_result' => $payload,
+            ];
+        }
+
+        $signed = $this->signConfiguredPfxPayload($payload['documentBase64']);
+        if (empty($signed['success'])) {
+            return [
+                'success' => false,
+                'error' => $signed['error'] ?? 'Configured signer failed to sign the payload.',
+                'stage' => 'sign_payload',
+                'sign_result' => $signed,
+            ];
+        }
+
+        $timestampRes = $this->createTimestamp($signed['pkcs7'], $signed['signature']);
+        if (empty($timestampRes['success']) || empty($timestampRes['data']['timeStampTokenB64'])) {
+            return [
+                'success' => false,
+                'error' => $timestampRes['error'] ?? 'Failed to create timestamp for Didox signature.',
+                'stage' => 'create_timestamp',
+                'timestamp_result' => $timestampRes,
+            ];
+        }
+
+        $finalSignature = $timestampRes['data']['timeStampTokenB64'];
+        $signResult = $this->signDocument($docId, $finalSignature, $userKey);
+        if (empty($signResult['success'])) {
+            return [
+                'success' => false,
+                'error' => $signResult['error'] ?? 'Failed to sign Didox document.',
+                'stage' => 'didox_sign',
+                'didox_sign_result' => $signResult,
+                'seller_tin' => $sellerTin,
+                'signer_tax_id' => $signerTaxId,
+            ];
+        }
+
+        $sendResult = $this->sendDocumentToPartner($docId, $userKey);
+        if (empty($sendResult['success'])) {
+            $documentState = $this->getDocument($docId, $userKey);
+            $stateDocument = $documentState['data']['data']['document'] ?? ($documentState['data']['document'] ?? null);
+            $stateStatus = is_array($stateDocument)
+                ? (isset($stateDocument['doc_status']) ? (int)$stateDocument['doc_status'] : (isset($stateDocument['status']) ? (int)$stateDocument['status'] : null))
+                : null;
+
+            // Some Didox flows move the document to waiting-partner state as part of signing,
+            // and an explicit /send request then returns "Нет такого документа".
+            if (!empty($documentState['success']) && $stateStatus === \app\models\didox\DidoxDocument::STATUS_WAITING_PARTNER_SIGNATURE) {
+                return [
+                    'success' => true,
+                    'stage' => 'completed',
+                    'token_tax_id' => $signerTaxId,
+                    'seller_tin' => $sellerTin,
+                    'auth_result' => $authResult,
+                    'sign_result' => $signResult,
+                    'send_result' => $sendResult,
+                    'document_state' => $documentState,
+                    'note' => 'Didox moved the document to waiting partner signature during sign; explicit send was not required.',
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $sendResult['error'] ?? 'Document signed, but failed to send to partner.',
+                'stage' => 'didox_send',
+                'sign_result' => $signResult,
+                'send_result' => $sendResult,
+                'seller_tin' => $sellerTin,
+                'signer_tax_id' => $signerTaxId,
+            ];
+        }
+
+        $documentState = $this->getDocument($docId, $userKey);
+
+        return [
+            'success' => true,
+            'stage' => 'completed',
+            'token_tax_id' => $signerTaxId,
+            'seller_tin' => $sellerTin,
+            'auth_result' => $authResult,
+            'sign_result' => $signResult,
+            'send_result' => $sendResult,
+            'document_state' => $documentState,
         ];
     }
 
