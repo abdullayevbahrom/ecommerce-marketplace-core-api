@@ -65,25 +65,36 @@ class PaymentController extends Controller {
     ];
 
 
+    /**
+     * Initiate payment for an order (dispatches to crypto or traditional).
+     * POST /api/order/pay-order
+     *
+     * Error codes (returned as {message, error_code}):
+     *   1 — order_id is required (422)
+     *   2 — Order not found or does not belong to user (404)
+     *   3 — Order is already paid (422)
+     *   4 — Could not retrieve wallet balance (503, crypto only)
+     *   5 — Insufficient wallet balance (422, crypto only)
+     */
     public function actionPay() {
         $orderId = Yii::$app->request->post('order_id');
         $userId  = Yii::$app->user->identity->id;
 
         if (!$orderId) {
             Yii::$app->response->statusCode = 422;
-            return ['errors' => ['order_id' => 'order_id is required']];
+            return ['message' => 'order_id is required', 'error_code' => 1];
         }
 
         $order = Order::find()->where(['id' => $orderId, 'user_id' => $userId])->one();
 
         if (!$order) {
             Yii::$app->response->statusCode = 404;
-            return ['errors' => ['order' => 'Order not found']];
+            return ['message' => 'Order not found', 'error_code' => 2];
         }
 
         if ($order->status_payment == 1) {
             Yii::$app->response->statusCode = 422;
-            return ['errors' => ['order' => 'Order is already paid']];
+            return ['message' => 'Order is already paid', 'error_code' => 3];
         }
 
         $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
@@ -95,6 +106,11 @@ class PaymentController extends Controller {
         return $this->handleTraditionalPayment($order);
     }
 
+    /**
+     * Crypto-payment branch of actionPay. Error codes continue the actionPay space:
+     *   4 — Could not retrieve wallet balance (503)
+     *   5 — Insufficient wallet balance (422)
+     */
     private function handleCryptoPayment(Order $order, int $userId): array
     {
         $token = Yii::$app->params['walletDefaultToken'] ?? 'USDT';
@@ -109,7 +125,7 @@ class PaymentController extends Controller {
             $balanceData = $walletService->getBalance($userId);
         } catch (\Exception $e) {
             Yii::$app->response->statusCode = 503;
-            return ['errors' => ['wallet' => 'Could not retrieve wallet balance.']];
+            return ['message' => 'Could not retrieve wallet balance.', 'error_code' => 4];
         }
 
         $balance = $this->extractTokenBalance($balanceData, $token);
@@ -117,7 +133,8 @@ class PaymentController extends Controller {
         if ($balance < $paymentAmount) {
             Yii::$app->response->statusCode = 422;
             return [
-                'errors' => ['wallet' => sprintf('Insufficient %s balance: %s available, %s required', $token, $balance, $paymentAmount)],
+                'message' => sprintf('Insufficient %s balance: %s available, %s required', $token, $balance, $paymentAmount),
+                'error_code' => 5,
                 'data' => ['balance' => $balance, 'amount' => $paymentAmount, 'token' => $token],
             ];
         }
@@ -163,6 +180,15 @@ class PaymentController extends Controller {
     /**
      * Execute crypto payment for an order.
      * POST /api/app/pay/order/{orderId}
+     *
+     * Error codes (returned as {message, error_code}):
+     *   1 — Order not found or does not belong to user (404)
+     *   2 — Order is already paid (422)
+     *   3 — Order does not use crypto payment (422)
+     *   4 — Shop owner missing for order (422)
+     *   5 — Insufficient wallet balance (422)
+     *   6 — Wallet balance check failed (503)
+     *   7 — On-chain payment execution failed (422)
      */
     public function actionPayOrder($orderId)
     {
@@ -171,17 +197,17 @@ class PaymentController extends Controller {
 
         if (!$order) {
             Yii::$app->response->statusCode = 404;
-            return ['success' => false, 'error' => 'Order not found or does not belong to you'];
+            return ['message' => 'Order not found or does not belong to you', 'error_code' => 1];
         }
         if ($order->status_payment == 1) {
             Yii::$app->response->statusCode = 422;
-            return ['success' => false, 'error' => 'Order is already paid'];
+            return ['message' => 'Order is already paid', 'error_code' => 2];
         }
 
         $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
         if (!$walletPaymentId || (int)$order->payment_id !== (int)$walletPaymentId) {
             Yii::$app->response->statusCode = 422;
-            return ['success' => false, 'error' => 'This order does not use crypto payment'];
+            return ['message' => 'This order does not use crypto payment', 'error_code' => 3];
         }
 
         $token = Yii::$app->params['walletDefaultToken'] ?? 'USDT';
@@ -192,7 +218,7 @@ class PaymentController extends Controller {
         $merchantUserId = $shop ? $shop->user_id : null;
         if (!$merchantUserId) {
             Yii::$app->response->statusCode = 422;
-            return ['success' => false, 'error' => 'Shop owner not found'];
+            return ['message' => 'Shop owner not found', 'error_code' => 4];
         }
 
         $walletService = new WalletService();
@@ -203,11 +229,11 @@ class PaymentController extends Controller {
             $balance = $this->extractTokenBalance($balanceData, $token);
             if ($balance < $paymentAmount) {
                 Yii::$app->response->statusCode = 422;
-                return ['success' => false, 'error' => "Insufficient $token balance: $balance < $paymentAmount"];
+                return ['message' => "Insufficient $token balance: $balance < $paymentAmount", 'error_code' => 5];
             }
         } catch (\Exception $e) {
             Yii::$app->response->statusCode = 503;
-            return ['success' => false, 'error' => 'Balance check failed: ' . $e->getMessage()];
+            return ['message' => 'Balance check failed: ' . $e->getMessage(), 'error_code' => 6];
         }
 
         $dbTransaction = Yii::$app->db->beginTransaction();
@@ -232,7 +258,7 @@ class PaymentController extends Controller {
         } catch (\Exception $e) {
             $dbTransaction->rollBack();
             Yii::$app->response->statusCode = 422;
-            return ['success' => false, 'error' => 'Payment failed: ' . $e->getMessage()];
+            return ['message' => 'Payment failed: ' . $e->getMessage(), 'error_code' => 7];
         }
     }
 
