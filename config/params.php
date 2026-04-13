@@ -129,7 +129,7 @@ $config = [
 ];
 
 if (YII_ENV_DEV) {
-    $config['baseUrl'] = 'http://localhost:8001';
+    $config['baseUrl'] = 'http://localhost:8002';
     $config['warehouseApiUrl'] = 'http://sklad';
     $config['skladApiUrl'] = 'http://sklad';
     $config['operatorApiUrl'] = 'http://operator_app';  // TODO: update when operator is running
