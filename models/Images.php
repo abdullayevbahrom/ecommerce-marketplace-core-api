@@ -111,27 +111,29 @@ class Images extends \yii\db\ActiveRecord
 
         foreach ($this->imageFiles as $file) {
             $rnd = mt_rand(0, 1000000);
-            $name = time() . '_' . $rnd . '.' . $file->extension;
+            // WebP formatini qo'llab-quvvatlamaslik uchun jpg ga o'zgartiramiz
+            $extension = strtolower($file->extension) === 'webp' ? 'jpg' : $file->extension;
+            $name = time() . '_' . $rnd . '.' . $extension;
 
             $localTemp = Yii::getAlias('@runtime') . '/' . $name;
             $file->saveAs($localTemp);
 
-            $ext = strtolower($file->extension);
+            $ext = strtolower($extension);
             $contentType = @mime_content_type($localTemp) ?: 'application/octet-stream';
 
             // original
-            $s3->putVariant($type, (string)$objectId, 'original', $name, $localTemp, $contentType);
+            $s3->putVariant($type, (string) $objectId, 'original', $name, $localTemp, $contentType);
 
-            // thumbnails (svg/mp4 skip)
-            $makeThumbs = !in_array($ext, ['svg', 'mp4'], true);
+            // thumbnails (svg/mp4/webp skip)
+            $makeThumbs = !in_array($ext, ['svg', 'mp4', 'webp'], true);
             if ($makeThumbs) {
                 foreach ($this->image_sizes as $w => $h) {
                     $thumbPath = Yii::getAlias('@runtime') . "/{$w}_{$name}";
 
-                    \yii\imagine\Image::thumbnail($localTemp, (int)$w, (int)$h)
+                    \yii\imagine\Image::thumbnail($localTemp, (int) $w, (int) $h)
                         ->save($thumbPath, ['quality' => 80]);
 
-                    $s3->putVariant($type, (string)$objectId, "{$w}x{$h}", $name, $thumbPath);
+                    $s3->putVariant($type, (string) $objectId, "{$w}x{$h}", $name, $thumbPath);
 
                     @unlink($thumbPath);
                 }
@@ -141,8 +143,9 @@ class Images extends \yii\db\ActiveRecord
 
             if ($this->photo && $check) {
                 $sizes = ['original'];
-                foreach ($this->image_sizes as $w => $h) $sizes[] = "{$w}x{$h}";
-                $s3->deleteVariants($this->type, (string)$objectId, $this->photo, $sizes);
+                foreach ($this->image_sizes as $w => $h)
+                    $sizes[] = "{$w}x{$h}";
+                $s3->deleteVariants($this->type, (string) $objectId, $this->photo, $sizes);
 
                 Yii::$app->db->createCommand()->update('image', [
                     'photo' => $name,
@@ -151,7 +154,7 @@ class Images extends \yii\db\ActiveRecord
             } else {
                 Yii::$app->db->createCommand()->insert('image', [
                     'type' => $type_image ?: $type,
-                    'object_id' => (int)$objectId,
+                    'object_id' => (int) $objectId,
                     'photo' => $name,
                     'main' => $main,
                     'sort' => 0,
@@ -171,7 +174,8 @@ class Images extends \yii\db\ActiveRecord
 
     public function uploadPhotoColor($object_id)
     {
-        if (!$this->colors) return true;
+        if (!$this->colors)
+            return true;
 
         /** @var S3Component $s3 */
         $s3 = Yii::$app->s3;
@@ -179,7 +183,7 @@ class Images extends \yii\db\ActiveRecord
         foreach ($this->colors as $k => $color) {
             $c = ProductColor::findOne(['product_id' => $object_id, 'color_id' => $color]) ?: new ProductColor();
             $c->product_id = $object_id;
-            $c->color_id = (int)$color;
+            $c->color_id = (int) $color;
             $c->status = 1;
 
             if (!$c->save(false)) {
@@ -187,29 +191,33 @@ class Images extends \yii\db\ActiveRecord
             }
 
             $file = $this->imageFiles[$k] ?? null;
-            if (!$file) continue;
+            if (!$file)
+                continue;
 
             $old = self::findOne(['object_id' => $c->id, 'type' => 'color']);
             if ($old) {
                 $old->removeImageSize();
             }
 
-            $rnd  = mt_rand(0, 1000000);
-            $name = time() . '_' . $rnd . '.' . $file->extension;
+            $rnd = mt_rand(0, 1000000);
+            // WebP formatini qo'llab-quvvatlamaslik uchun jpg ga o'zgartiramiz
+            $extension = strtolower($file->extension) === 'webp' ? 'jpg' : $file->extension;
+            $name = time() . '_' . $rnd . '.' . $extension;
 
             $localTemp = Yii::getAlias('@runtime') . '/' . $name;
-            if (!$file->saveAs($localTemp)) continue;
+            if (!$file->saveAs($localTemp))
+                continue;
 
-            $ext = strtolower($file->extension);
+            $ext = strtolower($extension);
             $contentType = @mime_content_type($localTemp) ?: 'application/octet-stream';
 
-            $s3->putVariant('color', (string)$c->id, 'original', $name, $localTemp, $contentType);
+            $s3->putVariant('color', (string) $c->id, 'original', $name, $localTemp, $contentType);
 
-            if (!in_array($ext, ['svg', 'mp4'], true)) {
+            if (!in_array($ext, ['svg', 'mp4', 'webp'], true)) {
                 foreach ($this->image_sizes as $w => $h) {
                     $thumbPath = Yii::getAlias('@runtime') . "/{$w}_{$name}";
-                    \yii\imagine\Image::thumbnail($localTemp, (int)$w, (int)$h)->save($thumbPath, ['quality' => 80]);
-                    $s3->putVariant('color', (string)$c->id, "{$w}x{$h}", $name, $thumbPath);
+                    \yii\imagine\Image::thumbnail($localTemp, (int) $w, (int) $h)->save($thumbPath, ['quality' => 80]);
+                    $s3->putVariant('color', (string) $c->id, "{$w}x{$h}", $name, $thumbPath);
                     @unlink($thumbPath);
                 }
             }
@@ -217,7 +225,7 @@ class Images extends \yii\db\ActiveRecord
             @unlink($localTemp);
 
             $img = new self();
-            $img->object_id = (int)$c->id;
+            $img->object_id = (int) $c->id;
             $img->type = 'color';
             $img->photo = $name;
             $img->main = 1;
@@ -232,13 +240,13 @@ class Images extends \yii\db\ActiveRecord
 
     public function removeImageSize()
     {
-        if ((int)$this->web === 1) {
+        if ((int) $this->web === 1) {
             if (filter_var($this->photo, FILTER_VALIDATE_URL)) {
-                return (bool)$this->delete();
+                return (bool) $this->delete();
             }
 
             if (!$this->object_id || !$this->type || !$this->photo) {
-                return (bool)$this->delete();
+                return (bool) $this->delete();
             }
 
             /** @var S3Component $s3 */
@@ -249,25 +257,27 @@ class Images extends \yii\db\ActiveRecord
                 $sizes[] = "{$w}x{$h}";
             }
 
-            $s3->deleteVariants($this->type, (string)$this->object_id, $this->photo, $sizes);
+            $s3->deleteVariants($this->type, (string) $this->object_id, $this->photo, $sizes);
 
-            return (bool)$this->delete();
+            return (bool) $this->delete();
         }
 
         $path = $this->object[$this->type] ?? null;
         if (!$path) {
-            return (bool)$this->delete();
+            return (bool) $this->delete();
         }
 
         $original = $path . $this->object_id . '/original/' . $this->photo;
-        if (is_file($original)) unlink($original);
+        if (is_file($original))
+            unlink($original);
 
         foreach ($this->image_sizes as $k => $v) {
             $image = $path . $this->object_id . '/' . $k . 'x' . $v . '/' . $this->photo;
-            if (is_file($image)) unlink($image);
+            if (is_file($image))
+                unlink($image);
         }
 
-        return (bool)$this->delete();
+        return (bool) $this->delete();
     }
 
     public function getPhoto(string $type, string $size = 'original'): string
@@ -276,12 +286,12 @@ class Images extends \yii\db\ActiveRecord
             return self::PHOTO_DEFAULT;
         }
 
-        if ((int)$this->web === 1) {
+        if ((int) $this->web === 1) {
             /** @var S3Component $s3 */
             $s3 = Yii::$app->s3;
             $realType = $this->type ?: $type;
 
-            return $s3->urlVariant($realType, (string)$this->object_id, $size, $this->photo);
+            return $s3->urlVariant($realType, (string) $this->object_id, $size, $this->photo);
         }
 
         $path = 'uploads/' . $type . '/' . $this->object_id . '/' . $size . '/' . $this->photo;
@@ -302,7 +312,7 @@ class Images extends \yii\db\ActiveRecord
     {
         parent::afterDelete();
 
-        if ((int)$this->web !== 1) {
+        if ((int) $this->web !== 1) {
             return;
         }
 
@@ -318,6 +328,6 @@ class Images extends \yii\db\ActiveRecord
         $s3 = Yii::$app->s3;
 
         $sizes = ['original', '50x50', '100x100', '150x150', '200x200', '250x250', '300x300'];
-        $s3->deleteVariants($this->type, (string)$this->object_id, $this->photo, $sizes);
+        $s3->deleteVariants($this->type, (string) $this->object_id, $this->photo, $sizes);
     }
 }
