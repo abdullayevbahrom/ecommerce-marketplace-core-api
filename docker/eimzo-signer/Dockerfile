@@ -2,10 +2,9 @@ FROM amazoncorretto:8-alpine3.19 AS builder
 
 WORKDIR /build
 
-COPY eimzo-server/lib ./lib
-COPY eimzo-signer/SignerServer.java ./
+COPY ./ ./
 
-RUN javac -cp "./lib/*" SignerServer.java
+RUN javac -cp "./lib/*" -encoding UTF-8 SignerServer.java
 
 FROM amazoncorretto:8-alpine3.19-jre
 

@@ -131,20 +131,35 @@ public class SignerServer {
         boolean dataBase64,
         BouncyCastleProvider provider
     ) throws Exception {
-        KeyStore keyStore = KeyStore.getInstance("PKCS12", provider);
-        FileInputStream inputStream = new FileInputStream(pfxFilePath);
+        char[] pwd = password.toCharArray();
+        KeyStore keyStore;
+
+        // Try standard KeyStore loading first (works for classic PBE algorithms)
         try {
-            keyStore.load(inputStream, password.toCharArray());
-        } finally {
-            inputStream.close();
+            keyStore = KeyStore.getInstance("PKCS12", provider);
+            FileInputStream inputStream = new FileInputStream(pfxFilePath);
+            try {
+                keyStore.load(inputStream, pwd);
+            } finally {
+                inputStream.close();
+            }
+        } catch (Exception e) {
+            // Fallback: use E-IMZO PKCS12Reader which supports PBES2/PBKDF2
+            uz.eimzo.pkcs12.reader.PKCS12Reader pkcs12Reader = new uz.eimzo.pkcs12.reader.PKCS12Reader(provider);
+            FileInputStream inputStream = new FileInputStream(pfxFilePath);
+            try {
+                keyStore = pkcs12Reader.convert(inputStream, pwd);
+            } finally {
+                inputStream.close();
+            }
         }
 
-        String resolvedAlias = alias.isEmpty() ? firstPrivateKeyAlias(keyStore, password) : alias;
+        String resolvedAlias = alias.isEmpty() ? firstPrivateKeyAlias(keyStore, pwd) : alias;
         if (!keyStore.containsAlias(resolvedAlias)) {
             throw new IllegalArgumentException("Alias not found: " + resolvedAlias);
         }
 
-        PrivateKey privateKey = (PrivateKey) keyStore.getKey(resolvedAlias, password.toCharArray());
+        PrivateKey privateKey = (PrivateKey) keyStore.getKey(resolvedAlias, pwd);
         if (privateKey == null) {
             throw new IllegalArgumentException("Private key not found for alias: " + resolvedAlias);
         }
@@ -200,7 +215,7 @@ public class SignerServer {
         return result;
     }
 
-    private static String firstPrivateKeyAlias(KeyStore keyStore, String password) throws Exception {
+    private static String firstPrivateKeyAlias(KeyStore keyStore, char[] password) throws Exception {
         java.util.Enumeration<String> aliases = keyStore.aliases();
         if (!aliases.hasMoreElements()) {
             throw new IllegalArgumentException("No aliases found in PFX");
@@ -208,7 +223,7 @@ public class SignerServer {
         while (aliases.hasMoreElements()) {
             String currentAlias = aliases.nextElement();
             try {
-                if (keyStore.isKeyEntry(currentAlias) && keyStore.getKey(currentAlias, password.toCharArray()) != null) {
+                if (keyStore.isKeyEntry(currentAlias) && keyStore.getKey(currentAlias, password) != null) {
                     return currentAlias;
                 }
             } catch (Exception ignored) {

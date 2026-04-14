@@ -82,25 +82,28 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
     const FACTURA_TYPE_ADDITIONAL_COST_REIMBURSEMENT = 6; // Дополнительная (возмещение затрат)
     const FACTURA_TYPE_CORRECTED_NO_PAYMENT = 8;        // Исправленный (без оплаты)
     const FACTURA_TYPE_ADDITIONAL_NO_PAYMENT = 9;       // Дополнительный (без оплаты)
-    
+
     // VAT rates
     const VAT_RATE_NONE = 0;
     const VAT_RATE_STANDARD = 12;
     const VAT_RATE_INCREASED = 15;
-    
+
     // Product origin constants
     const PRODUCT_ORIGIN_IMPORT = 1;
     const PRODUCT_ORIGIN_EXPORT = 2;
     const PRODUCT_ORIGIN_REEXPORT = 3;
     const PRODUCT_ORIGIN_DOMESTIC = 4;
-    
+
     // Tax benefit types
     const LGOTA_TYPE_VAT = 1;           // Льгота по НДС
     const LGOTA_TYPE_TURNOVER_TAX = 2;  // Льгота по налогу с оборота
-    
+
     // VAT registration status
+    const VAT_REG_STATUS_NONE = 0;            // Not VAT registered
     const VAT_REG_STATUS_TEMPORARY = 10;
-    const VAT_REG_STATUS_PERMANENT = 20;
+    const VAT_REG_STATUS_PREVIOUS = 20;       // Previously was VAT registered
+    const VAT_REG_STATUS_CURRENT = 21;        // Current VAT registered
+    const VAT_REG_STATUS_PERMANENT = 21;      // Alias for CURRENT (compatibility)
     const VAT_REG_STATUS_SPECIAL = 30;
 
     /**
@@ -129,34 +132,44 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
             [['seller_vat_reg_code', 'buyer_vat_reg_code', 'seller_account', 'buyer_account'], 'string', 'max' => 50],
             [['seller_bank_id', 'buyer_bank_id', 'foreign_country_id'], 'string', 'max' => 10],
             [['document_id'], 'exist', 'skipOnError' => true, 'targetClass' => DidoxDocument::class, 'targetAttribute' => ['document_id' => 'id']],
-            
+
             // Invoice specific validations
             [['buyer_tin', 'seller_tin'], 'required'],
             [['total_sum'], 'required'],
             [['total_sum'], 'number', 'min' => 0.01],
             [['invoice_number', 'invoice_date'], 'required'],
             [['seller_name', 'buyer_name'], 'required'],
-            [['seller_vat_reg_code', 'buyer_vat_reg_code'], 'required'],
+            [['seller_vat_reg_code', 'buyer_vat_reg_code'], 'default', 'value' => ''],
+            [['seller_vat_reg_code', 'buyer_vat_reg_code'], 'string', 'max' => 50],
             [['seller_address', 'buyer_address'], 'required'],
-            
-            // DIDOX API specific validations
-            [['factura_type'], 'in', 'range' => [
-                self::FACTURA_TYPE_STANDARD,
-                self::FACTURA_TYPE_ADDITIONAL,
-                self::FACTURA_TYPE_COST_REIMBURSEMENT,
-                self::FACTURA_TYPE_NO_PAYMENT,
-                self::FACTURA_TYPE_CORRECTED,
-                self::FACTURA_TYPE_CORRECTED_COST_REIMBURSEMENT,
-                self::FACTURA_TYPE_ADDITIONAL_COST_REIMBURSEMENT,
-                self::FACTURA_TYPE_CORRECTED_NO_PAYMENT,
-                self::FACTURA_TYPE_ADDITIONAL_NO_PAYMENT
-            ]],
 
-            [['seller_vat_reg_status', 'buyer_vat_reg_status'], 'in', 'range' => [
-                self::VAT_REG_STATUS_TEMPORARY,
-                self::VAT_REG_STATUS_PERMANENT,
-                self::VAT_REG_STATUS_SPECIAL
-            ]],
+            // DIDOX API specific validations
+            [
+                ['factura_type'],
+                'in',
+                'range' => [
+                    self::FACTURA_TYPE_STANDARD,
+                    self::FACTURA_TYPE_ADDITIONAL,
+                    self::FACTURA_TYPE_COST_REIMBURSEMENT,
+                    self::FACTURA_TYPE_NO_PAYMENT,
+                    self::FACTURA_TYPE_CORRECTED,
+                    self::FACTURA_TYPE_CORRECTED_COST_REIMBURSEMENT,
+                    self::FACTURA_TYPE_ADDITIONAL_COST_REIMBURSEMENT,
+                    self::FACTURA_TYPE_CORRECTED_NO_PAYMENT,
+                    self::FACTURA_TYPE_ADDITIONAL_NO_PAYMENT
+                ]
+            ],
+
+            [
+                ['seller_vat_reg_status', 'buyer_vat_reg_status'],
+                'in',
+                'range' => [
+                    self::VAT_REG_STATUS_NONE,
+                    self::VAT_REG_STATUS_TEMPORARY,
+                    self::VAT_REG_STATUS_CURRENT,
+                    self::VAT_REG_STATUS_SPECIAL
+                ]
+            ],
         ];
     }
 
@@ -286,21 +299,21 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
         if ($this->document) {
             return $this->document->generateDidoxApiStructure();
         }
-        
+
         // Fallback for legacy compatibility (basic structure without products)
         return [
             'Version' => 1,
             'WaybillLocalIds' => [],
-            'HasMarking' => (bool)$this->has_marking,
-            'HasRent' => (bool)$this->has_rent,
+            'HasMarking' => (bool) $this->has_marking,
+            'HasRent' => (bool) $this->has_rent,
             'FacturaRentDoc' => null,
-            'FacturaType' => (int)$this->factura_type,
+            'FacturaType' => (int) $this->factura_type,
             'ProductList' => [
-                'HasCommittent' => (bool)$this->has_committent,
-                'HasLgota' => (bool)$this->has_lgota,
+                'HasCommittent' => (bool) $this->has_committent,
+                'HasLgota' => (bool) $this->has_lgota,
                 'Tin' => $this->seller_tin,
-                'HasExcise' => (bool)$this->has_excise,
-                'HasVat' => (bool)$this->has_vat,
+                'HasExcise' => (bool) $this->has_excise,
+                'HasVat' => (bool) $this->has_vat,
                 'Products' => [] // Empty products array - will be populated by DidoxDocument
             ],
             'FacturaDoc' => [
@@ -323,13 +336,13 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
                 'Name' => $this->seller_name,
                 'BranchCode' => $this->seller_branch_code ?: '',
                 'BranchName' => $this->seller_branch_name ?: '',
-                'VatRegCode' => $this->seller_vat_reg_code,
+                'VatRegCode' => $this->seller_vat_reg_code ?: null,
                 'Account' => $this->seller_account ?: '',
                 'BankId' => $this->seller_bank_id ?: '',
                 'Address' => $this->seller_address,
                 'Director' => $this->seller_director ?: '',
                 'Accountant' => $this->seller_accountant ?: '',
-                'VatRegStatus' => (int)$this->seller_vat_reg_status,
+                'VatRegStatus' => !empty($this->seller_vat_reg_code) ? (int) $this->seller_vat_reg_status : null,
             ],
             'ItemReleasedDoc' => [
                 'ItemReleasedPinfl' => $this->item_released_pinfl ?: '',
@@ -340,13 +353,13 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
                 'Name' => $this->buyer_name,
                 'BranchCode' => $this->buyer_branch_code ?: '',
                 'BranchName' => $this->buyer_branch_name ?: '',
-                'VatRegCode' => $this->buyer_vat_reg_code,
+                'VatRegCode' => $this->buyer_vat_reg_code ?: null,
                 'Account' => $this->buyer_account ?: '',
                 'BankId' => $this->buyer_bank_id ?: '',
                 'Address' => $this->buyer_address,
                 'Director' => $this->buyer_director ?: '',
                 'Accountant' => $this->buyer_accountant ?: '',
-                'VatRegStatus' => (int)$this->buyer_vat_reg_status,
+                'VatRegStatus' => !empty($this->buyer_vat_reg_code) ? (int) $this->buyer_vat_reg_status : null,
             ],
             'FacturaInvestmentObjectDoc' => [
                 'ObjectId' => $this->investment_object_id ?: '',
@@ -397,24 +410,24 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
         if (parent::beforeSave($insert)) {
             // Auto-calculate VAT sum
             $this->calculateVatSum();
-            
+
             if ($insert) {
                 $this->created_at = date('Y-m-d H:i:s');
             }
             $this->updated_at = date('Y-m-d H:i:s');
-            
+
             // Set default values for required fields if not set
             if (!$this->factura_type) {
                 $this->factura_type = self::FACTURA_TYPE_STANDARD;
             }
 
             if (!$this->seller_vat_reg_status) {
-                $this->seller_vat_reg_status = self::VAT_REG_STATUS_PERMANENT;
+                $this->seller_vat_reg_status = self::VAT_REG_STATUS_NONE;
             }
             if (!$this->buyer_vat_reg_status) {
-                $this->buyer_vat_reg_status = self::VAT_REG_STATUS_PERMANENT;
+                $this->buyer_vat_reg_status = self::VAT_REG_STATUS_NONE;
             }
-            
+
             return true;
         }
         return false;
@@ -426,17 +439,17 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
     public function calculateTotals()
     {
         $products = $this->products;
-        
+
         $totalSum = 0;
         $totalVatSum = 0;
         $totalDeliverySumWithVat = 0;
-        
+
         foreach ($products as $product) {
             $totalSum += $product->delivery_sum ?: 0;
             $totalVatSum += $product->vat_sum ?: 0;
             $totalDeliverySumWithVat += $product->delivery_sum_with_vat ?: 0;
         }
-        
+
         $this->total_sum = $totalSum;
         $this->total_vat_sum = $totalVatSum;
         $this->total_delivery_sum_with_vat = $totalDeliverySumWithVat;
@@ -484,8 +497,12 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
             'has_lgota',
             'created_at',
             'updated_at',
-            'factura_type_label' => function() { return $this->getFacturaTypeLabel(); },
-            'product_origin_label' => function() { return $this->getProductOriginLabel(); },
+            'factura_type_label' => function () {
+                return $this->getFacturaTypeLabel();
+            },
+            'product_origin_label' => function () {
+                return $this->getProductOriginLabel();
+            },
         ];
     }
-} 
+}

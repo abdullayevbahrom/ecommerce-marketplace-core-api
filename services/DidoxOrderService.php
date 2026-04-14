@@ -38,8 +38,26 @@ class DidoxOrderService
             $documentState = $autoResult['document_state'] ?? null;
             if (is_array($documentState)) {
                 $document->setDidoxData($documentState);
-                if (isset($documentState['status'])) {
-                    $document->didox_status = (int)$documentState['status'];
+
+                // Extract status from nested document_state structure
+                // Structure: document_state['data']['data']['document']['doc_status']
+                // Fallback: document_state['data']['document']['status']
+                // Fallback: document_state['status']
+                $newStatus = null;
+                if (isset($documentState['data']['data']['document']['doc_status'])) {
+                    $newStatus = (int) $documentState['data']['data']['document']['doc_status'];
+                } elseif (isset($documentState['data']['data']['document']['status'])) {
+                    $newStatus = (int) $documentState['data']['data']['document']['status'];
+                } elseif (isset($documentState['data']['document']['doc_status'])) {
+                    $newStatus = (int) $documentState['data']['document']['doc_status'];
+                } elseif (isset($documentState['data']['document']['status'])) {
+                    $newStatus = (int) $documentState['data']['document']['status'];
+                } elseif (isset($documentState['status'])) {
+                    $newStatus = (int) $documentState['status'];
+                }
+
+                if ($newStatus !== null) {
+                    $document->didox_status = $newStatus;
                 }
             }
             $document->didox_signed_at = date('Y-m-d H:i:s');
@@ -81,14 +99,16 @@ class DidoxOrderService
 
         // 2. Data Retrieval: Seller Info (Global Settings)
         $settings = \app\models\Settings::find()
-            ->where(['type' => [
-                'didox_seller_inn', 
-                'didox_seller_name', 
-                'didox_seller_address', 
-                'didox_seller_account', 
-                'didox_seller_mfo',
-                'didox_seller_vat_reg_code'
-            ]])
+            ->where([
+                'type' => [
+                    'didox_seller_inn',
+                    'didox_seller_name',
+                    'didox_seller_address',
+                    'didox_seller_account',
+                    'didox_seller_mfo',
+                    'didox_seller_vat_reg_code'
+                ]
+            ])
             ->all();
         $settingsMap = \yii\helpers\ArrayHelper::map($settings, 'type', 'content');
 
@@ -107,16 +127,16 @@ class DidoxOrderService
 
         // Fallback for name if empty in settings (though user provided specific name)
         if (empty($sellerInfo['name']) && $order->shop) {
-             $sellerInfo['name'] = $order->shop->name_ru;
+            $sellerInfo['name'] = $order->shop->name_ru;
         }
 
         // Check essential seller fields
         if (empty($sellerInfo['tin'])) {
-             Yii::warning("Order #{$order->id}: Global Seller Settings have no TIN (didox_seller_inn). Skipping Didox creation.", 'didox_order');
-             Log::log('didox_order', "Order #{$order->id}: Global Seller Settings have no TIN (didox_seller_inn). Skipping Didox creation.", $sellerInfo, 'warning');
-             $result['success'] = false;
-             $result['messages'][] = "Global Seller Settings has no TIN. Skipped.";
-             return $result;
+            Yii::warning("Order #{$order->id}: Global Seller Settings have no TIN (didox_seller_inn). Skipping Didox creation.", 'didox_order');
+            Log::log('didox_order', "Order #{$order->id}: Global Seller Settings have no TIN (didox_seller_inn). Skipping Didox creation.", $sellerInfo, 'warning');
+            $result['success'] = false;
+            $result['messages'][] = "Global Seller Settings has no TIN. Skipped.";
+            return $result;
         }
 
         // 3. Data Retrieval: Buyer Info
@@ -138,13 +158,13 @@ class DidoxOrderService
             } else {
                 // 2. Fallback to manually stored System Token
                 if (!empty($autoAuth['error'])) {
-                     Yii::warning("Auto-Auth failed: " . $autoAuth['error'], 'didox_order');
+                    Yii::warning("Auto-Auth failed: " . $autoAuth['error'], 'didox_order');
                 }
-                
+
                 $sysSettings = \app\models\Settings::find()
                     ->where(['type' => 'didox_eimzo_token'])
                     ->one();
-                
+
                 if ($sysSettings && !empty($sysSettings->content)) {
                     $userKey = $sysSettings->content;
                     Yii::info("Using System Didox Token (Stored) for order #{$order->id}.", 'didox_order');
@@ -169,7 +189,7 @@ class DidoxOrderService
                 if (!empty($profileData['address'])) {
                     $sellerInfo['address'] = $profileData['address'];
                 }
-                 Yii::info("Updated Seller Info from Didox Profile: TIN={$sellerInfo['tin']}, Name={$sellerInfo['name']}", 'didox_order');
+                Yii::info("Updated Seller Info from Didox Profile: TIN={$sellerInfo['tin']}, Name={$sellerInfo['name']}", 'didox_order');
             }
         }
 
@@ -177,21 +197,21 @@ class DidoxOrderService
         // If we are using Auto-Auth or System Token, we must ensure the token belongs to the configured Seller TIN.
         // Otherwise Didox rejects with "Owners do not match".
         // Ideally we should decode the token or check 'didox_eimzo_tax_id' setting.
-        
+
         $tokenTaxId = null;
         $settingsTaxId = \app\models\Settings::find()->where(['type' => 'didox_eimzo_tax_id'])->one();
         if ($settingsTaxId) {
             $tokenTaxId = $settingsTaxId->content;
         }
-        
+
         if ($tokenTaxId && $tokenTaxId != $sellerInfo['tin']) {
-             // Mismatch!
-             // Force override Seller Info with Token Owner Info to avoid "Owners do not match" error?
-             // Or fail?
-             // User asked: "make the arbitrary contract from the same as the seller setting file"
-             // But if the PFX is different, it will fail.
-             // Warning: We proceed, but this is the likely cause of "Owners do not match".
-             Yii::warning("Didox Token Owner ({$tokenTaxId}) does not match Configured Seller ({$sellerInfo['tin']}). This may cause API errors.", 'didox_order');
+            // Mismatch!
+            // Force override Seller Info with Token Owner Info to avoid "Owners do not match" error?
+            // Or fail?
+            // User asked: "make the arbitrary contract from the same as the seller setting file"
+            // But if the PFX is different, it will fail.
+            // Warning: We proceed, but this is the likely cause of "Owners do not match".
+            Yii::warning("Didox Token Owner ({$tokenTaxId}) does not match Configured Seller ({$sellerInfo['tin']}). This may cause API errors.", 'didox_order');
         }
 
         // 4. Create Invoice Document
@@ -206,34 +226,34 @@ class DidoxOrderService
                         $apiData = $invoiceDoc->generateDidoxApiStructure();
                         // Ensure doctype is set
                         $apiData['doctype'] = $invoiceDoc->didox_doc_type ?: '002';
-                        
+
                         // Log REQUEST
                         Log::log('didox_order', "[INVOICE REQUEST] Order #{$order->id}", [
                             'order_id' => $order->id,
                             'doctype' => $apiData['doctype'],
                             'request_data' => $apiData
                         ]);
-                        
+
                         $uploadResult = $didoxService->createDocument($apiData, $userKey);
-                        
+
                         // Log RESPONSE
                         Log::log('didox_order', "[INVOICE RESPONSE] Order #{$order->id}", [
                             'order_id' => $order->id,
                             'success' => $uploadResult['success'] ?? false,
                             'response_data' => $uploadResult
                         ], $uploadResult['success'] ? 'info' : 'error');
-                        
+
                         if ($uploadResult['success']) {
                             $invoiceDoc->extractAndSetDidoxDocumentId($uploadResult['data']);
                             $invoiceDoc->didox_status = DidoxDocument::STATUS_DRAFT;
                             $invoiceDoc->didox_created_at = date('Y-m-d H:i:s');
                             $invoiceDoc->setDidoxData($uploadResult['data']);
                             $invoiceDoc->save(false);
-                            
+
                             $transaction->commit();
                             $result['documents'][] = 'invoice';
                             $result['messages'][] = "Invoice uploaded to DIDOX successfully (ID: {$invoiceDoc->didox_id}).";
-                            
+
                             // Auto-download PDF (silent - errors logged, doesn't break flow)
                             try {
                                 $invoiceDoc->downloadPdfFromDidox(['uz', 'ru']);
@@ -248,9 +268,10 @@ class DidoxOrderService
                             if (is_array($errorVal)) {
                                 $errorMsg = json_encode($errorVal, JSON_UNESCAPED_UNICODE);
                             } else {
-                                $errorMsg = (string)$errorVal;
+                                $errorMsg = (string) $errorVal;
                             }
-                            if (empty($errorMsg)) $errorMsg = 'Unknown error (empty response)';
+                            if (empty($errorMsg))
+                                $errorMsg = 'Unknown error (empty response)';
 
                             $transaction->rollBack();
                             $result['messages'][] = "Invoice creation failed at Didox: " . $errorMsg;
@@ -286,7 +307,7 @@ class DidoxOrderService
                         $apiData = $contractDoc->generateDidoxApiStructure();
                         // Ensure doctype is set
                         $apiData['doctype'] = $contractDoc->didox_doc_type ?: '000';
-                        
+
                         // Log REQUEST (exclude PDF content for readability, it's too large)
                         $requestLogData = $apiData;
                         if (isset($requestLogData['document']) && strlen($requestLogData['document']) > 200) {
@@ -297,27 +318,27 @@ class DidoxOrderService
                             'doctype' => $apiData['doctype'],
                             'request_data' => $requestLogData
                         ]);
-                        
+
                         $uploadResult = $didoxService->createDocument($apiData, $userKey);
-                        
+
                         // Log RESPONSE
                         Log::log('didox_order', "[CONTRACT RESPONSE] Order #{$order->id}", [
                             'order_id' => $order->id,
                             'success' => $uploadResult['success'] ?? false,
                             'response_data' => $uploadResult
                         ], $uploadResult['success'] ? 'info' : 'error');
-                        
+
                         if ($uploadResult['success']) {
                             $contractDoc->extractAndSetDidoxDocumentId($uploadResult['data']);
                             $contractDoc->didox_status = DidoxDocument::STATUS_DRAFT;
                             $contractDoc->didox_created_at = date('Y-m-d H:i:s');
                             $contractDoc->setDidoxData($uploadResult['data']);
                             $contractDoc->save(false);
-                            
+
                             $transaction->commit();
                             $result['documents'][] = 'contract';
                             $result['messages'][] = "Contract uploaded to DIDOX successfully (ID: {$contractDoc->didox_id}).";
-                            
+
                             // Auto-download PDF (silent - errors logged, doesn't break flow)
                             try {
                                 $contractDoc->downloadPdfFromDidox(['uz', 'ru']);
@@ -332,19 +353,20 @@ class DidoxOrderService
                             if (is_array($errorVal)) {
                                 $errorMsg = json_encode($errorVal, JSON_UNESCAPED_UNICODE);
                             } else {
-                                $errorMsg = (string)$errorVal;
+                                $errorMsg = (string) $errorVal;
                             }
-                            if (empty($errorMsg)) $errorMsg = 'Unknown error (empty response)';
-                            
+                            if (empty($errorMsg))
+                                $errorMsg = 'Unknown error (empty response)';
+
                             // Debugging: Log payload that caused error
                             $debugPayload = json_encode($apiData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
                             Yii::error("Didox Contract Upload Failed. Payload: " . $debugPayload, 'didox_order');
-                            
+
                             $transaction->rollBack();
                             $sellerDetails = "Seller: " . ($sellerInfo['name'] ?? 'N/A') . " (INN: " . ($sellerInfo['tin'] ?? 'N/A') . ")";
                             $buyerDetails = "Buyer: " . ($buyerInfo['name'] ?? 'N/A') . " (INN: " . ($buyerInfo['tin'] ?? 'N/A') . ")";
                             $result['messages'][] = "Contract creation failed at Didox: " . $errorMsg . ". " . $sellerDetails . " | " . $buyerDetails;
-                            
+
                             Log::log('didox_order', "Didox Contract Upload Failed for Order #{$order->id}. {$sellerDetails} | {$buyerDetails}", [
                                 'error' => $errorMsg,
                                 'payload' => $apiData
@@ -368,9 +390,9 @@ class DidoxOrderService
         }
 
         if (empty($result['documents']) && empty($result['messages'])) {
-             $result['messages'][] = "No documents created (already exist or skipped).";
+            $result['messages'][] = "No documents created (already exist or skipped).";
         } elseif (!empty($result['documents'])) {
-             $result['messages'][] = "Didox documents created: " . implode(', ', $result['documents']);
+            $result['messages'][] = "Didox documents created: " . implode(', ', $result['documents']);
         }
 
         return $result;
@@ -435,9 +457,9 @@ class DidoxOrderService
         $transaction = Yii::$app->db->beginTransaction();
         try {
             Log::log('didox_order', "[AUTO INVOICE] Creating Invoice Document for Order #{$order->id}");
-            
+
             $invoiceDoc = self::createInvoiceDocument($order, $sellerInfo, $buyerInfo);
-            
+
             if (!$invoiceDoc) {
                 $transaction->rollBack();
                 $result['success'] = false;
@@ -454,13 +476,13 @@ class DidoxOrderService
             try {
                 // Refresh document to load relations
                 $invoiceDoc->refresh();
-                
+
                 $apiData = $invoiceDoc->generateDidoxApiStructure();
                 $apiData['doctype'] = $invoiceDoc->didox_doc_type ?: '002';
-                
+
                 // Log full API structure including products for debugging
                 $productsCount = isset($apiData['ProductList']['Products']) ? count($apiData['ProductList']['Products']) : 0;
-                
+
                 Log::log('didox_order', "[AUTO INVOICE REQUEST] Order #{$order->id}", [
                     'order_id' => $order->id,
                     'doctype' => $apiData['doctype'],
@@ -472,22 +494,22 @@ class DidoxOrderService
                     'products_sample' => isset($apiData['ProductList']['Products'][0]) ? $apiData['ProductList']['Products'][0] : 'NO PRODUCTS',
                     'full_request' => $apiData
                 ]);
-                
+
                 $uploadResult = $didoxService->createDocument($apiData, $userKey);
-                
+
                 Log::log('didox_order', "[AUTO INVOICE RESPONSE] Order #{$order->id}", [
                     'order_id' => $order->id,
                     'success' => $uploadResult['success'] ?? false,
                     'response_data' => $uploadResult
                 ], ($uploadResult['success'] ?? false) ? 'info' : 'error');
-                
+
                 if ($uploadResult['success'] ?? false) {
                     $invoiceDoc->extractAndSetDidoxDocumentId($uploadResult['data']);
                     $invoiceDoc->didox_status = DidoxDocument::STATUS_DRAFT;
                     $invoiceDoc->didox_created_at = date('Y-m-d H:i:s');
                     $invoiceDoc->setDidoxData($uploadResult['data']);
                     $invoiceDoc->save(false);
-                    
+
                     $transaction->commit();
                     $result['documents'][] = 'invoice';
                     $result['messages'][] = "Invoice uploaded to DIDOX successfully (ID: {$invoiceDoc->didox_id}).";
@@ -574,7 +596,7 @@ class DidoxOrderService
                 try {
                     $apiData = $contractDoc->generateDidoxApiStructure();
                     $apiData['doctype'] = $contractDoc->didox_doc_type ?: '000';
-                    
+
                     // Log REQUEST (exclude PDF content for readability)
                     $requestLogData = $apiData;
                     if (isset($requestLogData['document']) && strlen($requestLogData['document']) > 200) {
@@ -585,22 +607,22 @@ class DidoxOrderService
                         'doctype' => $apiData['doctype'],
                         'request_data' => $requestLogData
                     ]);
-                    
+
                     $uploadResult = $didoxService->createDocument($apiData, $userKey);
-                    
+
                     Log::log('didox_order', "[CONTRACT RESPONSE] Order #{$order->id}", [
                         'order_id' => $order->id,
                         'success' => $uploadResult['success'] ?? false,
                         'response_data' => $uploadResult
                     ], $uploadResult['success'] ? 'info' : 'error');
-                    
+
                     if ($uploadResult['success']) {
                         $contractDoc->extractAndSetDidoxDocumentId($uploadResult['data']);
                         $contractDoc->didox_status = DidoxDocument::STATUS_DRAFT;
                         $contractDoc->didox_created_at = date('Y-m-d H:i:s');
                         $contractDoc->setDidoxData($uploadResult['data']);
                         $contractDoc->save(false);
-                        
+
                         $transaction->commit();
                         $result['documents'][] = 'contract';
                         $result['messages'][] = "Contract uploaded to DIDOX successfully (ID: {$contractDoc->didox_id}).";
@@ -654,14 +676,16 @@ class DidoxOrderService
 
         // Get Seller Info from Settings
         $settings = \app\models\Settings::find()
-            ->where(['type' => [
-                'didox_seller_inn', 
-                'didox_seller_name', 
-                'didox_seller_address', 
-                'didox_seller_account', 
-                'didox_seller_mfo',
-                'didox_seller_vat_reg_code'
-            ]])
+            ->where([
+                'type' => [
+                    'didox_seller_inn',
+                    'didox_seller_name',
+                    'didox_seller_address',
+                    'didox_seller_account',
+                    'didox_seller_mfo',
+                    'didox_seller_vat_reg_code'
+                ]
+            ])
             ->all();
         $settingsMap = \yii\helpers\ArrayHelper::map($settings, 'type', 'content');
 
@@ -746,7 +770,7 @@ class DidoxOrderService
         if (is_array($errorVal)) {
             return json_encode($errorVal, JSON_UNESCAPED_UNICODE);
         }
-        $errorMsg = (string)$errorVal;
+        $errorMsg = (string) $errorVal;
         return empty($errorMsg) ? 'Unknown error (empty response)' : $errorMsg;
     }
 
@@ -787,10 +811,10 @@ class DidoxOrderService
             } else {
                 $info['bank_id'] = $user->mfo ?? '';
             }
-            
+
             $fullName = array_filter([$user->name, $user->lastname]);
             $info['name'] = implode(' ', $fullName) ?: ($user->organization_name ?? 'Client');
-            
+
             // Address logic similar to DidoxController
             $address = '';
             if ($user->addresses) {
@@ -810,13 +834,13 @@ class DidoxOrderService
             $info['bank_id'] = $order->bank_id ?? '';
 
             if (empty($info['tin'])) {
-                 $info['tin'] = '123456789'; // Only use default if no TIN available at all and guest
+                $info['tin'] = '123456789'; // Only use default if no TIN available at all and guest
             }
-            
+
             $info['name'] = trim(($order->name ?? '') . ' ' . ($order->lastname ?? '')) ?: 'Client';
             $info['address'] = $order->address ?: 'Unknown';
         }
-        
+
         // Provide a default for buyer VAT reg code if not known, often required by validation even if 0
         if (empty($info['vat_reg_code'])) {
             $info['vat_reg_code'] = '0'; // Default to '0' if unknown to pass validation
@@ -844,14 +868,14 @@ class DidoxOrderService
             $doc->to_user_id = $order->user_id; // Assign to buyer
             $doc->status = DidoxDocument::LOCAL_STATUS_ACTIVE;
             $doc->didox_status = DidoxDocument::STATUS_DRAFT; // Start as local draft
-            
+
             if (!$doc->save()) {
                 Log::log('didox_order', "[CREATE INVOICE DOC] Failed to save DidoxDocument", [
                     'errors' => $doc->errors
                 ], 'error');
                 throw new \Exception("Failed to save DidoxDocument (Invoice): " . json_encode($doc->errors));
             }
-            
+
             Log::log('didox_order', "[CREATE INVOICE DOC] DidoxDocument saved, id={$doc->id}");
 
             $invoice = new DidoxDocumentInvoice();
@@ -860,7 +884,7 @@ class DidoxOrderService
             $invoice->invoice_date = date('Y-m-d');
             $invoice->contract_number = "CNT-{$order->id}";
             $invoice->contract_date = date('Y-m-d', strtotime($order->date ?: 'now'));
-            
+
             // Seller
             $invoice->seller_tin = $sellerInfo['tin'] ?? '';
             $invoice->seller_name = $sellerInfo['name'] ?? '';
@@ -868,7 +892,7 @@ class DidoxOrderService
             $invoice->seller_account = $sellerInfo['account'] ?? '';
             $invoice->seller_bank_id = $sellerInfo['bank_id'] ?? '';
             $invoice->seller_vat_reg_code = $sellerInfo['vat_reg_code'] ?? '';
-            
+
             // Buyer
             $invoice->buyer_tin = $buyerInfo['tin'] ?? '';
             $invoice->buyer_name = $buyerInfo['name'] ?? '';
@@ -888,42 +912,42 @@ class DidoxOrderService
                 }
             }
             $invoice->total_sum = $tempTotal > 0 ? $tempTotal : 1; // Ensure > 0
-            
+
             Log::log('didox_order', "[CREATE INVOICE DOC] Invoice data prepared", [
                 'document_id' => $doc->id,
                 'invoice_number' => $invoice->invoice_number,
                 'total_sum' => $invoice->total_sum,
                 'products_count' => count($orderProducts ?: [])
             ]);
-            
+
             if (!$invoice->save()) {
                 Log::log('didox_order', "[CREATE INVOICE DOC] Failed to save DidoxDocumentInvoice", [
                     'errors' => $invoice->errors
                 ], 'error');
                 throw new \Exception("Failed to save DidoxDocumentInvoice: " . json_encode($invoice->errors));
             }
-            
+
             Log::log('didox_order', "[CREATE INVOICE DOC] Invoice saved, id={$invoice->id}");
 
             // Products
             self::createIncludedProducts($doc, $order);
-            
+
             Log::log('didox_order', "[CREATE INVOICE DOC] Products created, recalculating totals");
-            
+
             // Check if we have any products
             $doc->refresh();
             $productsCount = $doc->getIncludedProducts()->count();
             Log::log('didox_order', "[CREATE INVOICE DOC] Products count: {$productsCount}");
-            
+
             if ($productsCount == 0) {
                 Log::log('didox_order', "[CREATE INVOICE DOC] WARNING: No products created for invoice!", null, 'warning');
             }
-            
+
             // Recalculate totals - refresh invoice from DB first
             $invoice->refresh();
             $invoice->calculateTotals();
             $invoice->save(false);
-            
+
             Log::log('didox_order', "[CREATE INVOICE DOC] Completed for Order #{$order->id}", [
                 'doc_id' => $doc->id,
                 'invoice_id' => $invoice->id,
@@ -932,7 +956,7 @@ class DidoxOrderService
             ]);
 
             return $doc;
-            
+
         } catch (\Exception $e) {
             Log::log('didox_order', "[CREATE INVOICE DOC] Exception for Order #{$order->id}", [
                 'error' => $e->getMessage(),
@@ -964,17 +988,17 @@ class DidoxOrderService
 
         $contract = new DidoxDocumentArbitrary();
         $contract->document_id = $doc->id;
-        
+
         // For testing/arbitrary, if "buyer" is not a real organization, Didox might reject mismatch owners.
         // If contract is "arbitrary", Didox allows 2-way with any Tin if properly set?
         // "Owners do not match" usually means the user creating the doc (token owner) 
         // does not match the 'Seller' or 'Owner' field in the JSON payload.
         // We are using 'sellerInfo' (from settings) as the creator.
-        
+
         // If the user wants to set the arbitrary contract to use "same as seller" for both sides? No, that makes no sense.
         // But "Owners do not match" means the token belongs to TIN X, but the document JSON says "SellerTin": Y.
         // Ensure sellerInfo['tin'] MATCHES the TIN of the PFX/Token used.
-        
+
         // Populate arbitrary doc
         // Check if buyer TIN is present, if not use default
         $buyerTin = $buyerInfo['tin'];
@@ -991,13 +1015,13 @@ class DidoxOrderService
             'buyer_address' => $buyerInfo['address']
             // 'branch_code' => ... if available
         ]);
-        
+
         // FOR ARBITRARY: The 'Owner' is the creator.
         // In DidoxDocumentArbitrary::generateDidoxJson(), it maps 'Owner' to these fields.
         // Let's ensure the 'Owner' tin matches the Seller TIN.
-        
+
         // Additionally, for "Invalid document json", we might be missing fields.
-        
+
         if (!$contract->save()) {
             throw new \Exception("Failed to save DidoxDocumentArbitrary: " . json_encode($contract->errors));
         }
@@ -1020,18 +1044,18 @@ class DidoxOrderService
     protected static function createIncludedProducts(DidoxDocument $doc, Order $order)
     {
         $orderProducts = $order->orderProducts;
-        
+
         Log::log('didox_order', "[PRODUCTS] Creating included products for doc #{$doc->id}", [
             'order_id' => $order->id,
             'products_count' => count($orderProducts)
         ]);
-        
+
         foreach ($orderProducts as $index => $op) {
             if (!$op) {
                 Log::log('didox_order', "[PRODUCTS] Skipping null order product at index {$index}", null, 'warning');
                 continue;
             }
-            
+
             $product = $op->product;
             if (!$product) {
                 Log::log('didox_order', "[PRODUCTS] Skipping order product #{$op->id} - product is null", [
@@ -1046,17 +1070,16 @@ class DidoxOrderService
                 $included->document_id = $doc->id;
                 $included->ord_no = $index + 1;
                 $included->name = $product->name_ru ?: $product->name_uz ?: 'Product';
-                
-                // Map IKPU - use product's IKPU code or default
-                // Default IKPU: 06912001001000000 - Прочие готовые пищевые продукты (or use your preferred default)
+
+                // Map IKPU - use product's IKPU code
                 $ikpuCode = '';
                 $ikpuName = '';
-                
+
                 if (!empty($product->ikpu_code)) {
                     $ikpuCode = $product->ikpu_code;
                     $ikpuName = $product->ikpu_name ?: ($product->ikpu ? $product->ikpu->name_ru : '');
                 }
-                
+
                 // If still empty, use a default IKPU code for "Other goods"
                 if (empty($ikpuCode)) {
                     $ikpuCode = '10309001003000000'; // Default: Прочие товары
@@ -1065,32 +1088,32 @@ class DidoxOrderService
                         'product_name' => $product->name_ru
                     ], 'warning');
                 }
-                
+
                 $included->catalog_code = $ikpuCode;
                 $included->catalog_name = $ikpuName;
-                
+
                 // Map Package - use defaults if not set
-                $included->package_code = isset($product->package_code) && !empty($product->package_code) 
-                    ? $product->package_code 
+                $included->package_code = isset($product->package_code) && !empty($product->package_code)
+                    ? $product->package_code
                     : '1516231'; // Default package code for "шт" (pieces)
-                $included->package_name = isset($product->package_name) && !empty($product->package_name) 
-                    ? $product->package_name 
+                $included->package_name = isset($product->package_name) && !empty($product->package_name)
+                    ? $product->package_name
                     : 'шт';
-                
-                $included->count = (float)($op->amount ?: 1);
-                
+
+                $included->count = (float) ($op->amount ?: 1);
+
                 // Safe division - ensure amount is not zero
                 $amount = $op->amount ?: 1;
                 $unitPrice = $op->price / $amount;
                 $included->summa = $op->price ?: 0; // Total price
-                
+
                 // VAT Logic (assuming 12% standard if not specified)
                 $included->vat_rate = 12; // Default
                 // Calculate VAT sum from total
                 $included->vat_sum = $included->summa * $included->vat_rate / (100 + $included->vat_rate);
-                
+
                 $included->origin = DidoxDocumentInvoice::PRODUCT_ORIGIN_DOMESTIC; // Default
-                
+
                 Log::log('didox_order', "[PRODUCTS] Creating product #{$index}", [
                     'document_id' => $doc->id,
                     'product_id' => $product->id,
@@ -1099,7 +1122,7 @@ class DidoxOrderService
                     'count' => $included->count,
                     'summa' => $included->summa
                 ]);
-                
+
                 if (!$included->save()) {
                     Log::log('didox_order', "[PRODUCTS] Failed to save IncludedProduct", [
                         'document_id' => $doc->id,
