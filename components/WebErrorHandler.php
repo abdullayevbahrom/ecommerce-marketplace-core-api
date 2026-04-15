@@ -11,6 +11,7 @@ class WebErrorHandler extends \yii\web\ErrorHandler
     {
         parent::logException($exception);
 
+        // Exception notifier mavjud bo'lsa, Telegramga yuborish
         if ($exception instanceof Throwable && Yii::$app->has('exceptionNotifier', true)) {
             $bodyParams = Yii::$app->request->bodyParams;
             if (empty($bodyParams)) {
@@ -31,5 +32,15 @@ class WebErrorHandler extends \yii\web\ErrorHandler
                 'body' => !empty($bodyParams) ? json_encode($bodyParams, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
             ]);
         }
+    }
+
+    /**
+     * Development mode-da ham xatolar to'g'ri qaytarilishi uchun
+     */
+    protected function renderException($exception)
+    {
+        // YII_DEBUG=true bo'lsa ham, exception notifier ishlashi kerak
+        // Bu metodni override qilib, parent::renderException() chaqiramiz
+        parent::renderException($exception);
     }
 }

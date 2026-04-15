@@ -104,25 +104,49 @@ class Images extends \yii\db\ActiveRecord
     public function uploadPhoto($objectId, $type, $main = 1, $type_image = null, $check = true): bool
     {
         if (!array_key_exists($type, $this->object)) {
+            Yii::error("Invalid image type: {$type}", __METHOD__);
             return false;
         }
         /** @var S3Component $s3 */
         $s3 = \Yii::$app->s3;
 
-        foreach ($this->imageFiles as $file) {
+        foreach ($this->imageFiles as $index => $file) {
             $rnd = mt_rand(0, 1000000);
             // WebP formatini qo'llab-quvvatlamaslik uchun jpg ga o'zgartiramiz
             $extension = strtolower($file->extension) === 'webp' ? 'jpg' : $file->extension;
             $name = time() . '_' . $rnd . '.' . $extension;
 
             $localTemp = Yii::getAlias('@runtime') . '/' . $name;
-            $file->saveAs($localTemp);
+            
+            Yii::info("Uploading image #{$index}: {$file->name} -> {$localTemp}", __METHOD__);
+            
+            if (!$file->saveAs($localTemp)) {
+                Yii::error("Failed to save uploaded file to: {$localTemp}", __METHOD__);
+                continue;
+            }
+
+            // Tekshirish: fayl haqiqatan ham mavjudmi?
+            if (!is_file($localTemp)) {
+                Yii::error("Uploaded file not found after save: {$localTemp}", __METHOD__);
+                continue;
+            }
+
+            $fileSize = filesize($localTemp);
+            Yii::info("File saved successfully: {$localTemp} ({$fileSize} bytes)", __METHOD__);
 
             $ext = strtolower($extension);
             $contentType = @mime_content_type($localTemp) ?: 'application/octet-stream';
 
             // original
-            $s3->putVariant($type, (string) $objectId, 'original', $name, $localTemp, $contentType);
+            try {
+                Yii::info("Uploading original to Minio: {$type}/{$objectId}/original/{$name}", __METHOD__);
+                $s3->putVariant($type, (string) $objectId, 'original', $name, $localTemp, $contentType);
+                Yii::info("Original uploaded successfully to Minio", __METHOD__);
+            } catch (\Throwable $e) {
+                Yii::error("Failed to upload original to Minio: {$e->getMessage()}", __METHOD__);
+                @unlink($localTemp);
+                continue;
+            }
 
             // thumbnails (svg/mp4/webp skip)
             $makeThumbs = !in_array($ext, ['svg', 'mp4', 'webp'], true);
@@ -130,12 +154,26 @@ class Images extends \yii\db\ActiveRecord
                 foreach ($this->image_sizes as $w => $h) {
                     $thumbPath = Yii::getAlias('@runtime') . "/{$w}_{$name}";
 
-                    \yii\imagine\Image::thumbnail($localTemp, (int) $w, (int) $h)
-                        ->save($thumbPath, ['quality' => 80]);
+                    try {
+                        // Tekshirish: source fayl hali mavjudmi?
+                        if (!is_file($localTemp)) {
+                            Yii::error("Source file missing before thumbnail creation: {$localTemp}", __METHOD__);
+                            break;
+                        }
 
-                    $s3->putVariant($type, (string) $objectId, "{$w}x{$h}", $name, $thumbPath);
+                        Yii::info("Creating thumbnail: {$w}x{$h} from {$localTemp}", __METHOD__);
+                        \yii\imagine\Image::thumbnail($localTemp, (int) $w, (int) $h)
+                            ->save($thumbPath, ['quality' => 80]);
+                        Yii::info("Thumbnail created: {$thumbPath}", __METHOD__);
 
-                    @unlink($thumbPath);
+                        $s3->putVariant($type, (string) $objectId, "{$w}x{$h}", $name, $thumbPath);
+
+                        @unlink($thumbPath);
+                    } catch (\Throwable $e) {
+                        Yii::error("Failed to create thumbnail {$w}x{$h}: {$e->getMessage()}", __METHOD__);
+                        @unlink($thumbPath);
+                        // Continue with other sizes even if one fails
+                    }
                 }
             }
 
@@ -205,20 +243,43 @@ class Images extends \yii\db\ActiveRecord
             $name = time() . '_' . $rnd . '.' . $extension;
 
             $localTemp = Yii::getAlias('@runtime') . '/' . $name;
-            if (!$file->saveAs($localTemp))
+            if (!$file->saveAs($localTemp)) {
+                Yii::error("Failed to save color image to: {$localTemp}", __METHOD__);
                 continue;
+            }
+
+            // Tekshirish: fayl mavjudmi?
+            if (!is_file($localTemp)) {
+                Yii::error("Color image file not found after save: {$localTemp}", __METHOD__);
+                continue;
+            }
 
             $ext = strtolower($extension);
             $contentType = @mime_content_type($localTemp) ?: 'application/octet-stream';
 
-            $s3->putVariant('color', (string) $c->id, 'original', $name, $localTemp, $contentType);
+            try {
+                $s3->putVariant('color', (string) $c->id, 'original', $name, $localTemp, $contentType);
+            } catch (\Throwable $e) {
+                Yii::error("Failed to upload color image to Minio: {$e->getMessage()}", __METHOD__);
+                @unlink($localTemp);
+                continue;
+            }
 
             if (!in_array($ext, ['svg', 'mp4', 'webp'], true)) {
                 foreach ($this->image_sizes as $w => $h) {
                     $thumbPath = Yii::getAlias('@runtime') . "/{$w}_{$name}";
-                    \yii\imagine\Image::thumbnail($localTemp, (int) $w, (int) $h)->save($thumbPath, ['quality' => 80]);
-                    $s3->putVariant('color', (string) $c->id, "{$w}x{$h}", $name, $thumbPath);
-                    @unlink($thumbPath);
+                    try {
+                        if (!is_file($localTemp)) {
+                            Yii::error("Color source file missing before thumbnail: {$localTemp}", __METHOD__);
+                            break;
+                        }
+                        \yii\imagine\Image::thumbnail($localTemp, (int) $w, (int) $h)->save($thumbPath, ['quality' => 80]);
+                        $s3->putVariant('color', (string) $c->id, "{$w}x{$h}", $name, $thumbPath);
+                        @unlink($thumbPath);
+                    } catch (\Throwable $e) {
+                        Yii::error("Failed to create color thumbnail {$w}x{$h}: {$e->getMessage()}", __METHOD__);
+                        @unlink($thumbPath);
+                    }
                 }
             }
 

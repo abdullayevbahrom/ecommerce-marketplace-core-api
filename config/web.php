@@ -74,6 +74,8 @@ $config = [
         'errorHandler' => [
             'class' => 'app\components\WebErrorHandler',
             'errorAction' => '/main/error',
+            // Development mode-da ham xatolar log qilinsin va Telegramga yuborilsin
+            'discardExistingOutput' => true,
         ],
         'mailer' => [
             'class' => 'yii\swiftmailer\Mailer',

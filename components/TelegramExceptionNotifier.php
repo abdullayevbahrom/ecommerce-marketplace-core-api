@@ -18,17 +18,21 @@ class TelegramExceptionNotifier extends Component
     public function notify(Throwable $exception, array $context = []): void
     {
         if (!$this->shouldNotify($exception)) {
+            Yii::info("Telegram notification skipped (shouldNotify=false): " . get_class($exception), __METHOD__);
             return;
         }
 
         [$botToken, $chatId] = $this->resolveCredentials();
         if (!$botToken || !$chatId) {
+            Yii::error("Telegram notification skipped: missing credentials (botToken=" . ($botToken ? 'set' : 'empty') . ", chatId=" . ($chatId ? 'set' : 'empty') . ")", __METHOD__);
             return;
         }
 
         $message = $this->buildMessage($exception, $context);
 
         try {
+            Yii::info("Sending Telegram notification for: " . get_class($exception), __METHOD__);
+            
             $ch = curl_init();
             curl_setopt_array($ch, [
                 CURLOPT_URL => "https://api.telegram.org/bot{$botToken}/sendMessage",
@@ -43,24 +47,51 @@ class TelegramExceptionNotifier extends Component
                 CURLOPT_CONNECTTIMEOUT => $this->timeout,
                 CURLOPT_TIMEOUT => $this->timeout,
             ]);
-            curl_exec($ch);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
             curl_close($ch);
+
+            if ($response === false || $httpCode !== 200) {
+                Yii::error("Telegram API error: HTTP {$httpCode}, curl error: {$curlError}, response: {$response}", __METHOD__);
+            } else {
+                Yii::info("Telegram notification sent successfully", __METHOD__);
+            }
         } catch (Throwable $notifyException) {
-            // Never break the main exception flow.
+            Yii::error("Telegram notification exception: " . $notifyException->getMessage(), __METHOD__);
         }
     }
 
     protected function shouldNotify(Throwable $exception): bool
     {
+        // UserException - foydalanuvchi xatosi (masalan, 400 Bad Request)
         if ($exception instanceof UserException) {
             return false;
         }
 
+        // HttpException < 500 - client xatolari (404, 403, va h.k.)
         if ($exception instanceof HttpException && $exception->statusCode < 500) {
             return false;
         }
 
-        return true;
+        // YII_DEBUG=false bo'lsa, barcha xatolarni yuborish
+        // YII_DEBUG=true bo'lsa, faqat 500+ xatolarini yuborish
+        if (!YII_DEBUG) {
+            return true;
+        }
+
+        // Development mode-da ham 500 xatolarini yuborish
+        if ($exception instanceof HttpException && $exception->statusCode >= 500) {
+            return true;
+        }
+
+        // Development mode-da boshqa exceptionlarni ham yuborish (Imagine xatolari va h.k.)
+        // Faqat HttpException bo'lmaganlarini ham yuboramiz
+        if (!$exception instanceof HttpException) {
+            return true;
+        }
+
+        return false;
     }
 
     protected function resolveCredentials(): array
