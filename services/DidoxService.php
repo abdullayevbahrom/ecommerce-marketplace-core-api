@@ -7,7 +7,8 @@ use yii\web\HttpException;
 
 class DidoxService
 {
-    const STAGE_URL = 'https://stage.goodsign.biz';
+    // const STAGE_URL = 'https://stage.goodsign.biz';
+    const STAGE_URL = 'https://testapi.einvoice.example.com';
     const PROD_URL = 'https://api.einvoice.example.com';
     
     private $baseUrl;
