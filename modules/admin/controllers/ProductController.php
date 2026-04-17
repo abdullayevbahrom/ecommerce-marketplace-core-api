@@ -77,7 +77,7 @@ class ProductController extends Controller {
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
         $dataProvider->query->with('category', 'image');
 
-        if ($this->user->role == User::ROLE_MODERATOR) {
+        if ($this->user && $this->user?->role == User::ROLE_MODERATOR) {
             $dataProvider->query->andWhere(['status' => 2])->andWhere(['deleted_at' => null]);
         }
 
@@ -132,7 +132,7 @@ class ProductController extends Controller {
         $current_product_types = [];
         $tree = [0 => ''];
         
-        if ($this->user->role == User::ROLE_MODERATOR) {
+        if ($this->user && $this->user->role == User::ROLE_MODERATOR) {
             return $this->redirect(['/admin/default/profile']);
         }
 
@@ -608,7 +608,7 @@ class ProductController extends Controller {
         $model->softDelete();
     }
 
-    if ($this->user->role == User::ROLE_MODERATOR) {
+    if ($this->user && $this->user->role == User::ROLE_MODERATOR) {
             return $this->redirect(['/admin/default/profile']);
         }
 
@@ -616,7 +616,7 @@ class ProductController extends Controller {
     }
 
     public function actionRemove($id) {
-        if ($this->user->role == User::ROLE_MODERATOR) {
+        if ($this->user && $this->user->role == User::ROLE_MODERATOR) {
             return $this->redirect(['/admin/default/profile']);
         }
         
