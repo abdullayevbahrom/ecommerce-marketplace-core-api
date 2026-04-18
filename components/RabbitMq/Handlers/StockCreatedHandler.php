@@ -42,7 +42,12 @@ class StockCreatedHandler
             $response = $client->post(
                 $warehouseApiUrl . "/api/sync-webhook/branches/{$warehouseBranchId}/set-stock-id",
                 [
-                    'json' => ['id' => $warehouseBranchId, 'yii_stock_id' => $stock->id],
+                    'json' => [
+                        'id' => $warehouseBranchId,
+                        'yii_stock_id' => $stock->id,
+                        'yii_shop_id' => $stock->shop_id,
+                        'for_marketplace' => (bool) $stock->for_marketplace,
+                    ],
                     'headers' => [
                         'X-Api-Token' => $token,
                         'Content-Type' => 'application/json',
