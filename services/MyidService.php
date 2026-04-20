@@ -350,6 +350,7 @@ class MyidService
 
         $userMyid = UserMyid::createFromSdkData($myidData, $reuid, $userId);
         if (!$userMyid) {
+            Yii::error('verifyAndSaveSdk save failed for userId=' . $userId . ', pinfl=' . ($pinfl ?? 'null'), __METHOD__);
             return [
                 'success' => false,
                 'error' => 'Failed to save verification data',
