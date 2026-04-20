@@ -268,9 +268,9 @@ class UserMyid extends ActiveRecord
         $model->first_name_en = $commonData['first_name_en'] ?? null;
         $model->last_name_en = $commonData['last_name_en'] ?? null;
         $model->birth_date = $commonData['birth_date'] ?? null;
-        $model->birth_place = $commonData['birth_place'] ?? null;
-        $model->nationality = $commonData['nationality'] ?? null;
-        $model->citizenship = $commonData['citizenship'] ?? null;
+        $model->birth_place = isset($commonData['birth_place']) ? mb_substr((string)$commonData['birth_place'], 0, 500) : null;
+        $model->nationality = isset($commonData['nationality']) ? mb_substr((string)$commonData['nationality'], 0, 50) : null;
+        $model->citizenship = isset($commonData['citizenship']) ? mb_substr((string)$commonData['citizenship'], 0, 50) : null;
         $model->sdk_hash = $commonData['sdk_hash'] ?? null;
 
         // Gender mapping
@@ -288,21 +288,24 @@ class UserMyid extends ActiveRecord
             $passData = $docData['pass_data'];
             if (strlen($passData) >= 9) {
                 $model->passport_series = substr($passData, 0, 2);
-                $model->passport_number = substr($passData, 2);
+                $model->passport_number = mb_substr(substr($passData, 2), 0, 7);
             }
         }
         $model->passport_issued_by = $docData['issued_by'] ?? null;
         $model->passport_issued_date = $docData['issued_date'] ?? null;
         $model->passport_expiry_date = $docData['expiry_date'] ?? null;
-        $model->doc_type = $docData['doc_type'] ?? null;
+        $model->doc_type = isset($docData['doc_type']) ? mb_substr((string)$docData['doc_type'], 0, 50) : null;
 
         // Contacts
         $model->phone = $contacts['phone'] ?? null;
         $model->email = $contacts['email'] ?? null;
 
-        // Address
-        $model->permanent_address = $address['permanent_address'] ?? null;
-        $model->temporary_address = $address['temporary_address'] ?? null;
+        // Address — permanent_address and temporary_address are strings per MyID docs,
+        // but truncate to column limit to handle edge cases
+        $permanentAddr = $address['permanent_address'] ?? null;
+        $temporaryAddr = $address['temporary_address'] ?? null;
+        $model->permanent_address = is_string($permanentAddr) ? mb_substr($permanentAddr, 0, 500) : null;
+        $model->temporary_address = is_string($temporaryAddr) ? mb_substr($temporaryAddr, 0, 500) : null;
 
         // Comparison and job
         $model->comparison_value = $sdkData['comparison_value'] ?? null;
@@ -331,7 +334,9 @@ class UserMyid extends ActiveRecord
             return $model;
         }
 
-        Yii::error('Failed to save UserMyid: ' . json_encode($model->errors), __METHOD__);
+        $errorDetail = json_encode($model->errors, JSON_UNESCAPED_UNICODE);
+        Yii::error('Failed to save UserMyid: ' . $errorDetail, __METHOD__);
+        $model->addError('_save', $errorDetail);
         return null;
     }
 
@@ -372,9 +377,11 @@ class UserMyid extends ActiveRecord
         $model->birth_place = $myidData['birth_place'] ?? null;
         $model->nationality = $myidData['nationality'] ?? null;
         $model->citizenship = $myidData['citizenship'] ?? null;
-        $model->living_address = $myidData['living_address'] ?? null;
+        $livingAddr = $myidData['living_address'] ?? null;
+        $model->living_address = is_string($livingAddr) ? mb_substr($livingAddr, 0, 255) : null;
         $model->passport_series = $myidData['passport_series'] ?? null;
-        $model->passport_number = $myidData['passport_number'] ?? null;
+        $passNum = $myidData['passport_number'] ?? null;
+        $model->passport_number = is_string($passNum) ? mb_substr($passNum, 0, 7) : null;
         $model->passport_issued_by = $myidData['passport_issued_by'] ?? null;
         $model->passport_issued_date = $myidData['passport_issued_date'] ?? null;
         $model->passport_expiry_date = $myidData['passport_expiry_date'] ?? null;
