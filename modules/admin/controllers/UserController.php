@@ -13,6 +13,7 @@ use app\models\Category;
 use app\models\order\Order;
 use app\models\order\OrderSearch;
 use app\models\user\User;
+use app\models\user\UserMyid;
 use app\models\user\UserSearch;
 use app\models\user\card\UserCard;
 use app\models\user\card\UserCardSearch;
@@ -412,6 +413,45 @@ class UserController extends Controller {
     public function actionWalletTransfer($id) {
         Yii::$app->session->setFlash('error', 'Transfer functionality has been removed. Use payment instead.');
         return $this->redirect(['view', 'id' => $id]);
+    }
+
+    public function actionWalletFreeze($id) {
+        $model = User::findOne($id);
+        if (!$model) {
+            throw new HttpException(404, 'Page not found');
+        }
+
+        if ($model->wallet_frozen) {
+            $model->wallet_frozen = 0;
+            $msg = 'Кошелёк разморожен';
+        } else {
+            $model->wallet_frozen = 1;
+            $msg = 'Кошелёк заморожен';
+        }
+
+        if ($model->save(false)) {
+            Yii::$app->session->setFlash('wallet_generated', $msg);
+        }
+
+        return $this->redirect(['view', 'id' => $id]);
+    }
+
+    public function actionMyidDetail($id) {
+        $model = User::find()->with('image')->where(['id' => $id])->andWhere(['!=', 'status', 0])->one();
+        if (!$model) {
+            throw new HttpException(404, 'Page not found');
+        }
+
+        $userMyid = UserMyid::findOne(['user_id' => $id]);
+        if (!$userMyid) {
+            Yii::$app->session->setFlash('error', 'У пользователя нет данных MyID');
+            return $this->redirect(['view', 'id' => $id]);
+        }
+
+        return $this->render('myid-detail', [
+            'model' => $model,
+            'userMyid' => $userMyid,
+        ]);
     }
 
     public function actionRemove($id) {

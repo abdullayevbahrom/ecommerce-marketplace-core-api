@@ -217,10 +217,11 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
 
                                 <?php if ($hasMyid): ?>
                                 <div class="col-md-6">
-                                    <div class="info-box bg-green">
+                                    <a href="<?= \yii\helpers\Url::to(['/admin/user/myid-detail', 'id' => $model->id]) ?>" style="text-decoration: none; color: inherit;">
+                                    <div class="info-box bg-green" style="cursor: pointer;">
                                         <span class="info-box-icon"><i class="fa fa-user-circle"></i></span>
                                         <div class="info-box-content">
-                                            <span class="info-box-text">MyID</span>
+                                            <span class="info-box-text">MyID <i class="fa fa-external-link" style="font-size: 11px;"></i></span>
                                             <span class="info-box-number"><?= Html::encode($userMyid->pinfl ?: 'Верифицирован') ?></span>
                                             <span class="progress-description">
                                                 <?php if ($userMyid->comparison_value): ?>
@@ -229,6 +230,7 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                             </span>
                                         </div>
                                     </div>
+                                    </a>
                                     <dl class="dl-horizontal" style="font-size: 12px;">
                                         <?php if ($userMyid->first_name || $userMyid->last_name): ?>
                                             <dt>ФИО (MyID):</dt>
@@ -251,6 +253,9 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                             <dd><?= formatDateSafe($userMyid->created_at, 'datetime') ?></dd>
                                         <?php endif; ?>
                                     </dl>
+                                    <a href="<?= \yii\helpers\Url::to(['/admin/user/myid-detail', 'id' => $model->id]) ?>" class="btn btn-sm btn-success btn-block">
+                                        <i class="fa fa-eye"></i> Подробнее MyID
+                                    </a>
                                 </div>
                                 <?php endif; ?>
                             </div>
@@ -744,16 +749,29 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                             <div class="alert alert-success">
                                                                 <i class="fa fa-check-circle"></i> Wallet is deployed and active on Sepolia network.
                                                             </div>
+                                                            <?php if ($model->wallet_frozen): ?>
+                                                                <div class="alert alert-danger">
+                                                                    <i class="fa fa-lock"></i> Кошелёк заморожен. Операции недоступны.
+                                                                </div>
+                                                            <?php endif; ?>
                                                             <div class="btn-group btn-group-justified">
                                                                 <div class="btn-group">
-                                                                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#mintModal">
+                                                                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#mintModal" <?= $model->wallet_frozen ? 'disabled' : '' ?>>
                                                                         <i class="fa fa-plus-circle"></i> Mint Token
                                                                     </button>
                                                                 </div>
                                                                 <div class="btn-group">
-                                                                    <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#payModal">
+                                                                    <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#payModal" <?= $model->wallet_frozen ? 'disabled' : '' ?>>
                                                                         <i class="fa fa-paper-plane"></i> Pay
                                                                     </button>
+                                                                </div>
+                                                                <div class="btn-group">
+                                                                    <a href="<?= \yii\helpers\Url::to(['/admin/user/wallet-freeze', 'id' => $model->id]) ?>"
+                                                                       class="btn btn-<?= $model->wallet_frozen ? 'success' : 'danger' ?>"
+                                                                       data-confirm="<?= $model->wallet_frozen ? 'Разморозить кошелёк?' : 'Заморозить кошелёк? Все операции будут заблокированы.' ?>">
+                                                                        <i class="fa fa-<?= $model->wallet_frozen ? 'unlock' : 'lock' ?>"></i>
+                                                                        <?= $model->wallet_frozen ? 'Разморозить' : 'Заморозить' ?>
+                                                                    </a>
                                                                 </div>
                                                             </div>
                                                         <?php endif; ?>
