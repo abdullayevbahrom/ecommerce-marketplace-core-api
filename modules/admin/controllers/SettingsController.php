@@ -117,7 +117,7 @@ class SettingsController extends Controller{
 
         // Handle manual token refresh
         if (Yii::$app->request->post('refresh_token')) {
-            $result = $didoxService->refreshAndStoreToken();
+            $result = $didoxService->refreshAndStoreToken(true);
             
             if ($result['success']) {
                 Yii::$app->session->setFlash('didox_saved', 'Token refreshed successfully! Expires at: ' . $result['expires_at']);

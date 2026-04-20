@@ -835,7 +835,7 @@ class OrderController extends Controller
                 'success' => true,
                 'is_mock' => $isMock, // TODO: Remove this flag when BTS mock is removed
                 'data' => [
-                    'summaryPrice' => $branchPrice,
+                    'summaryPrice' => $response['data']['summaryPrice'] ?? $response['data']['all_cost'] ?? $price,
                     'price' => $price,
                     'price_key' => $priceKey,
                     'all_prices' => $allPrices,

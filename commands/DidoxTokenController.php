@@ -80,7 +80,7 @@ class DidoxTokenController extends Controller
         }
         
         // Perform refresh
-        $result = $service->refreshAndStoreToken();
+        $result = $service->refreshAndStoreToken(true);
         
         if ($result['success']) {
             $this->stdout("✓ Token refreshed successfully!\n", Console::FG_GREEN);

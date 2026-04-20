@@ -195,7 +195,11 @@ class Order extends \yii\db\ActiveRecord
                 $order_product->product_id = $product->product->id;
                 $order_product->amount = $product->amount;
                 $order_product->delivery_cost = $product->delivery_cost;
-                $order_product->stock_id = $product->product->stock_id;
+                $resolvedStockId = $product->product->stock_id;
+                if (!$resolvedStockId && $product->product->shop && $product->product->shop->stock) {
+                    $resolvedStockId = $product->product->shop->stock->id;
+                }
+                $order_product->stock_id = $resolvedStockId;
     
                 // Calculate price based on quantity and wholesale tiers
                 $unit_price = $product->product->getPriceByQuantity($product->amount);
@@ -349,25 +353,43 @@ class Order extends \yii\db\ActiveRecord
         
         // Get order products grouped by stock_id (cart has already been cleared)
         $orderProducts = OrderProduct::find()
-            ->with(['product.stock'])
+            ->with(['product.stock', 'product.shop.stock'])
             ->where(['order_id' => $this->id])
             ->all();
             
         // Group order products by stock_id
         $stockGroups = [];
         foreach ($orderProducts as $orderProduct) {
-            $stockId = $orderProduct->product->stock_id ?? null;
-            if (!isset($stockGroups[$stockId])) {
-                $stockGroups[$stockId] = [];
+            $resolvedStock = null;
+
+            if ($orderProduct->stock_id) {
+                $resolvedStock = Stock::findOne($orderProduct->stock_id);
             }
-            $stockGroups[$stockId][] = $orderProduct;
+
+            if (!$resolvedStock && $orderProduct->product && $orderProduct->product->stock) {
+                $resolvedStock = $orderProduct->product->stock;
+            }
+
+            if (!$resolvedStock && $orderProduct->product && $orderProduct->product->shop && $orderProduct->product->shop->stock) {
+                $resolvedStock = $orderProduct->product->shop->stock;
+            }
+
+            $groupKey = $resolvedStock ? ('stock_' . $resolvedStock->id) : ('orphan_' . $orderProduct->id);
+            if (!isset($stockGroups[$groupKey])) {
+                $stockGroups[$groupKey] = [
+                    'stock' => $resolvedStock,
+                    'items' => [],
+                ];
+            }
+            $stockGroups[$groupKey]['items'][] = $orderProduct;
         }
         
         $totalDeliveryCost = 0;
         
         // Process each stock group
-        foreach ($stockGroups as $stockId => $groupItems) {
-            $stock = $stockId ? Stock::findOne($stockId) : null;
+        foreach ($stockGroups as $groupData) {
+            $stock = $groupData['stock'];
+            $groupItems = $groupData['items'];
             
             // Calculate total weight and volume for this group using existing order products
             $totalWeight = 0;
@@ -395,6 +417,12 @@ class Order extends \yii\db\ActiveRecord
                 // Sum up delivery costs
                 foreach ($groupProducts as $orderProduct) {
                     $totalDeliveryCost += $orderProduct->bts_price ?? 0;
+                }
+            } elseif (!empty($groupProducts)) {
+                $errorMessage = 'BTS integration skipped: sender stock/BTS city not configured';
+                foreach ($groupProducts as $orderProduct) {
+                    $orderProduct->bts_status_info = $errorMessage;
+                    $orderProduct->save(false);
                 }
             }
         }
@@ -490,7 +518,28 @@ class Order extends \yii\db\ActiveRecord
         $controller = Yii::$app->controller->id;
         $action = Yii::$app->controller->action->id;
 
-        $data = ['id', 'user', 'payment', 'delivery', 'price', 'amount', 'delivery_cost', 'discount_amount', 'promocode', 'name', 'phone', 'address', 'status'=>function(){return Yii::$app->request->get('status') == 3 ? 3 : $this->status;}, 'status_payment', 'date', 'orderReceipt'];
+        $data = [
+            'id',
+            'user',
+            'payment',
+            'delivery',
+            'price',
+            'amount',
+            'delivery_cost' => function () {
+                return $this->getResolvedDeliveryCost();
+            },
+            'discount_amount',
+            'promocode',
+            'name',
+            'phone',
+            'address',
+            'status' => function () {
+                return Yii::$app->request->get('status') == 3 ? 3 : $this->status;
+            },
+            'status_payment',
+            'date',
+            'orderReceipt'
+        ];
     
         $exception = ['send', 'detail', 'index'];
 
@@ -565,6 +614,48 @@ class Order extends \yii\db\ActiveRecord
     {
         return $this->hasMany(DidoxDocument::class, ['order_id' => 'id'])
             ->orderBy(['id' => SORT_ASC]);
+    }
+
+    /**
+     * Resolve delivery cost for API responses.
+     * Uses order.delivery_cost first, then falls back to order products and finally
+     * derives from price - products + discount for legacy rows.
+     */
+    public function getResolvedDeliveryCost(): float
+    {
+        $stored = (float)($this->delivery_cost ?? 0);
+        if ($stored > 0) {
+            return $stored;
+        }
+
+        $products = $this->orderProducts;
+        if (empty($products)) {
+            $products = OrderProduct::find()->where(['order_id' => $this->id])->all();
+        }
+
+        $deliveryFromProducts = 0.0;
+        $productsTotal = 0.0;
+        foreach ($products as $product) {
+            $productsTotal += (float)($product->product_price ?? 0);
+
+            $itemDelivery = (float)($product->delivery_cost ?? 0);
+            if ($itemDelivery <= 0) {
+                $itemDelivery = (float)($product->bts_price ?? 0);
+            }
+            if ($itemDelivery > 0) {
+                $deliveryFromProducts += $itemDelivery;
+            }
+        }
+
+        if ($deliveryFromProducts > 0) {
+            return $deliveryFromProducts;
+        }
+
+        $orderTotal = (float)($this->price ?? 0);
+        $discount = (float)($this->discount_amount ?? 0);
+        $derived = $orderTotal - $productsTotal + $discount;
+
+        return $derived > 0 ? $derived : 0.0;
     }
 
     /**

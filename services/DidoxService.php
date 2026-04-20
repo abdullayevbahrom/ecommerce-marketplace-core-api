@@ -211,7 +211,7 @@ class DidoxService
      * 
      * @return array ['success' => bool, 'token' => string|null, 'expires_at' => string|null, 'error' => string|null]
      */
-    public function refreshAndStoreToken(): array
+    public function refreshAndStoreToken(bool $ignoreDisabled = false): array
     {
         $now = date('Y-m-d H:i:s');
         
@@ -223,7 +223,7 @@ class DidoxService
             ]);
             
             $status = $settings['didox_auto_refresh_status'] ?? 'manual';
-            if ($status === 'disabled') {
+            if ($status === 'disabled' && !$ignoreDisabled) {
                 return ['success' => false, 'error' => 'Auto-refresh is disabled', 'token' => null, 'expires_at' => null, 'skipped' => true];
             }
 

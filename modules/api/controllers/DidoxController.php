@@ -75,6 +75,22 @@ class DidoxController extends Controller
         return (string)$error;
     }
 
+    private function isDidoxAuthError(array $result): bool
+    {
+        $httpCode = (int)($result['httpCode'] ?? 0);
+        if (in_array($httpCode, [401, 403], true)) {
+            return true;
+        }
+
+        $errorText = strtolower((string)($result['error'] ?? ''));
+        $rawText = strtolower((string)($result['debug']['response_raw'] ?? ''));
+        $combined = $errorText . ' ' . $rawText;
+
+        return strpos($combined, 'invalid user key') !== false
+            || strpos($combined, 'unauthorized') !== false
+            || strpos($combined, 'token') !== false;
+    }
+
     /**
      * Handle CORS preflight requests
      */
@@ -380,35 +396,82 @@ class DidoxController extends Controller
 
             // PDF not found locally - try to fetch from Didox and save
             $didoxService = new \app\services\DidoxService();
-            
-            // Get user-key from DB setting
-            $userKey = '';
-            $sysSettings = \app\models\Settings::find()
-                ->where(['type' => 'didox_eimzo_token'])
-                ->one();
-            
-            if ($sysSettings && !empty($sysSettings->content)) {
-                $userKey = $sysSettings->content;
+            $tokenCandidates = [];
+
+            if (!empty($user->eimzo_didox_token)) {
+                $tokenCandidates['user'] = trim((string)$user->eimzo_didox_token);
             }
 
-            $result = $didoxService->getDocumentPdf($document->didox_id, $userKey, $lang);
-
-            if ($result['success']) {
-                // Save PDF locally for future requests
-                $document->savePdfLocally($result['data'], $lang);
-
-                // Return PDF file
-                $response = Yii::$app->response;
-                $response->format = Response::FORMAT_RAW;
-                $response->headers->set('Content-Type', 'application/pdf');
-                $response->headers->set('Content-Disposition', 'inline; filename="' . $document->didox_id . '_' . $lang . '.pdf"');
-                $response->headers->set('Cache-Control', 'public, max-age=3600');
-                $response->data = $result['data'];
-                
-                return $response;
-            } else {
-                throw new HttpException(502, 'Failed to fetch PDF from Didox: ' . (isset($result['error']) ? $result['error'] : 'Unknown error'));
+            $systemTokenStatus = $didoxService->getTokenStatus();
+            if (!empty($systemTokenStatus['has_token']) && empty($systemTokenStatus['is_expired'])) {
+                $sysSettings = \app\models\Settings::find()
+                    ->where(['type' => 'didox_eimzo_token'])
+                    ->one();
+                $storedSystemToken = trim((string)($sysSettings->content ?? ''));
+                if ($storedSystemToken !== '') {
+                    $tokenCandidates['system'] = $storedSystemToken;
+                }
             }
+
+            if (empty($tokenCandidates)) {
+                $refreshResult = $didoxService->refreshAndStoreToken(true);
+                if (!empty($refreshResult['success']) && !empty($refreshResult['token'])) {
+                    $tokenCandidates['refreshed'] = trim((string)$refreshResult['token']);
+                }
+            }
+
+            $lastResult = null;
+            foreach ($tokenCandidates as $tokenSource => $tokenValue) {
+                if ($tokenValue === '') {
+                    continue;
+                }
+
+                $attempt = $didoxService->getDocumentPdf($document->didox_id, $tokenValue, $lang);
+                if (!empty($attempt['success'])) {
+                    $document->savePdfLocally($attempt['data'], $lang);
+
+                    $response = Yii::$app->response;
+                    $response->format = Response::FORMAT_RAW;
+                    $response->headers->set('Content-Type', 'application/pdf');
+                    $response->headers->set('Content-Disposition', 'inline; filename="' . $document->didox_id . '_' . $lang . '.pdf"');
+                    $response->headers->set('Cache-Control', 'public, max-age=3600');
+                    $response->data = $attempt['data'];
+
+                    return $response;
+                }
+
+                $lastResult = $attempt;
+                Yii::warning('Didox PDF fetch failed with token source [' . $tokenSource . ']: ' . ($attempt['error'] ?? 'Unknown error'), __METHOD__);
+            }
+
+            if (is_array($lastResult) && $this->isDidoxAuthError($lastResult)) {
+                $refreshResult = $didoxService->refreshAndStoreToken(true);
+                if (!empty($refreshResult['success']) && !empty($refreshResult['token'])) {
+                    $freshToken = trim((string)$refreshResult['token']);
+                    if ($freshToken !== '') {
+                        $retryAttempt = $didoxService->getDocumentPdf($document->didox_id, $freshToken, $lang);
+                        if (!empty($retryAttempt['success'])) {
+                            $document->savePdfLocally($retryAttempt['data'], $lang);
+
+                            $response = Yii::$app->response;
+                            $response->format = Response::FORMAT_RAW;
+                            $response->headers->set('Content-Type', 'application/pdf');
+                            $response->headers->set('Content-Disposition', 'inline; filename="' . $document->didox_id . '_' . $lang . '.pdf"');
+                            $response->headers->set('Cache-Control', 'public, max-age=3600');
+                            $response->data = $retryAttempt['data'];
+
+                            return $response;
+                        }
+
+                        $lastResult = $retryAttempt;
+                    }
+                }
+            }
+
+            $errorMessage = is_array($lastResult)
+                ? (string)($lastResult['error'] ?? 'Unknown error')
+                : 'No available Didox token to fetch PDF';
+            throw new HttpException(502, 'Failed to fetch PDF from Didox: ' . $errorMessage);
 
         } catch (HttpException $e) {
             throw $e;
