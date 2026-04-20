@@ -15,8 +15,17 @@ class WalletController extends Controller
     public function init()
     {
         parent::init();
-        // Initialize the service manually or via DI if configured
         $this->walletService = new WalletService();
+    }
+
+    private function checkWalletFrozen()
+    {
+        $user = Yii::$app->user->identity;
+        if ($user && $user->wallet_frozen) {
+            Yii::$app->response->statusCode = 403;
+            return ['error' => 'Wallet is frozen. Contact support.'];
+        }
+        return null;
     }
 
     public function behaviors()
@@ -150,6 +159,7 @@ class WalletController extends Controller
      */
     public function actionPay()
     {
+        if ($frozen = $this->checkWalletFrozen()) return $frozen;
 
         $payerId = Yii::$app->user->id;
         if (!$payerId) {
@@ -181,6 +191,8 @@ class WalletController extends Controller
      */
     public function actionSend()
     {
+        if ($frozen = $this->checkWalletFrozen()) return $frozen;
+
         $senderUserId = Yii::$app->user->id;
         if (!$senderUserId) {
             return ['error' => 'User not found'];
