@@ -129,10 +129,11 @@ $config = [
 ];
 
 if (YII_ENV_DEV) {
-    $config['baseUrl'] = 'http://localhost:8002';
-    $config['warehouseApiUrl'] = 'http://sklad';
-    $config['skladApiUrl'] = 'http://sklad';
-    $config['operatorApiUrl'] = 'http://operator_app';  // TODO: update when operator is running
+    $config['baseUrl'] = getenv('BASE_URL') ?: 'http://localhost:8002';
+    // In local docker network warehouse service is reachable as "sklad_app"
+    $config['warehouseApiUrl'] = getenv('WAREHOUSE_API_URL') ?: 'http://sklad_app';
+    $config['skladApiUrl'] = getenv('SKLAD_API_URL') ?: 'http://sklad_app';
+    $config['operatorApiUrl'] = getenv('OPERATOR_API_URL') ?: 'http://operator_app';
 }
 
 return $config;
