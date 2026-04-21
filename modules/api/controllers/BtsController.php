@@ -311,11 +311,38 @@ class BtsController extends Controller {
             $bts = new BTS();
             $result = $bts->fetchCities($regionCode);
 
-            if ($result['success'] && isset($result['data']['items'])) {
+            $items = null;
+            $btsMeta = null;
+
+            if (!empty($result['success'])) {
+                $responseData = $result['data'] ?? null;
+
+                // Legacy/internal normalized format: ['items' => [...], '_meta' => ...]
+                if (is_array($responseData) && isset($responseData['items']) && is_array($responseData['items'])) {
+                    $items = $responseData['items'];
+                    $btsMeta = $responseData['_meta'] ?? null;
+                }
+
+                // BTS v1 returns payload as indexed array:
+                // [0 => items, 1 => links, 2 => pagination]
+                if ($items === null && is_array($responseData)) {
+                    if (isset($responseData[0]) && is_array($responseData[0])) {
+                        $items = $responseData[0];
+                    }
+                    if (isset($responseData[1]) || isset($responseData[2])) {
+                        $btsMeta = array_filter([
+                            'links' => $responseData[1] ?? null,
+                            'pagination' => $responseData[2] ?? null,
+                        ], static fn($value) => $value !== null);
+                    }
+                }
+            }
+
+            if (is_array($items)) {
                 return [
-                    'data' => $result['data']['items'],
+                    'data' => $items,
                     '_meta' => array_filter([
-                        'bts_meta' => $result['data']['_meta'] ?? null,
+                        'bts_meta' => $btsMeta,
                         'resolved_region_code' => $regionCode,
                         'requested_region_id' => $regionId,
                         'requested_region_code' => Yii::$app->request->get('regionCode'),
