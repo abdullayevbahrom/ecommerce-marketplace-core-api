@@ -103,7 +103,7 @@ class User extends ActiveRecord implements IdentityInterface
     ];
 
     const PHOTO_PATH = 'uploads/user/';
-    const PHOTO_DEFAULT = '/assets_files/images/user.png';
+    const PHOTO_DEFAULT = 'https://files.example.com/uploads/user.png';
 
     const SOURCE_YII = 'yii';
     const SOURCE_SKLAD = 'sklad';
