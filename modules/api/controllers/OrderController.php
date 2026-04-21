@@ -37,7 +37,10 @@ class OrderController extends Controller
 
         Yii::$app->response->getHeaders()->add('Access-Control-Allow-Origin', '*');
         Yii::$app->response->getHeaders()->add('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS');
-        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token, Origin, Authorization');
+        Yii::$app->response->getHeaders()->add(
+            'Access-Control-Allow-Headers',
+            'Content-Type, X-Auth-Token, Origin, Authorization, language, Language, Content-Language, Accept-Language'
+        );
 
         if (Yii::$app->request->isOptions) {
             Yii::$app->response->statusCode = 200;
