@@ -376,14 +376,22 @@ class EIMZOAuth {
         return data.digestHex;
     }
 
-    async startMobileSign(token) {
+    async startMobileSign(token, document = null, meta = null) {
+        const body = {};
+        if (document !== null && document !== undefined && document !== "") {
+            body.document = document;
+        }
+        if (meta && typeof meta === "object") {
+            body.meta = meta;
+        }
+
         const response = await this.requestJson(this.buildUrl(this.routes.mobileSign), {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`,
             },
-            body: "{}",
+            body: JSON.stringify(body),
         });
 
         return response.data || response;

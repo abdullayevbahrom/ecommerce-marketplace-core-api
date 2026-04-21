@@ -390,6 +390,18 @@ class EimzoController extends Controller
      */
     public function actionMobileSign()
     {
+        $documentInput = Yii::$app->request->post('document');
+        if ($documentInput === null || trim((string)$documentInput) === '') {
+            return $this->sendError(ErrorCodes::ERROR_EIMZO_PKCS7_REQUIRED, 'document is required');
+        }
+
+        $documentB64 = $this->normalizeDocumentInputToBase64((string)$documentInput);
+        $documentRef = Yii::$app->request->post('document_ref');
+        $meta = Yii::$app->request->post('meta', []);
+        if (!is_array($meta)) {
+            $meta = ['raw' => $meta];
+        }
+
         $service = new EimzoService();
         $result = $service->mobileSign();
 
@@ -397,9 +409,22 @@ class EimzoController extends Controller
             return $this->sendError(ErrorCodes::ERROR_EIMZO_MOBILE_INIT_FAILED, $result['error']);
         }
 
+        $documentId = $result['documentId'] ?? '';
+        $stored = false;
+        if ($documentId !== '') {
+            $stored = $service->storeMobileSignDocument($documentId, $documentB64, [
+                'user_id' => Yii::$app->user->id ?? null,
+                'user_ip' => Yii::$app->request->userIP ?? null,
+                'document_ref' => $documentRef,
+                'meta' => $meta,
+            ]);
+        }
+
         return $this->sendSuccess([
             'siteId' => $result['siteId'],
             'documentId' => $result['documentId'],
+            'documentSha256' => hash('sha256', $documentB64),
+            'mappingStored' => $stored,
             'pollInterval' => Yii::$app->params['eimzo']['mobileStatusPollInterval'] ?? 5,
             'timeout' => Yii::$app->params['eimzo']['mobileStatusTimeout'] ?? 120,
         ]);
@@ -573,16 +598,38 @@ class EimzoController extends Controller
     public function actionMobileVerify()
     {
         $documentId = Yii::$app->request->post('documentId');
-        $documentB64 = Yii::$app->request->post('document');
+        $documentInput = Yii::$app->request->post('document');
 
         if (empty($documentId)) {
             return $this->sendError(ErrorCodes::ERROR_EIMZO_DOCUMENT_ID_REQUIRED);
         }
-        if (empty($documentB64)) {
+
+        $service = new EimzoService();
+        $mapped = $service->getMobileSignDocument($documentId);
+        $resolvedFromMapping = false;
+        $documentB64 = '';
+
+        if ($documentInput !== null && trim((string)$documentInput) !== '') {
+            $documentB64 = $this->normalizeDocumentInputToBase64((string)$documentInput);
+        } elseif (is_array($mapped) && !empty($mapped['document_b64'])) {
+            $documentB64 = (string)$mapped['document_b64'];
+            $resolvedFromMapping = true;
+        }
+
+        if ($documentB64 === '') {
             return $this->sendError(ErrorCodes::ERROR_EIMZO_PKCS7_REQUIRED, 'document is required');
         }
 
-        $service = new EimzoService();
+        if (!$resolvedFromMapping && is_array($mapped) && !empty($mapped['document_sha256'])) {
+            $incomingHash = hash('sha256', $documentB64);
+            if (!hash_equals((string)$mapped['document_sha256'], $incomingHash)) {
+                return $this->sendError(
+                    ErrorCodes::ERROR_EIMZO_VERIFY_FAILED,
+                    'Provided document does not match the one linked to this documentId'
+                );
+            }
+        }
+
         $userIp = Yii::$app->request->userIP ?? '127.0.0.1';
         $result = $service->mobileVerify($documentId, $documentB64, $userIp);
 
@@ -594,6 +641,46 @@ class EimzoController extends Controller
             'certificate' => $result['certificate'],
             'pkcs7Attached' => $result['pkcs7Attached'],
             'verificationInfo' => $result['verificationInfo'],
+            'tracking' => [
+                'documentId' => $documentId,
+                'documentSha256' => hash('sha256', $documentB64),
+                'resolvedFromMapping' => $resolvedFromMapping,
+                'mappingFound' => is_array($mapped),
+                'mappedMeta' => is_array($mapped) ? ($mapped['meta'] ?? null) : null,
+            ],
         ]);
+    }
+
+    private function normalizeDocumentInputToBase64(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $compact = preg_replace('/\s+/', '', $value);
+        if ($compact !== '' && $this->looksLikeBase64($compact)) {
+            return $compact;
+        }
+
+        return base64_encode($value);
+    }
+
+    private function looksLikeBase64(string $value): bool
+    {
+        if ($value === '' || strlen($value) % 4 !== 0) {
+            return false;
+        }
+
+        if (!preg_match('/^[A-Za-z0-9+\/=]+$/', $value)) {
+            return false;
+        }
+
+        $decoded = base64_decode($value, true);
+        if ($decoded === false) {
+            return false;
+        }
+
+        return base64_encode($decoded) === $value;
     }
 }
