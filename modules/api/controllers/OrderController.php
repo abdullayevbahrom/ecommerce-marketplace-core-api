@@ -39,8 +39,11 @@ class OrderController extends Controller
         Yii::$app->response->getHeaders()->add('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS');
         Yii::$app->response->getHeaders()->add('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token, Origin, Authorization');
 
-        if (Yii::$app->request->headers->has('OPTIONS')) {
-            throw new HttpException(200, 'OK');
+        if (Yii::$app->request->isOptions) {
+            Yii::$app->response->statusCode = 200;
+            Yii::$app->response->format = Response::FORMAT_JSON;
+            Yii::$app->response->data = [];
+            return false;
         }
 
         return parent::beforeAction($action);
@@ -68,8 +71,7 @@ class OrderController extends Controller
             ]
         ];
 
-        $behaviors['authenticator']['except'] = ['options'];
-
+        $auth['except'] = ['options'];
         $behaviors['authenticator'] = $auth;
 
         return $behaviors;
