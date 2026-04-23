@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>E-IMZO Mobile Check</title>
+    <title>E-IMZO Mobile Auth And Sign Check</title>
     <style>
         :root {
             --bg: #f3efe7;
@@ -18,9 +18,7 @@
             --ok: #17633f;
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         body {
             margin: 0;
@@ -33,87 +31,66 @@
         }
 
         .wrap {
-            max-width: 980px;
+            max-width: 1220px;
             margin: 0 auto;
-            padding: 32px 20px 48px;
-        }
-
-        .hero {
-            margin-bottom: 24px;
+            padding: 28px 18px 42px;
         }
 
         .hero h1 {
-            margin: 0 0 10px;
-            font-size: 38px;
-            line-height: 1.05;
+            margin: 0 0 8px;
+            font-size: 34px;
+            line-height: 1.1;
         }
 
         .hero p {
             margin: 0;
             color: var(--muted);
-            font-size: 17px;
+            font-size: 16px;
         }
 
         .grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.7fr) minmax(340px, 0.9fr);
-            gap: 20px;
-        }
-
-        .mapping {
             margin-top: 18px;
-            border-top: 1px solid var(--border);
-            padding-top: 16px;
-        }
-
-        .mapping-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-
-        .mapping-table th,
-        .mapping-table td {
-            text-align: left;
-            vertical-align: top;
-            padding: 9px 10px;
-            border-bottom: 1px solid #ece5d8;
-        }
-
-        .mapping-table th {
-            color: var(--muted);
-            font-weight: normal;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 14px;
         }
 
         .card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: 0 10px 30px rgba(34, 39, 34, 0.06);
+            border-radius: 16px;
+            padding: 14px;
+            box-shadow: 0 8px 24px rgba(34, 39, 34, 0.06);
         }
 
         .card h2 {
-            margin: 0 0 14px;
-            font-size: 20px;
+            margin: 0 0 10px;
+            font-size: 19px;
+        }
+
+        .card h3 {
+            margin: 14px 0 8px;
+            font-size: 14px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .03em;
         }
 
         .controls {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 14px;
+            gap: 8px;
+            margin-bottom: 10px;
         }
 
-        button,
-        select {
+        button, input, select, textarea {
             font: inherit;
         }
 
         button {
             border: 0;
             border-radius: 999px;
-            padding: 11px 16px;
+            padding: 10px 14px;
             cursor: pointer;
             background: var(--accent);
             color: #fff;
@@ -125,339 +102,621 @@
         }
 
         button:disabled {
-            opacity: 0.55;
+            opacity: .55;
             cursor: not-allowed;
         }
 
-        select {
+        input, select, textarea {
+            width: 100%;
             border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: 10px 14px;
+            border-radius: 10px;
+            padding: 9px 10px;
             background: #fff;
+            color: var(--text);
+        }
+
+        textarea {
+            min-height: 82px;
+            resize: vertical;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
         }
 
         .status {
-            border-radius: 14px;
-            padding: 12px 14px;
+            border-radius: 12px;
+            padding: 10px 12px;
             background: #eef4ef;
-            color: var(--text);
-            margin-bottom: 16px;
             border: 1px solid #d9e5db;
+            margin-bottom: 10px;
         }
 
-        .status.info { background: #eef4ef; border-color: #d9e5db; }
+        .status.info { background: #eef4ef; border-color: #d9e5db; color: var(--text); }
         .status.warn { background: #fff5df; border-color: #ead7a8; color: var(--warn); }
         .status.error { background: #fff0f0; border-color: #efcaca; color: var(--err); }
         .status.success { background: #edf8f0; border-color: #cfe6d5; color: var(--ok); }
 
-        .kv {
-            display: grid;
-            grid-template-columns: 160px 1fr;
-            gap: 8px 14px;
-            margin-bottom: 18px;
-            font-size: 15px;
-        }
-
-        .kv div:nth-child(odd) {
-            color: var(--muted);
-        }
-
-        .mono,
-        textarea,
-        pre {
+        .mono, pre, textarea.log {
             font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 12.5px;
+            line-height: 1.42;
         }
 
-        textarea,
         pre {
+            margin: 0;
             width: 100%;
             border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 12px;
+            border-radius: 10px;
+            padding: 10px;
             background: #fcfaf5;
-            color: var(--text);
-            font-size: 13px;
-            line-height: 1.45;
+            overflow: auto;
         }
 
-        textarea {
-            min-height: 96px;
-            resize: vertical;
-        }
-
-        .qr-box {
+        .qr-wrap {
             display: grid;
-            gap: 12px;
-            justify-items: center;
+            grid-template-columns: minmax(0, 1fr) 190px;
+            gap: 10px;
+            align-items: start;
         }
 
         .qr-img {
-            width: min(100%, 360px);
-            aspect-ratio: 1;
-            border-radius: 18px;
+            width: 190px;
+            height: 190px;
+            border-radius: 12px;
             border: 1px solid var(--border);
             background: #fff;
-            padding: 14px;
+            padding: 10px;
             object-fit: contain;
         }
 
-        .link {
-            color: var(--accent-dark);
-            word-break: break-all;
-            display: block;
-            font-size: 15px;
-            line-height: 1.5;
+        .small { color: var(--muted); font-size: 12px; }
+
+        .all-log textarea {
+            min-height: 260px;
         }
 
-        .small {
-            color: var(--muted);
-            font-size: 13px;
-        }
-
-        .qr-box > div {
-            width: 100%;
-        }
-
-        #qrPayload {
-            min-height: 180px;
-        }
-
-        @media (max-width: 820px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-
-            .hero h1 {
-                font-size: 30px;
-            }
-
-            .qr-img {
-                width: min(100%, 320px);
-            }
+        @media (max-width: 980px) {
+            .grid { grid-template-columns: 1fr; }
+            .row { grid-template-columns: 1fr; }
+            .qr-wrap { grid-template-columns: 1fr; }
+            .qr-img { width: 100%; height: auto; aspect-ratio: 1; }
         }
     </style>
 </head>
 <body>
-    <div class="wrap">
-        <div class="hero">
-            <h1>E-IMZO Mobile Flow Check</h1>
-            <p>`/api/eimzo/mobile/auth -> digest -> deeplink/QR -> status -> auth-result` flow ni brauzerdan tekshirish uchun sahifa.</p>
-        </div>
+<div class="wrap">
+    <div class="hero">
+        <h1>E-IMZO Mobile API Check</h1>
+        <p>
+            Route: <span class="mono">/main/eimzo-mobile-check</span>. Bitta sahifada
+            <span class="mono">auth</span>, <span class="mono">auth-result</span>,
+            <span class="mono">sign</span>, <span class="mono">status</span>,
+            <span class="mono">verify</span> ni tekshiradi.
+        </p>
+    </div>
 
-        <div class="grid">
-            <div class="card">
-                <h2>Flow</h2>
-                <div id="status" class="status info">Ready.</div>
-                <div class="controls">
-                    <select id="userType">
+    <div id="globalStatus" class="status info">Ready.</div>
+
+    <div class="grid">
+        <div class="card" id="authCard">
+            <h2>Mobile Auth Flow</h2>
+            <div class="row">
+                <div>
+                    <label class="small" for="authUserType">user_type</label>
+                    <select id="authUserType">
                         <option value="fiz">fiz</option>
                         <option value="yur">yur</option>
                     </select>
-                    <button id="startBtn">Start Mobile Auth</button>
-                    <button id="pollBtn" class="secondary" disabled>Poll Once</button>
-                    <button id="resultBtn" class="secondary" disabled>Get Auth Result</button>
-                </div>
-                <div class="kv">
-                    <div>siteId</div><div id="siteId">-</div>
-                    <div>documentId</div><div id="documentId">-</div>
-                    <div>challenge</div><div id="challenge" class="mono">-</div>
-                    <div>digestHex</div><div id="digestHex" class="mono">-</div>
-                    <div>status</div><div id="flowStatus">-</div>
                 </div>
                 <div>
-                    <div class="small">Auth Result</div>
-                    <pre id="resultBox">No result yet.</pre>
+                    <label class="small" for="langHeader">lang header</label>
+                    <input id="langHeader" value="uz" />
                 </div>
+            </div>
+            <div class="controls">
+                <button id="authStartBtn">1) POST /api/eimzo/mobile/auth</button>
+                <button id="authStatusBtn" class="secondary" disabled>2) POST /api/eimzo/mobile/status</button>
+                <button id="authResultBtn" class="secondary" disabled>3) POST /api/eimzo/mobile/auth-result</button>
+            </div>
 
-                <div class="mapping">
-                    <div class="small" style="margin-bottom: 10px;">Demo endpoint mapping</div>
-                    <table class="mapping-table">
-                        <thead>
-                        <tr>
-                            <th>Demo</th>
-                            <th>This page</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr>
-                            <td class="mono">/frontend/mobile/auth</td>
-                            <td class="mono">POST /api/eimzo/mobile/auth</td>
-                        </tr>
-                        <tr>
-                            <td class="mono">/frontend/mobile/status</td>
-                            <td class="mono">POST /api/eimzo/mobile/status</td>
-                        </tr>
-                        <tr>
-                            <td class="mono">/backend/mobile/authenticate/{documentId}</td>
-                            <td class="mono">POST /api/eimzo/mobile/auth-result</td>
-                        </tr>
-                        <tr>
-                            <td class="mono">/backend/mobile/verify</td>
-                            <td class="mono">Not used on this auth check page</td>
-                        </tr>
-                        <tr>
-                            <td class="mono">UPLOAD URL</td>
-                            <td class="mono">/v1/integration/eimzo -> /frontend/mobile/upload</td>
-                        </tr>
-                        </tbody>
-                    </table>
+            <h3>Session</h3>
+            <pre id="authSessionBox">No auth session.</pre>
+
+            <h3>Deep Link / QR</h3>
+            <div class="qr-wrap">
+                <div>
+                    <div class="small">deeplink</div>
+                    <pre id="authDeeplinkBox">-</pre>
+                    <div class="small" style="margin-top:8px;">qr payload</div>
+                    <pre id="authQrPayloadBox">-</pre>
+                </div>
+                <img id="authQrImg" class="qr-img" alt="Auth QR" />
+            </div>
+
+            <h3>Auth Result</h3>
+            <pre id="authResultBox">No auth result.</pre>
+        </div>
+
+        <div class="card" id="signCard">
+            <h2>Mobile Sign + Verify Flow</h2>
+            <div class="row">
+                <div>
+                    <label class="small" for="bearerToken">Bearer token</label>
+                    <input id="bearerToken" placeholder="Bearer token" />
+                </div>
+                <div>
+                    <label class="small" for="signUserType">user_type (verify audit uchun)</label>
+                    <select id="signUserType">
+                        <option value="fiz">fiz</option>
+                        <option value="yur">yur</option>
+                    </select>
                 </div>
             </div>
 
-            <div class="card">
-                <h2>QR And Deeplink</h2>
-                <div class="qr-box">
-                    <img id="qrImg" class="qr-img" alt="QR code" />
-                    <div>
-                        <div class="small">Deep Link</div>
-                        <a id="deepLink" class="link" href="#" target="_blank" rel="noopener">-</a>
-                    </div>
-                    <div>
-                        <div class="small">QR Payload</div>
-                        <textarea id="qrPayload" readonly></textarea>
-                    </div>
-                </div>
+            <label class="small" for="documentInput">Document (plain text). Sign/verify uchun shu matn base64 ga o'giriladi.</label>
+            <textarea id="documentInput">{"docType":"test","docNo":"A-1001","sum":150000}</textarea>
+
+            <label class="small" for="metaInput">Meta JSON (optional)</label>
+            <textarea id="metaInput">{"source":"manual-check","note":"/main/eimzo-mobile-check"}</textarea>
+
+            <div class="controls">
+                <button id="signStartBtn">1) POST /api/eimzo/mobile/sign</button>
+                <button id="signStatusBtn" class="secondary" disabled>2) POST /api/eimzo/mobile/status</button>
+                <button id="signVerifyBtn" class="secondary" disabled>3) POST /api/eimzo/mobile/verify</button>
             </div>
+
+            <h3>Session</h3>
+            <pre id="signSessionBox">No sign session.</pre>
+
+            <h3>Deep Link / QR</h3>
+            <div class="qr-wrap">
+                <div>
+                    <div class="small">deeplink</div>
+                    <pre id="signDeeplinkBox">-</pre>
+                    <div class="small" style="margin-top:8px;">qr payload</div>
+                    <pre id="signQrPayloadBox">-</pre>
+                </div>
+                <img id="signQrImg" class="qr-img" alt="Sign QR" />
+            </div>
+
+            <h3>Verify Result</h3>
+            <pre id="signVerifyBox">No verify result.</pre>
         </div>
     </div>
 
-    <script src="/eimzo-mobile-pkcs.js"></script>
-    <script src="/eimzo-mobile-crc32.js"></script>
-    <script src="/eimzo-auth.js"></script>
-    <script>
-        const auth = new EIMZOYii2Auth(window.location.origin);
-        const state = {
+    <div class="card all-log" style="margin-top: 14px;">
+        <h2>Request/Response Log (Errors Included)</h2>
+        <textarea id="allLog" class="log" readonly></textarea>
+    </div>
+</div>
+
+<script src="/eimzo-mobile-pkcs.js"></script>
+<script src="/eimzo-mobile-crc32.js"></script>
+<script src="/eimzo-auth.js"></script>
+<script>
+    const authClient = new EIMZOYii2Auth(window.location.origin);
+
+    const state = {
+        auth: {
             init: null,
-            digestHex: null,
-            lastStatus: null
+            status: null,
+            result: null,
+            qr: null
+        },
+        sign: {
+            init: null,
+            status: null,
+            verify: null,
+            qr: null,
+            documentB64: ""
+        }
+    };
+
+    const els = {
+        globalStatus: document.getElementById("globalStatus"),
+        allLog: document.getElementById("allLog"),
+
+        authUserType: document.getElementById("authUserType"),
+        langHeader: document.getElementById("langHeader"),
+        authStartBtn: document.getElementById("authStartBtn"),
+        authStatusBtn: document.getElementById("authStatusBtn"),
+        authResultBtn: document.getElementById("authResultBtn"),
+        authSessionBox: document.getElementById("authSessionBox"),
+        authDeeplinkBox: document.getElementById("authDeeplinkBox"),
+        authQrPayloadBox: document.getElementById("authQrPayloadBox"),
+        authQrImg: document.getElementById("authQrImg"),
+        authResultBox: document.getElementById("authResultBox"),
+
+        bearerToken: document.getElementById("bearerToken"),
+        signUserType: document.getElementById("signUserType"),
+        documentInput: document.getElementById("documentInput"),
+        metaInput: document.getElementById("metaInput"),
+        signStartBtn: document.getElementById("signStartBtn"),
+        signStatusBtn: document.getElementById("signStatusBtn"),
+        signVerifyBtn: document.getElementById("signVerifyBtn"),
+        signSessionBox: document.getElementById("signSessionBox"),
+        signDeeplinkBox: document.getElementById("signDeeplinkBox"),
+        signQrPayloadBox: document.getElementById("signQrPayloadBox"),
+        signQrImg: document.getElementById("signQrImg"),
+        signVerifyBox: document.getElementById("signVerifyBox")
+    };
+
+    function setGlobalStatus(message, type) {
+        els.globalStatus.className = "status " + (type || "info");
+        els.globalStatus.textContent = message;
+    }
+
+    function jsonPretty(value) {
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch (error) {
+            return String(value);
+        }
+    }
+
+    function toBase64Utf8(value) {
+        return btoa(unescape(encodeURIComponent(value)));
+    }
+
+    function appendLog(logObject) {
+        const line = [
+            "\n[" + new Date().toISOString() + "]",
+            logObject.name,
+            logObject.method + " " + logObject.url,
+            "Request headers: " + jsonPretty(logObject.requestHeaders || {}),
+            "Request body: " + (logObject.requestBody || "-"),
+            "Response status: " + logObject.status,
+            "Response body: " + (logObject.responseBody || "")
+        ].join("\n");
+
+        els.allLog.value = (line + "\n" + els.allLog.value).trim();
+    }
+
+    function extractMessage(details) {
+        if (!details) return "Unknown error";
+        if (details.parsed && details.parsed.message) return details.parsed.message;
+        if (details.parsed && details.parsed.data && typeof details.parsed.data === "string") return details.parsed.data;
+        return details.responseBody || ("HTTP " + details.status);
+    }
+
+    async function requestJson(name, path, options = {}) {
+        const url = authClient.buildUrl(path);
+        const response = await fetch(url, options);
+        const responseBody = await response.text();
+        let parsed = null;
+
+        try {
+            parsed = responseBody ? JSON.parse(responseBody) : null;
+        } catch (error) {
+            parsed = null;
+        }
+
+        const logObject = {
+            name,
+            method: options.method || "GET",
+            url,
+            requestHeaders: options.headers || {},
+            requestBody: options.body || "",
+            status: response.status,
+            responseBody
         };
+        appendLog(logObject);
 
-        const els = {
-            status: document.getElementById("status"),
-            startBtn: document.getElementById("startBtn"),
-            pollBtn: document.getElementById("pollBtn"),
-            resultBtn: document.getElementById("resultBtn"),
-            userType: document.getElementById("userType"),
-            siteId: document.getElementById("siteId"),
-            documentId: document.getElementById("documentId"),
-            challenge: document.getElementById("challenge"),
-            digestHex: document.getElementById("digestHex"),
-            flowStatus: document.getElementById("flowStatus"),
-            deepLink: document.getElementById("deepLink"),
-            qrPayload: document.getElementById("qrPayload"),
-            qrImg: document.getElementById("qrImg"),
-            resultBox: document.getElementById("resultBox")
-        };
-
-        function setStatus(message, type) {
-            els.status.className = "status " + (type || "info");
-            els.status.textContent = message;
+        if (!response.ok) {
+            const error = new Error(name + " failed: " + extractMessage({ status: response.status, responseBody, parsed }));
+            error.details = { status: response.status, responseBody, parsed, url, name };
+            throw error;
         }
 
-        function setFlowState(init, digestHex, qr) {
-            state.init = init;
-            state.digestHex = digestHex;
-            els.siteId.textContent = init.siteId || "-";
-            els.documentId.textContent = init.documentId || "-";
-            els.challenge.textContent = init.challenge || "-";
-            els.digestHex.textContent = digestHex || "-";
-            els.deepLink.textContent = qr.deepLink || "-";
-            els.deepLink.href = qr.deepLink || "#";
-            els.qrPayload.value = qr.qrCode || "";
-            els.qrImg.src = qr.qrCode
-                ? "https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=" + encodeURIComponent(qr.qrCode)
-                : "";
-            els.pollBtn.disabled = false;
-            els.resultBtn.disabled = false;
-            els.resultBox.textContent = "No result yet.";
+        if (parsed && parsed.success === false) {
+            const error = new Error(name + " failed: " + (parsed.message || "success=false"));
+            error.details = { status: response.status, responseBody, parsed, url, name };
+            throw error;
         }
 
-        async function pollOnce() {
-            if (!state.init || !state.init.documentId) {
-                throw new Error("documentId not available");
-            }
-
-            const data = await auth.requestJson(auth.buildUrl("/api/eimzo/mobile/status"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ documentId: state.init.documentId })
-            });
-
-            const result = data.data || data;
-            state.lastStatus = result;
-            els.flowStatus.textContent = JSON.stringify(result);
-
-            if (result.status === 1) {
-                setStatus("Signature completed. Auth result can be requested.", "success");
-            } else if (result.status === 2) {
-                setStatus("Still pending. Confirm signature in E-IMZO mobile app.", "warn");
-            } else {
-                setStatus("Unexpected status: " + JSON.stringify(result), "error");
-            }
-
-            return result;
+        if (parsed && typeof parsed.error_code === "number" && parsed.error_code !== 0) {
+            const error = new Error(name + " failed: " + (parsed.message || ("error_code=" + parsed.error_code)));
+            error.details = { status: response.status, responseBody, parsed, url, name };
+            throw error;
         }
 
-        async function getResult() {
-            if (!state.init || !state.init.documentId) {
-                throw new Error("documentId not available");
-            }
+        return parsed || {};
+    }
 
-            const response = await auth.requestJson(auth.buildUrl("/api/eimzo/mobile/auth-result"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    documentId: state.init.documentId,
-                    user_type: els.userType.value
-                })
-            });
+    function setQr(boxDeeplink, boxPayload, img, qrData) {
+        boxDeeplink.textContent = qrData ? (qrData.deepLink || "-") : "-";
+        boxPayload.textContent = qrData ? (qrData.qrCode || "-") : "-";
+        img.src = qrData && qrData.qrCode
+            ? "https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=" + encodeURIComponent(qrData.qrCode)
+            : "";
+    }
 
-            const data = response.data || response;
-            els.resultBox.textContent = JSON.stringify(data, null, 2);
-            setStatus("Auth result received.", "success");
-            return data;
+    function readMeta() {
+        const raw = (els.metaInput.value || "").trim();
+        if (!raw) return null;
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            throw new Error("Meta JSON noto'g'ri formatda");
+        }
+    }
+
+    function getBearerToken() {
+        return (els.bearerToken.value || "").trim();
+    }
+
+    function showError(error) {
+        const lines = [error.message || String(error)];
+        if (error.details) {
+            lines.push("HTTP: " + error.details.status);
+            lines.push("URL: " + error.details.url);
+            lines.push("Body: " + (error.details.responseBody || ""));
         }
 
-        els.startBtn.addEventListener("click", async () => {
-            try {
-                els.startBtn.disabled = true;
-                setStatus("Starting mobile auth session...", "info");
-                const init = await auth.startMobileAuth();
-                const digestHex = auth.hashMobilePayload(init.challenge);
-                const qr = auth.buildMobileQrPayload({
-                    siteId: init.siteId,
-                    documentId: init.documentId,
-                    challenge: init.challenge,
-                    hashHex: digestHex
-                });
+        setGlobalStatus(lines.join(" | "), "error");
+    }
 
-                setFlowState(init, digestHex, qr);
-                setStatus("Session created. Open deeplink on phone or scan QR in E-IMZO app.", "warn");
-            } catch (error) {
-                setStatus(error.message || String(error), "error");
-            } finally {
-                els.startBtn.disabled = false;
-            }
+    async function startAuth() {
+        setGlobalStatus("/api/eimzo/mobile/auth yuborilmoqda...", "info");
+
+        const data = await requestJson("mobile/auth", "/api/eimzo/mobile/auth", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "lang": (els.langHeader.value || "uz").trim()
+            },
+            body: "{}"
         });
 
-        els.pollBtn.addEventListener("click", async () => {
-            try {
-                setStatus("Checking current mobile status...", "info");
-                await pollOnce();
-            } catch (error) {
-                setStatus(error.message || String(error), "error");
-            }
+        const payload = data.data || data;
+        state.auth.init = payload;
+
+        if (!payload.documentId || !payload.challenge || !payload.siteId) {
+            throw new Error("auth javobida siteId/documentId/challenge topilmadi");
+        }
+
+        const digestHex = authClient.hashMobilePayload(payload.challenge);
+        state.auth.qr = authClient.buildMobileQrPayload({
+            siteId: payload.siteId,
+            documentId: payload.documentId,
+            challenge: payload.challenge,
+            hashHex: digestHex
         });
 
-        els.resultBtn.addEventListener("click", async () => {
-            try {
-                setStatus("Requesting auth result...", "info");
-                await getResult();
-            } catch (error) {
-                els.resultBox.textContent = error.message || String(error);
-                setStatus(error.message || String(error), "error");
-            }
+        els.authSessionBox.textContent = jsonPretty({ ...payload, digestHex });
+        setQr(els.authDeeplinkBox, els.authQrPayloadBox, els.authQrImg, state.auth.qr);
+        els.authStatusBtn.disabled = false;
+        els.authResultBtn.disabled = false;
+
+        setGlobalStatus("Auth session yaratildi. Mobil ilovada deeplink/QR ni oching.", "warn");
+    }
+
+    async function checkAuthStatus() {
+        if (!state.auth.init || !state.auth.init.documentId) {
+            throw new Error("Auth documentId topilmadi. Avval auth boshlang.");
+        }
+
+        setGlobalStatus("/api/eimzo/mobile/status tekshirilmoqda...", "info");
+
+        const data = await requestJson("mobile/status(auth)", "/api/eimzo/mobile/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ documentId: state.auth.init.documentId })
         });
-    </script>
+
+        const payload = data.data || data;
+        state.auth.status = payload;
+        els.authSessionBox.textContent = jsonPretty({ ...state.auth.init, statusResponse: payload });
+
+        if (payload.status === 1 || payload.complete) {
+            setGlobalStatus("Auth status: imzo yakunlangan.", "success");
+        } else if (payload.status === 2) {
+            setGlobalStatus("Auth status: pending (mobil ilovada tasdiqlang).", "warn");
+        } else {
+            setGlobalStatus("Auth status: kutilmagan javob.", "warn");
+        }
+    }
+
+    async function getAuthResult() {
+        if (!state.auth.init || !state.auth.init.documentId) {
+            throw new Error("Auth documentId topilmadi. Avval auth boshlang.");
+        }
+
+        setGlobalStatus("/api/eimzo/mobile/auth-result yuborilmoqda...", "info");
+
+        const data = await requestJson("mobile/auth-result", "/api/eimzo/mobile/auth-result", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                documentId: state.auth.init.documentId,
+                user_type: els.authUserType.value
+            })
+        });
+
+        const payload = data.data || data;
+        state.auth.result = payload;
+        els.authResultBox.textContent = jsonPretty(payload);
+
+        if (payload.token) {
+            els.bearerToken.value = payload.token;
+        }
+
+        setGlobalStatus("Auth result olindi.", "success");
+    }
+
+    async function startSign() {
+        const token = getBearerToken();
+        if (!token) {
+            throw new Error("Bearer token kiriting (auth-result dan ham avtomatik tushadi)");
+        }
+
+        const documentRaw = els.documentInput.value || "";
+        if (!documentRaw.trim()) {
+            throw new Error("Document bo'sh");
+        }
+
+        const meta = readMeta();
+        const documentB64 = toBase64Utf8(documentRaw);
+        state.sign.documentB64 = documentB64;
+
+        const body = { document: documentB64 };
+        if (meta) body.meta = meta;
+
+        setGlobalStatus("/api/eimzo/mobile/sign yuborilmoqda...", "info");
+
+        const data = await requestJson("mobile/sign", "/api/eimzo/mobile/sign", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token,
+                "lang": (els.langHeader.value || "uz").trim()
+            },
+            body: JSON.stringify(body)
+        });
+
+        const payload = data.data || data;
+        state.sign.init = payload;
+
+        if (!payload.documentId || !payload.challenge || !payload.siteId) {
+            throw new Error("sign javobida siteId/documentId/challenge topilmadi");
+        }
+
+        const digestHex = authClient.hashMobilePayload(payload.challenge);
+        state.sign.qr = authClient.buildMobileQrPayload({
+            siteId: payload.siteId,
+            documentId: payload.documentId,
+            challenge: payload.challenge,
+            hashHex: digestHex
+        });
+
+        els.signSessionBox.textContent = jsonPretty({ ...payload, digestHex });
+        setQr(els.signDeeplinkBox, els.signQrPayloadBox, els.signQrImg, state.sign.qr);
+
+        els.signStatusBtn.disabled = false;
+        els.signVerifyBtn.disabled = false;
+
+        setGlobalStatus("Sign session yaratildi. Mobil ilovada deeplink/QR ni imzolang.", "warn");
+    }
+
+    async function checkSignStatus() {
+        if (!state.sign.init || !state.sign.init.documentId) {
+            throw new Error("Sign documentId topilmadi. Avval sign boshlang.");
+        }
+
+        setGlobalStatus("/api/eimzo/mobile/status (sign) tekshirilmoqda...", "info");
+
+        const data = await requestJson("mobile/status(sign)", "/api/eimzo/mobile/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ documentId: state.sign.init.documentId })
+        });
+
+        const payload = data.data || data;
+        state.sign.status = payload;
+        els.signSessionBox.textContent = jsonPretty({ ...state.sign.init, statusResponse: payload });
+
+        if (payload.status === 1 || payload.complete) {
+            setGlobalStatus("Sign status: imzo yakunlangan.", "success");
+        } else if (payload.status === 2) {
+            setGlobalStatus("Sign status: pending (mobil ilovada tasdiqlang).", "warn");
+        } else {
+            setGlobalStatus("Sign status: kutilmagan javob.", "warn");
+        }
+    }
+
+    async function verifySign() {
+        const token = getBearerToken();
+        if (!token) {
+            throw new Error("Bearer token kerak");
+        }
+        if (!state.sign.init || !state.sign.init.documentId) {
+            throw new Error("Sign documentId topilmadi. Avval sign boshlang.");
+        }
+        if (!state.sign.documentB64) {
+            throw new Error("Sign document topilmadi. Avval sign boshlang.");
+        }
+
+        setGlobalStatus("/api/eimzo/mobile/verify yuborilmoqda...", "info");
+
+        const data = await requestJson("mobile/verify", "/api/eimzo/mobile/verify", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token,
+                "lang": (els.langHeader.value || "uz").trim()
+            },
+            body: JSON.stringify({
+                documentId: state.sign.init.documentId,
+                document: state.sign.documentB64,
+                user_type: els.signUserType.value
+            })
+        });
+
+        const payload = data.data || data;
+        state.sign.verify = payload;
+        els.signVerifyBox.textContent = jsonPretty(payload);
+        setGlobalStatus("Verify result olindi.", "success");
+    }
+
+    els.authStartBtn.addEventListener("click", async () => {
+        els.authStartBtn.disabled = true;
+        try {
+            await startAuth();
+        } catch (error) {
+            showError(error);
+        } finally {
+            els.authStartBtn.disabled = false;
+        }
+    });
+
+    els.authStatusBtn.addEventListener("click", async () => {
+        try {
+            await checkAuthStatus();
+        } catch (error) {
+            showError(error);
+        }
+    });
+
+    els.authResultBtn.addEventListener("click", async () => {
+        try {
+            await getAuthResult();
+        } catch (error) {
+            showError(error);
+            els.authResultBox.textContent = error.message || String(error);
+        }
+    });
+
+    els.signStartBtn.addEventListener("click", async () => {
+        els.signStartBtn.disabled = true;
+        try {
+            await startSign();
+        } catch (error) {
+            showError(error);
+        } finally {
+            els.signStartBtn.disabled = false;
+        }
+    });
+
+    els.signStatusBtn.addEventListener("click", async () => {
+        try {
+            await checkSignStatus();
+        } catch (error) {
+            showError(error);
+        }
+    });
+
+    els.signVerifyBtn.addEventListener("click", async () => {
+        try {
+            await verifySign();
+        } catch (error) {
+            showError(error);
+            els.signVerifyBox.textContent = error.message || String(error);
+        }
+    });
+</script>
 </body>
 </html>
