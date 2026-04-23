@@ -62,7 +62,11 @@ $config = [
             'csrfParam' => '_csrf-app',
             'parsers' => [
                 'application/json' => 'yii\web\JsonParser',
-            ]
+            ],
+            'trustedHosts' => ['0.0.0.0/0'],
+            'secureProtocolHeaders' => [
+                'X-Forwarded-Proto' => ['https'],
+            ],
         ],
         'cache' => [
             'class' => 'yii\caching\FileCache',
