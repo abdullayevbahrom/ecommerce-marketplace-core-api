@@ -581,15 +581,15 @@
         const payload = data.data || data;
         state.sign.init = payload;
 
-        if (!payload.documentId || !payload.challenge || !payload.siteId) {
-            throw new Error("sign javobida siteId/documentId/challenge topilmadi");
+        if (!payload.documentId || !payload.siteId) {
+            throw new Error("sign javobida siteId/documentId topilmadi");
         }
 
-        const digestHex = authClient.hashMobilePayload(payload.challenge);
+        const digestHex = authClient.hashMobilePayload(documentRaw);
+
         state.sign.qr = authClient.buildMobileQrPayload({
             siteId: payload.siteId,
             documentId: payload.documentId,
-            challenge: payload.challenge,
             hashHex: digestHex
         });
 
