@@ -395,7 +395,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
     {
         $path = $this->getPdfPath($lang);
         if ($path) {
-            return Yii::$app->request->hostInfo . '/' . $path;
+            return rtrim(Yii::$app->params['baseUrl']) . '/' . $path;
         }
         return null;
     }
@@ -407,7 +407,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
      */
     public function getNewPdfUrl($lang = 'uz')
     {
-        $baseUrl = Yii::$app->request->hostInfo;
+        $baseUrl = rtrim(Yii::$app->params['baseUrl']);
         if ($this->didox_id) {
             $return = [
                 'uz' => $baseUrl . '/api/didox/get-document-pdf?didox_id=' . $this->didox_id . '&lang=uz',
@@ -804,7 +804,7 @@ class DidoxDocument extends \yii\db\ActiveRecord
             },
             'pdf_urls' => function () {
                 if ($this->didox_id) {
-                    $baseUrl = Yii::$app->request->hostInfo;
+                    $baseUrl = rtrim(Yii::$app->params['baseUrl']);
                     return [
                         'uz' => $baseUrl . '/api/didox/get-document-pdf?didox_id=' . $this->didox_id . '&lang=uz',
                         'ru' => $baseUrl . '/api/didox/get-document-pdf?didox_id=' . $this->didox_id . '&lang=ru',

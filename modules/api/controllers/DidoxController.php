@@ -174,7 +174,7 @@ class DidoxController extends Controller
             $documents = $query->limit($limit)->offset($offset)->all();
 
             // Build response with PDF URLs for each document
-            $baseUrl = Yii::$app->request->hostInfo;
+            $baseUrl = rtrim(Yii::$app->params['baseUrl']);
             $documentsWithPdf = [];
             
             foreach ($documents as $doc) {
@@ -252,7 +252,7 @@ class DidoxController extends Controller
             }
 
             // Build response with PDF URLs
-            $baseUrl = Yii::$app->request->hostInfo;
+            $baseUrl = rtrim(Yii::$app->params['baseUrl']);
             $pdfUrls = null;
             
             if ($document->didox_id) {
@@ -314,7 +314,7 @@ class DidoxController extends Controller
             }
 
             // Build response with PDF URLs
-            $baseUrl = Yii::$app->request->hostInfo;
+            $baseUrl = rtrim(Yii::$app->params['baseUrl']);
             $pdfUrls = null;
             
             if ($document->didox_id) {
@@ -520,7 +520,7 @@ class DidoxController extends Controller
                 throw new HttpException(404, 'Document not found or not accessible');
             }
 
-            $baseUrl = Yii::$app->request->hostInfo;
+            $baseUrl = rtrim(Yii::$app->params['baseUrl']);
             
             return [
                 'data' => [
