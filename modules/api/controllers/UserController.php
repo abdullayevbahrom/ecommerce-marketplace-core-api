@@ -863,13 +863,20 @@ class UserController extends Controller
                 $this->enrichUserFromDidoxProfile($user, $profileData, $userType);
             }
 
-            // Override with explicitly provided data
-            foreach (['name', 'lastname', 'middlename', 'email', 'phone', 'organization_name'] as $field) {
+            // Override with explicitly provided data.
+            // For existing users, skip 'phone' — phone is owned by the SMS-OTP signup flow and
+            // the unique index `idx_unique_phone` would break E-IMZO login if Didox returns
+            // a phone already claimed by another account (same person, two records).
+            $overridableFields = ['name', 'lastname', 'middlename', 'email', 'organization_name'];
+            if ($user->isNewRecord) {
+                $overridableFields[] = 'phone';
+            }
+            foreach ($overridableFields as $field) {
                 if (isset($post[$field])) {
                     $user->$field = $post[$field];
                 }
             }
-            if (empty($user->phone) && isset($post['mobile'])) {
+            if ($user->isNewRecord && empty($user->phone) && isset($post['mobile'])) {
                 $user->phone = $post['mobile'];
             }
 
@@ -937,10 +944,11 @@ class UserController extends Controller
                 $user->manager = $profileData['accountant'];
             }
         } else {
-            // For existing users, only fill empty fields
+            // For existing users, only fill empty fields.
+            // Phone is intentionally excluded — it is owned by the SMS-OTP signup flow and the
+            // unique index `idx_unique_phone` would reject an update if Didox returns a phone
+            // already claimed by another account.
             if (empty($user->email) && isset($profileData['email'])) $user->email = $profileData['email'];
-            if (empty($user->phone) && isset($profileData['mobile'])) $user->phone = $profileData['mobile'];
-            if (empty($user->phone) && isset($profileData['phone'])) $user->phone = $profileData['phone'];
             if (empty($user->organization_name) && isset($profileData['fullName'])) $user->organization_name = $profileData['fullName'];
             if (empty($user->address) && isset($profileData['address'])) $user->address = $profileData['address'];
             if (empty($user->address_legal) && isset($profileData['address'])) $user->address_legal = $profileData['address'];
