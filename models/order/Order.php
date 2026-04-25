@@ -442,20 +442,23 @@ class Order extends \yii\db\ActiveRecord
     protected function createBtsOrderForStockGroup($stock, $orderProducts, $user, $orderInfo, $totalWeight, $totalVolume)
     {
         $shop = $stock->shop;
-        
+
+        $senderPhone = self::formatPhoneForBts($shop->contact_phone);
+        $receiverPhone = self::formatPhoneForBts($orderInfo->phone ?: $user->phone);
+
         // BTS API v1 uses nested objects: sender, receiver, cargo
         $data = [
             "pickup_type" => "courier", // courier=вызов курьера, self=самовывоз в офис BTS
             "dropoff_type" => "courier", // courier=курьер доставит, branch=получатель забирает с офиса BTS
             "sender" => [
                 "name" => $shop->name_ru,
-                "phone" => $shop->contact_phone,
+                "phone" => $senderPhone,
                 "address" => $stock->address,
                 "city_code" => (string)$stock->bts_city_id, // BTS city code (e.g. "0101")
             ],
             "receiver" => [
                 "name" => trim($orderInfo->lastname . ' ' . $orderInfo->name),
-                "phone" => $orderInfo->phone ? $orderInfo->phone : $user->phone,
+                "phone" => $receiverPhone,
                 "address" => $orderInfo->address ?? $user->address,
                 "city_code" => (string)($orderInfo->bts_city_id ?? $user->bts_city_id), // BTS city code
             ],
@@ -845,5 +848,23 @@ class Order extends \yii\db\ActiveRecord
             );
             throw new \Exception('Не удалось связаться со складом. Попробуйте позже.');
         }
+    }
+
+    /**
+     * Normalize phone to BTS required format: +998XXXXXXXXX
+     */
+    public static function formatPhoneForBts($phone)
+    {
+        $digits = preg_replace('/\D/', '', $phone ?? '');
+
+        if (strlen($digits) === 9) {
+            $digits = '998' . $digits;
+        }
+
+        if (strlen($digits) === 12 && strpos($digits, '998') === 0) {
+            return '+' . $digits;
+        }
+
+        return '+' . $digits;
     }
 }
