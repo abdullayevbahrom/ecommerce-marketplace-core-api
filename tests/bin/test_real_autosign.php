@@ -31,6 +31,7 @@ foreach ($draftDocs as $draftDoc) {
     if (!$result['success']) {
         $msg .= "Error: " . ($result['error'] ?? 'Noma\'lum') . "\n";
         $msg .= "Stage: " . ($result['stage'] ?? 'Noma\'lum') . "\n";
+        $msg .= "Debug Info: " . json_encode($result) . "\n";
     } else {
         $msg .= "✅ Hujjat muvaffaqiyatli imzolandi va yuborildi!\n";
 
