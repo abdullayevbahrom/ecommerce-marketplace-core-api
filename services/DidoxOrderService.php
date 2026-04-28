@@ -1083,7 +1083,7 @@ class DidoxOrderService
 
                 // If still empty, use a default IKPU code for "Other goods"
                 if (empty($ikpuCode)) {
-                    $ikpuCode = '10399001001000000'; // Default: Прочие товары
+                    $ikpuCode = '06912001001000000'; // Default: Прочие товары
                     $ikpuName = 'Прочие товары';
                     Log::log('didox_order', "[PRODUCTS] Using default IKPU for product #{$product->id}", [
                         'product_name' => $product->name_ru
