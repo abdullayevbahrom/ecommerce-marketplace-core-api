@@ -203,6 +203,7 @@ Alternative authentication:
 |-------------|-----|
 | Production | `https://api.einvoice.example.com` |
 | Staging | `https://stage.goodsign.biz` |
+| Staging test | `https://testapi.einvoice.example.com` |
 | Selection | Automatic based on `YII_ENV_DEV` |
 
 ### Key API Methods

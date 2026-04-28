@@ -421,11 +421,16 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
                 $this->factura_type = self::FACTURA_TYPE_STANDARD;
             }
 
-            if (!$this->seller_vat_reg_status) {
-                $this->seller_vat_reg_status = self::VAT_REG_STATUS_NONE;
+            if ($this->seller_vat_reg_status === null || $this->seller_vat_reg_status === '') {
+                // If seller has VAT reg code, Didox expects active VAT status (21).
+                $this->seller_vat_reg_status = !empty($this->seller_vat_reg_code)
+                    ? self::VAT_REG_STATUS_CURRENT
+                    : self::VAT_REG_STATUS_NONE;
             }
-            if (!$this->buyer_vat_reg_status) {
-                $this->buyer_vat_reg_status = self::VAT_REG_STATUS_NONE;
+            if ($this->buyer_vat_reg_status === null || $this->buyer_vat_reg_status === '') {
+                $this->buyer_vat_reg_status = !empty($this->buyer_vat_reg_code)
+                    ? self::VAT_REG_STATUS_CURRENT
+                    : self::VAT_REG_STATUS_NONE;
             }
 
             return true;
