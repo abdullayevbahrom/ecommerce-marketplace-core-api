@@ -72,6 +72,8 @@ use Yii;
  */
 class DidoxDocumentInvoice extends \yii\db\ActiveRecord
 {
+    private const TEST_DIDOX_HOST = 'testapi.einvoice.example.com';
+
     // Invoice type constants (FacturaType)
     const FACTURA_TYPE_STANDARD = 0;                    // Стандартный
     const FACTURA_TYPE_ADDITIONAL = 1;                  // Дополнительный
@@ -408,6 +410,8 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
     public function beforeSave($insert)
     {
         if (parent::beforeSave($insert)) {
+            $this->applyTestBuyerTinOverride();
+
             // Auto-calculate VAT sum
             $this->calculateVatSum();
 
@@ -436,6 +440,27 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
             return true;
         }
         return false;
+    }
+
+    private function applyTestBuyerTinOverride(): void
+    {
+        $testBuyerTin = trim((string)(Yii::$app->params['didoxTestTaxId'] ?? ''));
+        if ($testBuyerTin === '') {
+            return;
+        }
+
+        $didoxUrl = \app\models\Settings::find()
+            ->select('content')
+            ->where(['type' => 'didox_url'])
+            ->scalar();
+
+        if ($didoxUrl === false || $didoxUrl === null || trim((string)$didoxUrl) === '') {
+            $didoxUrl = (string)(Yii::$app->params['didoxApiUrl'] ?? '');
+        }
+
+        if (stripos((string)$didoxUrl, self::TEST_DIDOX_HOST) !== false) {
+            $this->buyer_tin = $testBuyerTin;
+        }
     }
 
     /**

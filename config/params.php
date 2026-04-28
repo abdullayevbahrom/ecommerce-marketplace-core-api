@@ -31,6 +31,7 @@ $config = [
 
     // Didox E-IMZO integration settings
     'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjM4LCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzYwOTM2NzIwfQ.Dr8fBTTwJ2O5KRh98tOtBeF4vfc8w4hxTye0hJ-qPSc', // Add your Didox partner token here
+    'didoxTestTaxId' => '123456789', // TIN for testing Didox integration for https://testapi.einvoice.example.com (should be registered in Didox system)
 
     // BTS delivery service integration settings
     'bts_token' => 'sample_logistics_token', // Your current BTS token

@@ -41,6 +41,7 @@ use app\models\order\Order;
 class DidoxDocumentArbitrary extends ActiveRecord
 {
     const MAX_PDF_SIZE = 10485760; // 10MB in bytes
+    private const TEST_DIDOX_HOST = 'testapi.einvoice.example.com';
     
     /**
      * {@inheritdoc}
@@ -350,6 +351,8 @@ class DidoxDocumentArbitrary extends ActiveRecord
     public function beforeSave($insert)
     {
         if (parent::beforeSave($insert)) {
+            $this->applyTestBuyerTinOverride();
+
             // Set default dates
             if (empty($this->document_date)) {
                 $this->document_date = date('Y-m-d');
@@ -361,6 +364,27 @@ class DidoxDocumentArbitrary extends ActiveRecord
             return true;
         }
         return false;
+    }
+
+    private function applyTestBuyerTinOverride(): void
+    {
+        $testBuyerTin = trim((string)(Yii::$app->params['didoxTestTaxId'] ?? ''));
+        if ($testBuyerTin === '') {
+            return;
+        }
+
+        $didoxUrl = \app\models\Settings::find()
+            ->select('content')
+            ->where(['type' => 'didox_url'])
+            ->scalar();
+
+        if ($didoxUrl === false || $didoxUrl === null || trim((string)$didoxUrl) === '') {
+            $didoxUrl = (string)(Yii::$app->params['didoxApiUrl'] ?? '');
+        }
+
+        if (stripos((string)$didoxUrl, self::TEST_DIDOX_HOST) !== false) {
+            $this->buyer_tin = $testBuyerTin;
+        }
     }
     
     /**
