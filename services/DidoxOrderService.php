@@ -1093,13 +1093,22 @@ class DidoxOrderService
                 $included->catalog_code = $ikpuCode;
                 $included->catalog_name = $ikpuName;
 
-                // Map Package - use defaults if not set
+                // Map Package - keep IKPU specific fallback to avoid Tasnif validation errors.
+                $fallbackPackageCode = '1516231';
+                $fallbackPackageName = 'шт';
+
+                // Known strict mapping from Didox/Tasnif: for this IKPU only "шт." (1195749) is valid.
+                if ($ikpuCode === '06912001001000000') {
+                    $fallbackPackageCode = '1195749';
+                    $fallbackPackageName = 'шт.';
+                }
+
                 $included->package_code = isset($product->package_code) && !empty($product->package_code)
                     ? $product->package_code
-                    : '1516231'; // Default package code for "шт" (pieces)
+                    : $fallbackPackageCode;
                 $included->package_name = isset($product->package_name) && !empty($product->package_name)
                     ? $product->package_name
-                    : 'шт';
+                    : $fallbackPackageName;
 
                 $included->count = (float) ($op->amount ?: 1);
 
