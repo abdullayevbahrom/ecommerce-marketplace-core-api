@@ -522,7 +522,8 @@ class DidoxService
         }
 
         $filename = basename(str_replace('\\', '/', $path));
-        return Yii::getAlias('@app/keys/' . $filename);
+
+        return Yii::getAlias('@app') . '/keys/' . $filename;
     }
 
     private function getConfiguredPfxSettings(): array
