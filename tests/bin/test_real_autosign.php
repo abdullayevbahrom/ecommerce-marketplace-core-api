@@ -7,43 +7,10 @@
 require __DIR__ . '/../../vendor/autoload.php';
 require __DIR__ . '/../../vendor/yiisoft/yii2/Yii.php';
 
-// Console application - session kerak emas
 $config = require __DIR__ . '/../../config/console.php';
 $app = new yii\console\Application($config);
 
-echo "=== Real Flow: Order → Didox Auto Sign Test ===\n\n";
-
-// // Eng yangi order ni olamiz
-// $order = \app\models\order\Order::find()->orderBy(['id' => SORT_DESC])->one();
-
-// if (!$order) {
-//     die("❌ Order topilmadi!\n");
-// }
-
-// echo "📦 Order ma'lumotlari:\n";
-// echo "   ID:        #{$order->id}\n";
-// echo "   User ID:   {$order->user_id}\n";
-// echo "   Narx:      " . number_format($order->price) . " so'm\n";
-// echo "   Date:      {$order->date}\n\n";
-
-// // Bu order uchun mavjud Didox hujjatlarni ko'ramiz
-// $existingDocs = \app\models\didox\DidoxDocument::find()
-//     ->where(['order_id' => $order->id])
-//     ->all();
-
-// echo "📋 Mavjud Didox hujjatlar:\n";
-// if (empty($existingDocs)) {
-//     echo "   (yo'q)\n\n";
-// } else {
-//     foreach ($existingDocs as $doc) {
-//         echo "   #{$doc->id} | {$doc->document_type} | didox_id: {$doc->didox_id} | status: {$doc->didox_status}\n";
-//     }
-//     echo "\n";
-// }
-
 $didoxService = new \app\services\DidoxService();
-// Auto sign test - mavjud draft hujjatni sign qilamiz
-// To'g'ridan-to'g'ri autoSignAndSendDocumentWithConfiguredPfx chaqiramiz
 $draftDocs = \app\models\didox\DidoxDocument::find()
     ->where(['didox_status' => 0])
     ->andWhere(['>', 'id', 37])
@@ -54,27 +21,32 @@ foreach ($draftDocs as $draftDoc) {
     if (!$draftDoc) {
         die("❌ Draft hujjat topilmadi!\n");
     }
-
-    echo "📄 Test qilinadigan hujjat: #{$draftDoc->id} | {$draftDoc->document_type} | didox_id: {$draftDoc->didox_id}\n";
-    echo "🔄 Auto sign boshlanmoqda...\n\n";
+    $msg = "📄 Test qilinadigan hujjat: #{$draftDoc->id} | {$draftDoc->document_type} | didox_id: {$draftDoc->didox_id} | Hujjat statusi: {$draftDoc->didox_status} | Imzolangan vaqt: " . ($draftDoc->didox_signed_at ?? 'N/A') . "\n";
 
     $result = $didoxService->autoSignAndSendDocumentWithConfiguredPfx($draftDoc->didox_id);
 
-    echo "=== Natija ===\n";
-    echo "Success: " . ($result['success'] ? '✅ HA' : '❌ YO\'Q') . "\n";
+    $msg .= "=== Natija ===\n";
+    $msg .= "Success: " . ($result['success'] ? '✅ HA' : '❌ YO\'Q') . "\n";
 
     if (!$result['success']) {
-        echo "Error: " . ($result['error'] ?? 'Noma\'lum') . "\n";
-        echo "Stage: " . ($result['stage'] ?? 'Noma\'lum') . "\n";
+        $msg .= "Error: " . ($result['error'] ?? 'Noma\'lum') . "\n";
+        $msg .= "Stage: " . ($result['stage'] ?? 'Noma\'lum') . "\n";
     } else {
-        echo "✅ Hujjat muvaffaqiyatli imzolandi va yuborildi!\n";
+        $msg .= "✅ Hujjat muvaffaqiyatli imzolandi va yuborildi!\n";
 
-        // Refresh va tekshirish
         $draftDoc->refresh();
-        echo "Yangi status: {$draftDoc->didox_status}\n";
-        echo "Imzolangan vaqt: " . ($draftDoc->didox_signed_at ?? 'N/A') . "\n";
+        $msg .= "Yangi status: {$draftDoc->didox_status}\n";
+        $msg .= "Imzolangan vaqt: " . ($draftDoc->didox_signed_at ?? 'N/A') . "\n";
     }
 
-    echo "\n=== Yakuniy Holat ===\n";
-    echo "Auto Sign Natija:   " . ($result['success'] ? 'MUVAFFAQIYATLI ✅' : 'XATO ❌') . "\n";
+    $msg .= "\n=== Yakuniy Holat ===\n";
+    $msg .= "Auto Sign Natija:   " . ($result['success'] ? 'MUVAFFAQIYATLI ✅' : 'XATO ❌') . "\n";
+
+    logToFile($msg);
+}
+
+function logToFile($message)
+{
+    $logFile = __DIR__ . '/autosign_test_log.txt';
+    file_put_contents($logFile, date('Y-m-d H:i:s') . " - " . $message . "\n", FILE_APPEND);
 }
