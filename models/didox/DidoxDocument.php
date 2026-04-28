@@ -1131,13 +1131,17 @@ class DidoxDocument extends \yii\db\ActiveRecord
                 'Name' => $invoice->seller_name ?: '',
                 'BranchCode' => $invoice->seller_branch_code ?: '',
                 'BranchName' => $invoice->seller_branch_name ?: '',
-                'VatRegCode' => $invoice->seller_vat_reg_code ?: null,
+                'VatRegCode' => ($invoice->seller_vat_reg_code !== null && $invoice->seller_vat_reg_code !== '')
+                    ? (string)$invoice->seller_vat_reg_code
+                    : null,
                 'Account' => $invoice->seller_account ?: '',
                 'BankId' => $invoice->seller_bank_id ?: '',
                 'Address' => $invoice->seller_address ?: '',
                 'Director' => $invoice->seller_director ?: '',
                 'Accountant' => $invoice->seller_accountant ?: '',
-                'VatRegStatus' => !empty($invoice->seller_vat_reg_code) ? (int) $invoice->seller_vat_reg_status : null,
+                'VatRegStatus' => ($invoice->seller_vat_reg_code !== null && $invoice->seller_vat_reg_code !== '')
+                    ? (int)$invoice->seller_vat_reg_status
+                    : null,
             ],
             'ItemReleasedDoc' => [
                 'ItemReleasedPinfl' => $invoice->item_released_pinfl ?: '',
@@ -1148,13 +1152,17 @@ class DidoxDocument extends \yii\db\ActiveRecord
                 'Name' => $invoice->buyer_name ?: '',
                 'BranchCode' => $invoice->buyer_branch_code ?: '',
                 'BranchName' => $invoice->buyer_branch_name ?: '',
-                'VatRegCode' => $invoice->buyer_vat_reg_code ?: null,
+                'VatRegCode' => ($invoice->buyer_vat_reg_code !== null && $invoice->buyer_vat_reg_code !== '')
+                    ? (string)$invoice->buyer_vat_reg_code
+                    : null,
                 'Account' => $invoice->buyer_account ?: '',
                 'BankId' => $invoice->buyer_bank_id ?: '',
                 'Address' => $invoice->buyer_address ?: '',
                 'Director' => $invoice->buyer_director ?: '',
                 'Accountant' => $invoice->buyer_accountant ?: '',
-                'VatRegStatus' => !empty($invoice->buyer_vat_reg_code) ? (int) $invoice->buyer_vat_reg_status : null,
+                'VatRegStatus' => ($invoice->buyer_vat_reg_code !== null && $invoice->buyer_vat_reg_code !== '')
+                    ? (int)$invoice->buyer_vat_reg_status
+                    : null,
             ],
             'FacturaInvestmentObjectDoc' => [
                 'ObjectId' => $invoice->investment_object_id ?: '',

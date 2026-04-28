@@ -338,13 +338,17 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
                 'Name' => $this->seller_name,
                 'BranchCode' => $this->seller_branch_code ?: '',
                 'BranchName' => $this->seller_branch_name ?: '',
-                'VatRegCode' => $this->seller_vat_reg_code ?: null,
+                'VatRegCode' => ($this->seller_vat_reg_code !== null && $this->seller_vat_reg_code !== '')
+                    ? (string)$this->seller_vat_reg_code
+                    : null,
                 'Account' => $this->seller_account ?: '',
                 'BankId' => $this->seller_bank_id ?: '',
                 'Address' => $this->seller_address,
                 'Director' => $this->seller_director ?: '',
                 'Accountant' => $this->seller_accountant ?: '',
-                'VatRegStatus' => !empty($this->seller_vat_reg_code) ? (int) $this->seller_vat_reg_status : null,
+                'VatRegStatus' => ($this->seller_vat_reg_code !== null && $this->seller_vat_reg_code !== '')
+                    ? (int)$this->seller_vat_reg_status
+                    : null,
             ],
             'ItemReleasedDoc' => [
                 'ItemReleasedPinfl' => $this->item_released_pinfl ?: '',
@@ -355,13 +359,17 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
                 'Name' => $this->buyer_name,
                 'BranchCode' => $this->buyer_branch_code ?: '',
                 'BranchName' => $this->buyer_branch_name ?: '',
-                'VatRegCode' => $this->buyer_vat_reg_code ?: null,
+                'VatRegCode' => ($this->buyer_vat_reg_code !== null && $this->buyer_vat_reg_code !== '')
+                    ? (string)$this->buyer_vat_reg_code
+                    : null,
                 'Account' => $this->buyer_account ?: '',
                 'BankId' => $this->buyer_bank_id ?: '',
                 'Address' => $this->buyer_address,
                 'Director' => $this->buyer_director ?: '',
                 'Accountant' => $this->buyer_accountant ?: '',
-                'VatRegStatus' => !empty($this->buyer_vat_reg_code) ? (int) $this->buyer_vat_reg_status : null,
+                'VatRegStatus' => ($this->buyer_vat_reg_code !== null && $this->buyer_vat_reg_code !== '')
+                    ? (int)$this->buyer_vat_reg_status
+                    : null,
             ],
             'FacturaInvestmentObjectDoc' => [
                 'ObjectId' => $this->investment_object_id ?: '',
@@ -460,6 +468,8 @@ class DidoxDocumentInvoice extends \yii\db\ActiveRecord
 
         if (stripos((string)$didoxUrl, self::TEST_DIDOX_HOST) !== false) {
             $this->buyer_tin = $testBuyerTin;
+            $this->buyer_vat_reg_code = '';
+            $this->buyer_vat_reg_status = null;
         }
     }
 

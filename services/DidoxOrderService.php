@@ -841,9 +841,10 @@ class DidoxOrderService
             $info['address'] = $order->address ?: 'Unknown';
         }
 
-        // Provide a default for buyer VAT reg code if not known, often required by validation even if 0
-        if (empty($info['vat_reg_code'])) {
-            $info['vat_reg_code'] = '0'; // Default to '0' if unknown to pass validation
+        // Leave VAT registration fields empty when unknown.
+        // Sending "0" causes validation issues for some TINs in Didox.
+        if (!isset($info['vat_reg_code']) || $info['vat_reg_code'] === null) {
+            $info['vat_reg_code'] = '';
         }
 
         return $info;
