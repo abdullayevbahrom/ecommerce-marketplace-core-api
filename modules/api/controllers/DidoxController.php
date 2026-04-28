@@ -745,15 +745,15 @@ class DidoxController extends Controller
                         'debug_info' => $result['debug'] ?? null
                     ]
                 ];
+            } else {
+                $errorMessage = 'Failed to get document from DIDOX: ';
+                if (isset($result['error'])) {
+                    $errorMessage .= $this->formatErrorMessage($result['error']);
                 } else {
-                    $errorMessage = 'Failed to get document from DIDOX: ';
-                    if (isset($result['error'])) {
-                        $errorMessage .= $this->formatErrorMessage($result['error']);
-                    } else {
-                        $errorMessage .= 'Unknown error';
-                    }
-                    throw new HttpException(422, $errorMessage);
+                    $errorMessage .= 'Unknown error';
                 }
+                throw new HttpException(422, $errorMessage);
+            }
 
         } catch (HttpException $e) {
             throw $e;
