@@ -141,7 +141,8 @@ class DidoxService
             }
 
             $authUrl = "/v1/auth/{$taxId}/token/ru";
-            $authRes = $this->makeRequest('POST', $authUrl, ['signature' => $timestampRes['data']['timeStampTokenB64']]);
+            $authRequestBody = ['signature' => $timestampRes['data']['timeStampTokenB64']];
+            $authRes = $this->makeRequest('POST', $authUrl, $authRequestBody);
 
             if ($authRes['isOk'] && isset($authRes['data']['token'])) {
                 return [
@@ -152,7 +153,14 @@ class DidoxService
                 ];
             }
 
-            return ['success' => false, 'error' => 'Didox Auth failed: ' . json_encode($authRes)];
+            return [
+                'success' => false,
+                'error' => 'Didox Auth failed: ' . json_encode($authRes),
+                'refresh_debug' => [
+                    'auth_url' => $authUrl,
+                    'auth_request_body' => json_encode($authRequestBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ],
+            ];
         } catch (\Throwable $e) {
             return ['success' => false, 'error' => 'Exception during auto-auth: ' . $e->getMessage()];
         }
@@ -249,7 +257,12 @@ class DidoxService
             if (!$result['success']) {
                 // Log error
                 $this->updateSetting('didox_auto_refresh_status', 'failed');
-                $this->updateSetting('didox_auto_refresh_error', $result['error'] ?? 'Unknown error');
+                $errorText = $result['error'] ?? 'Unknown error';
+                if (!empty($result['refresh_debug']['auth_request_body'])) {
+                    $errorText .= "\nAuth URL: " . ($result['refresh_debug']['auth_url'] ?? '');
+                    $errorText .= "\nAuth request body: " . $result['refresh_debug']['auth_request_body'];
+                }
+                $this->updateSetting('didox_auto_refresh_error', $errorText);
                 
                 Yii::error('Didox token refresh failed: ' . ($result['error'] ?? 'Unknown error'), __METHOD__);
                 
@@ -331,7 +344,7 @@ class DidoxService
             return false;
         }
     }
-    
+
     /**
      * Check if token is expired or about to expire (within 10 minutes)
      * 
