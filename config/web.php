@@ -235,18 +235,27 @@ $config = [
                 // Crypto payment execution
                 'OPTIONS api/app/pay/order/<orderId:\d+>' => 'api/payment/options',
                 'POST api/app/pay/order/<orderId:\d+>' => 'api/payment/pay-order',
+                'OPTIONS api/payment/pay' => 'api/payment/options',
+                'POST api/payment/pay' => 'api/payment/pay',
+                'OPTIONS api/order/pay-order' => 'api/payment/options',
+                'POST api/order/pay-order' => 'api/payment/pay',
 
                 // Client search for POS/Kassa
                 'GET api/user/search-client' => 'api/user/search-client',
 
                 // POS QR crypto payment (mobile scans QR at kassa)
+                'OPTIONS api/payment/pos-pay' => 'api/payment/options',
                 'POST api/payment/pos-pay' => 'api/payment/pos-pay',
                 'GET api/payment/pos-session' => 'api/payment/pos-session',
                 'GET api/payment/pos-branch' => 'api/payment/pos-branch',
 
                 // Wallet extras
                 'GET api/wallet/address' => 'api/wallet/address',
+                'OPTIONS api/wallet/pay' => 'api/wallet/options',
                 'POST api/wallet/pay' => 'api/wallet/pay',
+                'OPTIONS api/wallet/deploy' => 'api/wallet/options',
+                'OPTIONS api/wallet/send' => 'api/wallet/options',
+                'OPTIONS api/wallet/mint-to-user' => 'api/wallet/options',
 
             ],
         ],
