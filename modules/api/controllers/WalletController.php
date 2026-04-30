@@ -8,15 +8,31 @@ use app\services\WalletService;
 
 use yii\filters\auth\HttpBearerAuth;
 use yii\filters\Cors;
+use yii\rest\OptionsAction;
 
 class WalletController extends Controller
 {
     private $walletService;
 
+    public function actions()
+    {
+        $actions = parent::actions();
+        $actions['options'] = [
+            'class' => OptionsAction::class,
+        ];
+        return $actions;
+    }
+
     public function init()
     {
         parent::init();
         $this->walletService = new WalletService();
+    }
+
+    public function beforeAction($action)
+    {
+        $this->enableCsrfValidation = false;
+        return parent::beforeAction($action);
     }
 
     private function checkWalletFrozen()
@@ -43,7 +59,7 @@ class WalletController extends Controller
             'cors' => [
                 'Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
-                'Access-Control-Request-Headers' => ['*'],
+                'Access-Control-Request-Headers' => ['Authorization', 'Content-Type', 'X-Auth-Token', 'Origin', 'language', 'Language', 'Content-Language', 'Accept-Language'],
                 'Access-Control-Allow-Credentials' => false,
                 'Access-Control-Max-Age' => 86400,
             ],

@@ -10,6 +10,8 @@ use yii\helpers\ArrayHelper;
 use yii\web\HttpException;
 use yii\rest\Controller;
 use yii\filters\auth\HttpBearerAuth;
+use yii\filters\Cors;
+use yii\rest\OptionsAction;
 use app\models\order\Order;
 use app\models\order\product\OrderProduct;
 
@@ -17,16 +19,17 @@ class PaymentController extends Controller {
 
     public $user;
 
+    public function actions()
+    {
+        $actions = parent::actions();
+        $actions['options'] = [
+            'class' => OptionsAction::class,
+        ];
+        return $actions;
+    }
+
     public function beforeAction($action) {
         $this->enableCsrfValidation = false;
-        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Origin', '*');
-        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS');
-        Yii::$app->response->getHeaders()->add('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token, Origin, Authorization');
-
-        if (Yii::$app->request->headers->has('OPTIONS')) {
-            throw new HttpException(200, 'OK');
-        }
-
         return parent::beforeAction($action);
     }
 
@@ -39,12 +42,12 @@ class PaymentController extends Controller {
         ];
 
         $behaviors['corsFilter'] = [
-            'class' => \yii\filters\Cors::className(),
+            'class' => Cors::class,
             'cors' => [
-                'Access-Control-Allow-Origin' => ['*'],
+                'Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
-                'Access-Control-Request-Headers' => ['*'],
-                'Access-Control-Allow-Credentials' => true,
+                'Access-Control-Request-Headers' => ['Authorization', 'Content-Type', 'X-Auth-Token', 'Origin', 'language', 'Language', 'Content-Language', 'Accept-Language'],
+                'Access-Control-Allow-Credentials' => false,
                 'Access-Control-Max-Age' => 86400,
                 'Access-Control-Expose-Headers' => [],
             ]
