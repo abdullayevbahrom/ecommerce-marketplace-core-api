@@ -104,6 +104,9 @@ class DidoxTokenController extends Controller
 
             $this->stderr("✗ Token refresh failed!\n", Console::FG_RED);
             $this->stderr("  Error: {$result['error']}\n");
+
+            // Force-persist diagnostics to settings even if service-level write failed.
+            $this->persistAutoRefreshErrorFallback($result);
             
             // Log error
             Yii::error('Token refresh failed: ' . $result['error'], __METHOD__);
@@ -292,17 +295,53 @@ class DidoxTokenController extends Controller
      */
     private function updateSetting(string $type, string $content): bool
     {
-        $model = \app\models\Settings::findOne(['type' => $type]);
-        
-        if (!$model) {
-            $model = new \app\models\Settings();
-            $model->type = $type;
+        try {
+            $model = \app\models\Settings::findOne(['type' => $type]);
+            if (!$model) {
+                $model = new \app\models\Settings();
+                $model->type = $type;
+            }
+
+            $model->content = $content;
+            $model->date = date('Y-m-d H:i:s');
+            if ($model->save(false)) {
+                return true;
+            }
+
+            $now = date('Y-m-d H:i:s');
+            Yii::$app->db->createCommand()->upsert('settings', [
+                'type' => $type,
+                'content' => $content,
+                'date' => $now,
+            ], [
+                'content' => $content,
+                'date' => $now,
+            ])->execute();
+            return true;
+        } catch (\Throwable $e) {
+            Yii::error("DidoxTokenController updateSetting failed for {$type}: " . $e->getMessage(), __METHOD__);
+            return false;
         }
-        
-        $model->content = $content;
-        $model->date = date('Y-m-d H:i:s');
-        
-        return $model->save(false);
+    }
+
+    private function persistAutoRefreshErrorFallback(array $result): void
+    {
+        try {
+            $payload = (string)($result['error'] ?? 'Unknown token refresh error');
+            if (!empty($result['refresh_debug']) && is_array($result['refresh_debug'])) {
+                $payload .= "\n\n--- stage ---\n" . ($result['refresh_debug']['stage'] ?? 'unknown');
+                $payload .= "\n\n--- request_url ---\n" . ($result['refresh_debug']['request_url'] ?? 'N/A');
+                $payload .= "\n\n--- request_body ---\n" . ($result['refresh_debug']['request_body'] ?? 'N/A');
+                $payload .= "\n\n--- response ---\n" . ($result['refresh_debug']['response'] ?? 'N/A');
+            }
+            $payload .= "\n\n--- full_result ---\n" . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            $this->updateSetting('didox_auto_refresh_status', 'failed');
+            $this->updateSetting('didox_auto_refresh_last_attempt', date('Y-m-d H:i:s'));
+            $this->updateSetting('didox_auto_refresh_error', $payload);
+        } catch (\Throwable $e) {
+            Yii::error('Failed to persist auto-refresh error fallback: ' . $e->getMessage(), __METHOD__);
+        }
     }
     
     /**

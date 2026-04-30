@@ -370,8 +370,22 @@ class DidoxService
             
             $model->content = $content;
             $model->date = date('Y-m-d H:i:s');
-            
-            return $model->save(false);
+
+            if ($model->save(false)) {
+                return true;
+            }
+
+            // Fallback: write directly to DB in case AR save silently fails.
+            $now = date('Y-m-d H:i:s');
+            Yii::$app->db->createCommand()->upsert('settings', [
+                'type' => $type,
+                'content' => $content,
+                'date' => $now,
+            ], [
+                'content' => $content,
+                'date' => $now,
+            ])->execute();
+            return true;
         } catch (\Throwable $e) {
             Yii::error("Failed to update setting {$type}: " . $e->getMessage(), __METHOD__);
             return false;

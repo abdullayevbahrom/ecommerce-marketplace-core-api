@@ -36,7 +36,8 @@ class Settings extends \yii\db\ActiveRecord
     {
         return [
             [['date', 'phone', 'email'], 'safe'],
-            [['type', 'content'], 'string', 'max' => 255],
+            [['content'], 'string'],
+            [['type'], 'string', 'max' => 255],
             [['main'], 'integer'],
             [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, svg', 'maxSize' => 2048000],
         ];

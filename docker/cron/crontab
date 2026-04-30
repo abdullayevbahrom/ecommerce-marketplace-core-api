@@ -1,2 +1,2 @@
 * * * * * cd /var/www/html && php yii rabbit/publish-outbox
-0 */3 * * * cd /var/www/html && php yii didox-token/refresh
+0 */2 * * * cd /var/www/html && php yii didox-token/refresh --force
