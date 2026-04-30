@@ -19,6 +19,7 @@ RUN apk add --no-cache \
   freetype-dev \
   libjpeg-turbo-dev \
   libpng-dev \
+  tzdata \
   && apk add --no-cache --virtual .build-deps \
   build-base \
   autoconf \
@@ -41,6 +42,7 @@ RUN apk add --no-cache \
   && rm -rf /tmp/pear /var/cache/apk/* \
   && mkdir -p /etc/supervisor/conf.d
 
+ENV TZ=Asia/Tashkent
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
 COPY docker/php/php.ini /usr/local/etc/php/php.ini

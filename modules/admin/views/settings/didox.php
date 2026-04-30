@@ -249,7 +249,7 @@ $this->params['breadcrumbs'][] = $this->title;
                                     </div>
                                     <div class="box-body">
                                         <div class="alert alert-danger" style="margin: 0;">
-                                            <?=nl2br(Html::encode($tokenStatus['last_error']));?>
+                                            <pre style="margin:0; white-space:pre-wrap; word-break:break-word; max-height:360px; overflow:auto; border:0; background:transparent;"><?=Html::encode($tokenStatus['last_error']);?></pre>
                                         </div>
                                     </div>
                                 </div>

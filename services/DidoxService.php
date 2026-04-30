@@ -137,7 +137,19 @@ class DidoxService
 
             $timestampRes = $this->createTimestamp($signed['pkcs7'], $signed['signature']);
             if (!$timestampRes['success'] || empty($timestampRes['data']['timeStampTokenB64'])) {
-                return ['success' => false, 'error' => 'Failed to get timestamp: ' . json_encode($timestampRes)];
+                return [
+                    'success' => false,
+                    'error' => 'Failed to get timestamp: ' . json_encode($timestampRes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'refresh_debug' => [
+                        'stage' => 'timestamp',
+                        'request_url' => '/v1/dsvs/timestamp',
+                        'request_body' => json_encode([
+                            'pkcs7' => $signed['pkcs7'],
+                            'signatureHex' => $signed['signature'],
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'response' => json_encode($timestampRes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ],
+                ];
             }
 
             $authUrl = "/v1/auth/{$taxId}/token/ru";
@@ -157,8 +169,10 @@ class DidoxService
                 'success' => false,
                 'error' => 'Didox Auth failed: ' . json_encode($authRes),
                 'refresh_debug' => [
-                    'auth_url' => $authUrl,
-                    'auth_request_body' => json_encode($authRequestBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'stage' => 'auth',
+                    'request_url' => $authUrl,
+                    'request_body' => json_encode($authRequestBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'response' => json_encode($authRes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 ],
             ];
         } catch (\Throwable $e) {
@@ -238,6 +252,15 @@ class DidoxService
             $pfxValidation = $this->validateConfiguredPfx();
             if (!$pfxValidation['success']) {
                 $message = $this->cleanupInvalidAutoRefreshState($pfxValidation['error'], $now);
+                $this->updateSetting('didox_auto_refresh_last_attempt', $now);
+                $this->updateSetting(
+                    'didox_auto_refresh_error',
+                    $message
+                    . "\n\n--- stage ---\nvalidate_pfx"
+                    . "\n\n--- request_body ---\nN/A (validate_pfx stage)"
+                    . "\n\n--- response ---\n"
+                    . json_encode($pfxValidation, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                );
 
                 return [
                     'success' => false,
@@ -258,10 +281,13 @@ class DidoxService
                 // Log error
                 $this->updateSetting('didox_auto_refresh_status', 'failed');
                 $errorText = $result['error'] ?? 'Unknown error';
-                if (!empty($result['refresh_debug']['auth_request_body'])) {
-                    $errorText .= "\nAuth URL: " . ($result['refresh_debug']['auth_url'] ?? '');
-                    $errorText .= "\nAuth request body: " . $result['refresh_debug']['auth_request_body'];
+                if (!empty($result['refresh_debug']) && is_array($result['refresh_debug'])) {
+                    $errorText .= "\n\n--- stage ---\n" . ($result['refresh_debug']['stage'] ?? 'unknown');
+                    $errorText .= "\n\n--- request_url ---\n" . ($result['refresh_debug']['request_url'] ?? 'N/A');
+                    $errorText .= "\n\n--- request_body ---\n" . ($result['refresh_debug']['request_body'] ?? 'N/A');
+                    $errorText .= "\n\n--- response ---\n" . ($result['refresh_debug']['response'] ?? 'N/A');
                 }
+                $errorText .= "\n\n--- full_result ---\n" . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 $this->updateSetting('didox_auto_refresh_error', $errorText);
                 
                 Yii::error('Didox token refresh failed: ' . ($result['error'] ?? 'Unknown error'), __METHOD__);
@@ -302,9 +328,16 @@ class DidoxService
             
         } catch (\Throwable $e) {
             $error = 'Exception during token refresh: ' . $e->getMessage();
+            $errorPayload = $error
+                . "\n\n--- stage ---\nexception"
+                . "\n\n--- request_body ---\nN/A (exception before/around request)"
+                . "\n\n--- response ---\nN/A (exception path)"
+                . "\n\n--- exception_class ---\n" . get_class($e)
+                . "\n\n--- file ---\n" . $e->getFile() . ':' . $e->getLine()
+                . "\n\n--- trace ---\n" . $e->getTraceAsString();
             
             $this->updateSetting('didox_auto_refresh_status', 'failed');
-            $this->updateSetting('didox_auto_refresh_error', $error);
+            $this->updateSetting('didox_auto_refresh_error', $errorPayload);
             $this->updateSetting('didox_auto_refresh_last_attempt', $now);
             
             Yii::error($error, __METHOD__);
