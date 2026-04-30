@@ -19,8 +19,6 @@ use app\models\Log;
  */
 class EimzoService
 {
-    private const MOBILE_SIGN_CACHE_PREFIX = 'eimzo.mobile.sign.';
-
     private string $serverUrl;
 
     public function __construct()
@@ -508,82 +506,6 @@ class EimzoService
             'pkcs7Attached' => $response['pkcs7Attached'] ?? null,
             'verificationInfo' => $response['verificationInfo'] ?? [],
         ];
-    }
-
-    /**
-     * Persist mapping between E-IMZO mobile documentId and the local document payload.
-     * This allows us to later answer which exact document was signed.
-     *
-     * @param string $documentId
-     * @param string $documentB64 Base64-encoded document payload
-     * @param array $meta Optional context (user_id, refs, source flow, etc.)
-     * @return bool
-     */
-    public function storeMobileSignDocument(string $documentId, string $documentB64, array $meta = []): bool
-    {
-        $documentId = trim($documentId);
-        $documentB64 = trim($documentB64);
-
-        if ($documentId === '' || $documentB64 === '') {
-            return false;
-        }
-
-        $payload = [
-            'document_id' => $documentId,
-            'document_b64' => $documentB64,
-            'document_sha256' => hash('sha256', $documentB64),
-            'meta' => $meta,
-            'created_at' => date('Y-m-d H:i:s'),
-        ];
-
-        $timeout = (int) (Yii::$app->params['eimzo']['mobileStatusTimeout'] ?? 120);
-        $ttl = max($timeout + 900, 1800); // keep a bit longer than mobile session
-
-        $saved = Yii::$app->cache->set($this->mobileSignCacheKey($documentId), $payload, $ttl);
-
-        if ($saved) {
-            Log::log(
-                'eimzo_mobile_sign',
-                "Stored mobile sign mapping for documentId={$documentId}",
-                [
-                    'document_id' => $documentId,
-                    'document_sha256' => $payload['document_sha256'],
-                    'meta' => $meta,
-                    'ttl' => $ttl,
-                ],
-                'info'
-            );
-        } else {
-            Yii::warning("Failed to cache mobile sign mapping for documentId={$documentId}", 'eimzo');
-        }
-
-        return (bool) $saved;
-    }
-
-    /**
-     * Retrieve previously stored mobile sign mapping by E-IMZO documentId.
-     *
-     * @param string $documentId
-     * @return array|null
-     */
-    public function getMobileSignDocument(string $documentId): ?array
-    {
-        $documentId = trim($documentId);
-        if ($documentId === '') {
-            return null;
-        }
-
-        $data = Yii::$app->cache->get($this->mobileSignCacheKey($documentId));
-        if (!is_array($data) || empty($data['document_b64'])) {
-            return null;
-        }
-
-        return $data;
-    }
-
-    private function mobileSignCacheKey(string $documentId): string
-    {
-        return self::MOBILE_SIGN_CACHE_PREFIX . $documentId;
     }
 
     // ------------------------------------------------------------------
