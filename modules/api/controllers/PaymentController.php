@@ -11,6 +11,7 @@ use yii\web\HttpException;
 use yii\rest\Controller;
 use yii\filters\auth\HttpBearerAuth;
 use yii\filters\Cors;
+use yii\filters\VerbFilter;
 use yii\rest\OptionsAction;
 use app\models\order\Order;
 use app\models\order\product\OrderProduct;
@@ -35,25 +36,36 @@ class PaymentController extends Controller {
 
     public function behaviors() {
         $behaviors = parent::behaviors();
-        $auth = [
-            'class' => HttpBearerAuth::className(),
-            'optional' => ['notify'],
-            'except' => ['options'],
-        ];
+
+        unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
             'class' => Cors::class,
             'cors' => [
                 'Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
-                'Access-Control-Request-Headers' => ['Authorization', 'Content-Type', 'X-Auth-Token', 'Origin', 'language', 'Language', 'Content-Language', 'Accept-Language'],
+                'Access-Control-Request-Headers' => ['*'],
                 'Access-Control-Allow-Credentials' => false,
                 'Access-Control-Max-Age' => 86400,
                 'Access-Control-Expose-Headers' => [],
             ]
         ];
 
-        $behaviors['authenticator'] = $auth;
+        $behaviors['authenticator'] = [
+            'class' => HttpBearerAuth::className(),
+            'optional' => ['notify'],
+            'except' => ['options'],
+        ];
+
+        $behaviors['verbs'] = [
+            'class' => VerbFilter::class,
+            'actions' => [
+                'pay' => ['POST'],
+                'pay-order' => ['POST'],
+                'pos-pay' => ['POST'],
+                'options' => ['OPTIONS'],
+            ],
+        ];
 
         return $behaviors;
     }

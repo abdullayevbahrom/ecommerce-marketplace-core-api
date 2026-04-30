@@ -235,6 +235,8 @@ $config = [
                 // Crypto payment execution
                 'OPTIONS api/app/pay/order/<orderId:\d+>' => 'api/payment/options',
                 'POST api/app/pay/order/<orderId:\d+>' => 'api/payment/pay-order',
+                'OPTIONS api/pay/order/<orderId:\d+>' => 'api/payment/options',
+                'POST api/pay/order/<orderId:\d+>' => 'api/payment/pay-order',
                 'OPTIONS api/payment/pay' => 'api/payment/options',
                 'POST api/payment/pay' => 'api/payment/pay',
                 'OPTIONS api/order/pay-order' => 'api/payment/options',
