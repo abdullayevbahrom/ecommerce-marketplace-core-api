@@ -53,6 +53,21 @@ class WebErrorHandler extends \yii\web\ErrorHandler
      */
     protected function renderException($exception)
     {
+        // API endpointlarda xatolik javoblari ham CORS header bilan qaytsin
+        // (aks holda brauzer real xatoni yashirib, faqat CORS xatosini ko'rsatadi)
+        try {
+            $pathInfo = Yii::$app->request->pathInfo ?? '';
+            if (strpos($pathInfo, 'api/') === 0 || $pathInfo === 'api') {
+                $headers = Yii::$app->response->getHeaders();
+                $headers->set('Access-Control-Allow-Origin', '*');
+                $headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS');
+                $headers->set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Auth-Token, Origin, language, Language, Content-Language, Accept-Language');
+                $headers->set('Access-Control-Allow-Credentials', 'false');
+            }
+        } catch (\Throwable $e) {
+            Yii::warning('Failed to attach CORS headers in error handler: ' . $e->getMessage(), __METHOD__);
+        }
+
         // YII_DEBUG=true bo'lsa ham, exception notifier ishlashi kerak
         // Bu metodni override qilib, parent::renderException() chaqiramiz
         parent::renderException($exception);
