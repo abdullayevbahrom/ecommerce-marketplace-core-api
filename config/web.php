@@ -216,6 +216,7 @@ $config = [
                 'POST api/eimzo/mobile/verify' => 'api/eimzo/mobile-verify',
 
                 // Wallet API
+                'OPTIONS api/wallet/balance' => 'api/wallet/options',
                 'GET api/wallet/balance' => 'api/wallet/balance',
                 'POST api/wallet/deploy' => 'api/wallet/deploy',
                 'POST api/wallet/send' => 'api/wallet/send',
@@ -232,6 +233,7 @@ $config = [
                 'POST api/promocode/apply' => 'api/promocode/apply',
 
                 // Crypto payment execution
+                'OPTIONS api/app/pay/order/<orderId:\d+>' => 'api/payment/options',
                 'POST api/app/pay/order/<orderId:\d+>' => 'api/payment/pay-order',
 
                 // Client search for POS/Kassa

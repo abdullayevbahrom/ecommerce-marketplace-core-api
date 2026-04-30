@@ -32,13 +32,11 @@ class PaymentController extends Controller {
 
     public function behaviors() {
         $behaviors = parent::behaviors();
-        $behaviors['authenticator'] = [
+        $auth = [
             'class' => HttpBearerAuth::className(),
-            'optional' => ['notify']
+            'optional' => ['notify'],
+            'except' => ['options'],
         ];
-
-        $auth = $behaviors['authenticator'];
-        unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
             'class' => \yii\filters\Cors::className(),
@@ -51,8 +49,6 @@ class PaymentController extends Controller {
                 'Access-Control-Expose-Headers' => [],
             ]
         ];
-
-        $behaviors['authenticator']['except'] = ['options'];
 
         $behaviors['authenticator'] = $auth;
 
