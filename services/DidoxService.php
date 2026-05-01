@@ -10,6 +10,8 @@ class DidoxService
     // const STAGE_URL = 'https://stage.goodsign.biz';
     const STAGE_URL = 'https://testapi.einvoice.example.com';
     const PROD_URL = 'https://api.einvoice.example.com';
+    private const REFRESH_RETRY_ATTEMPTS = 3;
+    private const REFRESH_RETRY_SLEEP_SECONDS = 5;
     
     private $baseUrl;
     private $partnerToken;
@@ -271,8 +273,26 @@ class DidoxService
                 ];
             }
             
-            // Get new token using PFX
-            $result = $this->getAuthTokenFromPfx();
+            // Get new token using PFX with retry
+            $attemptLogs = [];
+            $result = null;
+            for ($attempt = 1; $attempt <= self::REFRESH_RETRY_ATTEMPTS; $attempt++) {
+                $result = $this->getAuthTokenFromPfx();
+                if (!empty($result['success'])) {
+                    break;
+                }
+
+                $attemptLogs[] = [
+                    'attempt' => $attempt,
+                    'time' => date('Y-m-d H:i:s'),
+                    'error' => $result['error'] ?? 'Unknown error',
+                    'refresh_debug' => $result['refresh_debug'] ?? null,
+                ];
+
+                if ($attempt < self::REFRESH_RETRY_ATTEMPTS) {
+                    sleep(self::REFRESH_RETRY_SLEEP_SECONDS);
+                }
+            }
             
             // Update last attempt timestamp
             $this->updateSetting('didox_auto_refresh_last_attempt', $now);
@@ -287,6 +307,9 @@ class DidoxService
                     $errorText .= "\n\n--- request_body ---\n" . ($result['refresh_debug']['request_body'] ?? 'N/A');
                     $errorText .= "\n\n--- response ---\n" . ($result['refresh_debug']['response'] ?? 'N/A');
                 }
+                if (!empty($attemptLogs)) {
+                    $errorText .= "\n\n--- retry_attempts ---\n" . json_encode($attemptLogs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                }
                 $errorText .= "\n\n--- full_result ---\n" . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 $this->updateSetting('didox_auto_refresh_error', $errorText);
                 
@@ -300,8 +323,8 @@ class DidoxService
                 ];
             }
             
-            // Calculate expiry (3 hours from now)
-            $expiresAt = date('Y-m-d H:i:s', strtotime('+3 hours'));
+            // Calculate expiry (2 hours from now)
+            $expiresAt = date('Y-m-d H:i:s', strtotime('+2 hours'));
             
             // Save token and metadata to settings
             $this->updateSetting('didox_eimzo_token', $result['token']);
