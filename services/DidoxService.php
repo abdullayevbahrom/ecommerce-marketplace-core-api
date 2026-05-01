@@ -2162,12 +2162,36 @@ class DidoxService
                     ]
                 ];
             } else {
+                $resolvedError = null;
+                if (is_array($response['data'] ?? null)) {
+                    if (isset($response['data']['error'])) {
+                        $resolvedError = $this->formatErrorMessage($response['data']['error']);
+                    } elseif (isset($response['data']['message'])) {
+                        $resolvedError = $this->formatErrorMessage($response['data']['message']);
+                    } elseif (isset($response['data']['errors'])) {
+                        $resolvedError = $this->formatErrorMessage($response['data']['errors']);
+                    } elseif (isset($response['data']['data']['message'])) {
+                        $resolvedError = $this->formatErrorMessage($response['data']['data']['message']);
+                    }
+                } elseif (is_string($response['data'] ?? null) && trim($response['data']) !== '') {
+                    $resolvedError = trim($response['data']);
+                }
+
+                if ($resolvedError === null || $resolvedError === '') {
+                    $resolvedError = 'DIDOX request failed';
+                    if (!empty($response['httpCode'])) {
+                        $resolvedError .= ' (HTTP ' . $response['httpCode'] . ')';
+                    }
+                    if (!empty($response['data'])) {
+                        $resolvedError .= ': ' . $this->formatErrorMessage($response['data']);
+                    }
+                }
+
                 return [
                     'success' => false,
                     'data' => $response['data'],
                     'httpCode' => $response['httpCode'],
-                    'error' => !$response['isOk'] && isset($response['data']['error']) ? 
-                        $this->formatErrorMessage($response['data']['error']) : null,
+                    'error' => $resolvedError,
                     'debug' => [
                         'endpoint' => '/v1/documents/' . $docId . '?owner=0',
                         'method' => 'GET'

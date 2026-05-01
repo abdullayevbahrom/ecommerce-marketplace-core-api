@@ -64,34 +64,8 @@ class TelegramExceptionNotifier extends Component
 
     protected function shouldNotify(Throwable $exception): bool
     {
-        // UserException - foydalanuvchi xatosi (masalan, 400 Bad Request)
-        if ($exception instanceof UserException) {
-            return false;
-        }
-
-        // HttpException < 500 - client xatolari (404, 403, va h.k.)
-        if ($exception instanceof HttpException && $exception->statusCode < 500) {
-            return false;
-        }
-
-        // YII_DEBUG=false bo'lsa, barcha xatolarni yuborish
-        // YII_DEBUG=true bo'lsa, faqat 500+ xatolarini yuborish
-        if (!YII_DEBUG) {
-            return true;
-        }
-
-        // Development mode-da ham 500 xatolarini yuborish
-        if ($exception instanceof HttpException && $exception->statusCode >= 500) {
-            return true;
-        }
-
-        // Development mode-da boshqa exceptionlarni ham yuborish (Imagine xatolari va h.k.)
-        // Faqat HttpException bo'lmaganlarini ham yuboramiz
-        if (!$exception instanceof HttpException) {
-            return true;
-        }
-
-        return false;
+        // Send all exceptions (4xx/5xx and all other throwables).
+        return true;
     }
 
     protected function resolveCredentials(): array
