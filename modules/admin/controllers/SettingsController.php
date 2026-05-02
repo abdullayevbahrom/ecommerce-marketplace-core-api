@@ -201,6 +201,25 @@ class SettingsController extends Controller{
             // Handle PFX file upload
             $uploadedFile = \yii\web\UploadedFile::getInstanceByName('didox_pfx_file');
             if ($uploadedFile) {
+                $allowedExtensions = ['pfx', 'p12'];
+                $allowedMimeTypes = [
+                    'application/x-pkcs12',
+                    'application/pkcs12',
+                ];
+
+                $extension = strtolower((string)$uploadedFile->extension);
+                if (!in_array($extension, $allowedExtensions, true)) {
+                    Yii::$app->session->setFlash('pfx_error', 'Only .pfx and .p12 files are allowed.');
+                    return $this->redirect(Yii::$app->request->referrer);
+                }
+
+                $tmpPath = $uploadedFile->tempName;
+                $contentType = @mime_content_type($tmpPath) ?: 'application/octet-stream';
+                if (!in_array($contentType, $allowedMimeTypes, true)) {
+                    Yii::$app->session->setFlash('pfx_error', 'Invalid PFX file type.');
+                    return $this->redirect(Yii::$app->request->referrer);
+                }
+
                 $uploadDir = Yii::getAlias('@app/keys');
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0755, true);
@@ -212,7 +231,6 @@ class SettingsController extends Controller{
                     $originalBaseName = 'didox_key';
                 }
 
-                $extension = strtolower((string)$uploadedFile->extension);
                 $filename = $extension !== ''
                     ? $originalBaseName . '.' . $extension
                     : $originalBaseName;

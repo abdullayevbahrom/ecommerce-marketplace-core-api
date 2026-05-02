@@ -136,6 +136,21 @@ class QuestionController extends Controller
         if (!$file) {
             return "File not uploaded\n";
         }
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        $allowedMimeTypes = [
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+        ];
+        $extension = strtolower((string)$file->extension);
+        $mimeType = @mime_content_type($file->tempName) ?: 'application/octet-stream';
+        if (!in_array($extension, $allowedExtensions, true) || !in_array($mimeType, $allowedMimeTypes, true)) {
+            return "Invalid file type. Only image files are allowed.\n";
+        }
+        if ((int)$file->size > 10 * 1024 * 1024) {
+            return "File is too large. Max size: 10MB\n";
+        }
 
         $model = new Question();
         $name = $model->generateFileName() . '.' . $file->extension;

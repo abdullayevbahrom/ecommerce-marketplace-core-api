@@ -55,7 +55,7 @@ class ProductRequest extends \yii\db\ActiveRecord
             [['date'], 'safe'],
             [['user_id', 'admin_id'], 'integer'],
             [['user_id', 'admin_id'], 'safe'],
-            [['product_photo_file'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg', 'maxSize' => 5120000, 'maxFiles' => 1, 'wrongExtension' => 'Недопустимый формат файла. Разрешены: {extensions}', 'tooBig' => 'Размер файла слишком большой'],
+            [['product_photo_file'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, gif, webp', 'maxSize' => 10485760, 'maxFiles' => 1, 'wrongExtension' => 'Недопустимый формат файла. Разрешены: {extensions}', 'tooBig' => 'Размер файла слишком большой'],
             [['product_photo_file'], 'safe'],
         ];
     }

@@ -56,7 +56,7 @@ class Category extends \yii\db\ActiveRecord
             [['parent_id', 'sort', 'status', 'main', 'is_filter', 'popular'], 'integer'],
             [['date', 'option_ru', 'option_uz', 'option_en', 'filters'], 'safe'],
             [['type', 'name_mini', 'name_ru', 'name_uz', 'name_en', 'description_ru', 'description_uz', 'description_en'], 'string', 'max' => 255],
-            [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, svg', 'maxSize' => 2048000],
+            [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, gif, webp', 'maxSize' => 10485760],
         ];
     }
 

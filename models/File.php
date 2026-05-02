@@ -16,6 +16,9 @@ use Yii;
  */
 class File extends \yii\db\ActiveRecord
 {
+    private const MAX_FILE_UPLOAD_SIZE = 10485760; // 10MB
+    private const ALLOWED_FILE_EXTENSIONS = ['zip', 'rar', 'doc', 'docx', 'xls', 'xlsx', 'pdf', 'txt', 'psd'];
+
     public $files = [];
 
     const FILE_DEFAULT = 'https://files.example.com/uploads/file.png';
@@ -37,7 +40,7 @@ class File extends \yii\db\ActiveRecord
         return [
             [['object_id', 'main', 'sort'], 'integer'],
             [['type', 'url'], 'string', 'max' => 255],
-            [['files'], 'file', 'skipOnEmpty' => true, 'extensions' => 'zip, rar, doc, docx, xls, xlsx, pdf, txt, psd', 'maxSize' => 2048000],
+            [['files'], 'file', 'skipOnEmpty' => true, 'extensions' => 'zip, rar, doc, docx, xls, xlsx, pdf, txt, psd', 'maxSize' => 10485760],
         ];
     }
 
@@ -75,6 +78,16 @@ class File extends \yii\db\ActiveRecord
         $s3 = Yii::$app->s3;
 
         foreach ($this->files as $v) {
+            $extension = strtolower((string)$v->extension);
+            if (!in_array($extension, self::ALLOWED_FILE_EXTENSIONS, true)) {
+                Yii::warning("Rejected file upload: invalid extension {$extension}", __METHOD__);
+                continue;
+            }
+            if ((int)$v->size <= 0 || (int)$v->size > self::MAX_FILE_UPLOAD_SIZE) {
+                Yii::warning("Rejected file upload: invalid file size {$v->size}", __METHOD__);
+                continue;
+            }
+
             $rnd = mt_rand(0, 1000000);
             $name = time() . '_' . $rnd . '.' . $v->extension;
 

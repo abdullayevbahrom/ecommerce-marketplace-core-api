@@ -1995,6 +1995,21 @@ class ProductController extends Controller
     public function actionByPhoto()
     {
         if ($image = UploadedFile::getInstanceByName('photo')) {
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+            $allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+            $extension = strtolower((string)$image->extension);
+            $mimeType = @mime_content_type((string)$image->tempName) ?: 'application/octet-stream';
+
+            if (!in_array($extension, $allowedExtensions, true) || !in_array($mimeType, $allowedMimeTypes, true)) {
+                Yii::$app->response->statusCode = 422;
+                return ['errors' => ['photo' => 'Invalid file type. Allowed: jpg, jpeg, png, webp']];
+            }
+
+            if ((int)$image->size <= 0 || (int)$image->size > 10 * 1024 * 1024) {
+                Yii::$app->response->statusCode = 422;
+                return ['errors' => ['photo' => 'File too large. Max size: 10MB']];
+            }
+
             $rnd = mt_rand(0, 1000000);
             $name = time() . '_' . $rnd . '.' . $image->extension;
             $tmp = Yii::getAlias('@runtime') . '/search_' . $name;

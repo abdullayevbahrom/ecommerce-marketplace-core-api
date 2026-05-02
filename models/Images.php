@@ -22,6 +22,14 @@ use app\models\product\ProductColor;
 
 class Images extends \yii\db\ActiveRecord
 {
+    private const MAX_IMAGE_UPLOAD_SIZE = 10485760; // 10MB
+    private const ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    private const ALLOWED_IMAGE_MIME_TYPES = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+    ];
     const PHOTO_USER_PATH = 'uploads/user/';
     const PHOTO_CATEGORY_PATH = 'uploads/category/';
     const PHOTO_PRODUCT_PATH = 'uploads/product/';
@@ -84,7 +92,7 @@ class Images extends \yii\db\ActiveRecord
             [['object_id', 'main', 'sort', 'status'], 'integer'],
             [['type', 'photo', 'number_image'], 'string', 'max' => 255],
             [['colors'], 'safe'],
-            [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, svg', 'maxSize' => 2048000],
+            [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, gif, webp', 'maxSize' => 10485760],
             [['token_key'], 'string', 'max' => 64],
         ];
     }
@@ -111,6 +119,11 @@ class Images extends \yii\db\ActiveRecord
         $s3 = \Yii::$app->s3;
 
         foreach ($this->imageFiles as $index => $file) {
+            if (!$this->isAllowedImageUpload($file)) {
+                Yii::warning("Rejected upload for {$type}: invalid file type/size", __METHOD__);
+                continue;
+            }
+
             $rnd = mt_rand(0, 1000000);
             // WebP formatini qo'llab-quvvatlamaslik uchun jpg ga o'zgartiramiz
             $extension = strtolower($file->extension) === 'webp' ? 'jpg' : $file->extension;
@@ -148,8 +161,8 @@ class Images extends \yii\db\ActiveRecord
                 continue;
             }
 
-            // thumbnails (svg/mp4/webp skip)
-            $makeThumbs = !in_array($ext, ['svg', 'mp4', 'webp'], true);
+            // thumbnails (video/webp skip)
+            $makeThumbs = !in_array($ext, ['mp4', 'webp'], true);
             if ($makeThumbs) {
                 foreach ($this->image_sizes as $w => $h) {
                     $thumbPath = Yii::getAlias('@runtime') . "/{$w}_{$name}";
@@ -231,6 +244,10 @@ class Images extends \yii\db\ActiveRecord
             $file = $this->imageFiles[$k] ?? null;
             if (!$file)
                 continue;
+            if (!$this->isAllowedImageUpload($file)) {
+                Yii::warning("Rejected color upload: invalid file type/size", __METHOD__);
+                continue;
+            }
 
             $old = self::findOne(['object_id' => $c->id, 'type' => 'color']);
             if ($old) {
@@ -265,7 +282,7 @@ class Images extends \yii\db\ActiveRecord
                 continue;
             }
 
-            if (!in_array($ext, ['svg', 'mp4', 'webp'], true)) {
+            if (!in_array($ext, ['mp4', 'webp'], true)) {
                 foreach ($this->image_sizes as $w => $h) {
                     $thumbPath = Yii::getAlias('@runtime') . "/{$w}_{$name}";
                     try {
@@ -339,6 +356,29 @@ class Images extends \yii\db\ActiveRecord
         }
 
         return (bool) $this->delete();
+    }
+
+    private function isAllowedImageUpload($file): bool
+    {
+        if (!$file) {
+            return false;
+        }
+
+        $extension = strtolower((string)$file->extension);
+        if (!in_array($extension, self::ALLOWED_IMAGE_EXTENSIONS, true)) {
+            return false;
+        }
+
+        if ((int)$file->size <= 0 || (int)$file->size > self::MAX_IMAGE_UPLOAD_SIZE) {
+            return false;
+        }
+
+        $mimeType = @mime_content_type((string)$file->tempName) ?: 'application/octet-stream';
+        if (!in_array($mimeType, self::ALLOWED_IMAGE_MIME_TYPES, true)) {
+            return false;
+        }
+
+        return true;
     }
 
     public function getPhoto(string $type, string $size = 'original'): string
