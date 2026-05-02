@@ -405,7 +405,7 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                     <?php endforeach; ?>
                                                     </ul>
                                                     <div class="text-center" style="margin-top: 15px;">
-                                                        <a href="<?= Url::to(['/admin/transaction/', 'TransactionSearch[user_id]' => $model->id]) ?>" class="uppercase">Посмотреть все транзакции</a>
+                                                        <a href="<?= Url::to(['/admin/user/view', 'id' => $model->id]) ?>#transactions" class="uppercase">Посмотреть все транзакции</a>
                                                     </div>
                                                 <?php else: ?>
                                                     <div class="text-center text-muted" style="padding: 20px;">
@@ -501,7 +501,7 @@ $recentTransactions = Transaction::find()->where(['user_id' => $model->id])->ord
                                                 </tbody>
                                             </table>
                                             <div class="box-footer text-center">
-                                                <a href="<?= Url::to(['/admin/transaction/', 'TransactionSearch[user_id]' => $model->id]) ?>" class="btn btn-default">Показать все транзакции</a>
+                                                <a href="<?= Url::to(['/admin/user/view', 'id' => $model->id]) ?>#transactions" class="btn btn-default">Показать все транзакции</a>
                                             </div>
                                         <?php else: ?>
                                             <div class="text-center" style="padding: 40px;">
