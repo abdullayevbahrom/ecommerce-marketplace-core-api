@@ -7,6 +7,7 @@ use Yii;
 use yii\base\Component;
 use yii\base\UserException;
 use yii\web\HttpException;
+use yii\web\NotFoundHttpException;
 
 class TelegramExceptionNotifier extends Component
 {
@@ -64,7 +65,10 @@ class TelegramExceptionNotifier extends Component
 
     protected function shouldNotify(Throwable $exception): bool
     {
-        // Send all exceptions (4xx/5xx and all other throwables).
+        if ($exception instanceof NotFoundHttpException) {
+            return false;
+        }
+        
         return true;
     }
 
