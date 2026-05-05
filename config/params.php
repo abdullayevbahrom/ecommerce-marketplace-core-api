@@ -25,6 +25,18 @@ $botToken = getenv('TELEGRAM_BOT_TOKEN') ?: null;
 $chatId = getenv('TELEGRAM_CHAT_ID') ?: null;
 
 $config = [
+    'jwt' => [
+        'issuer' => 'marketplace',
+        'audience' => ['marketplace', 'warehouse', 'operator'],
+        'privateKeyPath' => '@app/storage/jwt/private.pem',
+        'publicKeys' => [
+            'marketplace' => '@app/storage/jwt/marketplace_public.pem',
+            'warehouse' => '@app/storage/jwt/warehouse_public.pem',
+            'operator' => '@app/storage/jwt/operator_public.pem',
+        ],
+        'accessTtl' => 900,
+        'refreshTtl' => 60 * 60 * 24 * 30,
+    ],
     'adminEmail' => 'admin@example.com',
     'senderEmail' => 'noreply@example.com',
     'senderName' => 'Example.com mailer',
@@ -125,7 +137,7 @@ $config = [
     'skladApiUrl' => getenv('SKLAD_API_URL') ?: 'https://api.warehouse.example.com',
 
     // UZS to USDT exchange rate (default 1:1 for testing)
-    'uzsToUsdtRate' => (float)(getenv('UZS_TO_USDT_RATE') ?: 1.0),
+    'uzsToUsdtRate' => (float) (getenv('UZS_TO_USDT_RATE') ?: 1.0),
 
 ];
 

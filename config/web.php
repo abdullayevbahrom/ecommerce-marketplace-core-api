@@ -138,6 +138,9 @@ $config = [
             'attempts' => 5,
             'ttr' => 60,
         ],
+        'jwtService' => [
+            'class' => app\components\Jwt\JwtService::class,
+        ],
         'db' => $db,
         'urlManager' => [
             'enablePrettyUrl' => true,

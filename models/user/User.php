@@ -732,6 +732,20 @@ class User extends ActiveRecord implements IdentityInterface
         return self::ROLE_LABELS[$this->role] ?? 'Неизвестно';
     }
 
+    public function getRoleName()
+    {
+        return match ($this->role) {
+            self::ROLE_ADMIN => 'ROLE_ADMIN',
+            self::ROLE_MODERATOR => 'ROLE_MODERATOR',
+            self::ROLE_USER => 'ROLE_USER',
+            self::ROLE_SHOP => 'ROLE_SHOP',
+            self::ROLE_LOGIST => 'ROLE_LOGIST',
+            self::ROLE_OPERATOR => 'ROLE_OPERATOR',
+            self::ROLE_MANAGER => 'ROLE_MANAGER',
+            default => 'unknown',
+        };
+    }
+
     public function getRoleColor()
     {
         return self::ROLE_COLORS[$this->role] ?? 'bg-gray';
@@ -785,12 +799,12 @@ class User extends ActiveRecord implements IdentityInterface
 
     public function getAccesses(): array
     {
-        $accesses = [];
 
-        if (\in_array($this->role, [self::ROLE_ADMIN, self::ROLE_MODERATOR], true)) {
-            return ['warehouse', 'operator'];
+        if (\in_array($this->role, [self::ROLE_ADMIN, self::ROLE_MODERATOR, self::ROLE_MANAGER], true)) {
+            return ['warehouse', 'operator', 'marketplace'];
         }
 
+        $accesses = ['marketplace'];
         if (\in_array($this->role, [self::ROLE_SHOP, self::ROLE_MANAGER], true)) {
             $accesses[] = 'warehouse';
         } else if (\in_array($this->role, [self::ROLE_OPERATOR, self::ROLE_USER], true)) {
