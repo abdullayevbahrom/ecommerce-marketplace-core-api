@@ -31,8 +31,6 @@ $config = [
         'privateKeyPath' => '@app/storage/jwt/private.pem',
         'publicKeys' => [
             'marketplace' => '@app/storage/jwt/marketplace_public.pem',
-            'warehouse' => '@app/storage/jwt/warehouse_public.pem',
-            'operator' => '@app/storage/jwt/operator_public.pem',
         ],
         'accessTtl' => 900,
         'refreshTtl' => 60 * 60 * 24 * 30,
