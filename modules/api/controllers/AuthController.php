@@ -14,12 +14,73 @@ class AuthController extends Controller
 
     public function behaviors()
     {
-        return [
-            [
-                'class' => \app\components\Jwt\JwtAuthBehavior::class,
-                'audience' => 'marketplace',
-                'requiredPermissions' => [],
+        $behaviors = parent::behaviors();
+
+        unset($behaviors['authenticator']);
+
+        $behaviors['corsFilter'] = [
+            'class' => \yii\filters\Cors::class,
+            'cors' => [
+                'Origin' => ['*'],
+                'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+                'Access-Control-Request-Headers' => ['*'],
+                'Access-Control-Allow-Credentials' => false,
+                'Access-Control-Max-Age' => 86400,
             ],
+        ];
+
+        $behaviors['jwtAuth'] = [
+            'class' => \app\components\Jwt\JwtAuthBehavior::class,
+            'audience' => 'marketplace',
+            'requiredPermissions' => [],
+            'except' => [
+                'login',
+                'refresh',
+                'options',
+            ],
+        ];
+
+        $behaviors['verbs'] = [
+            'class' => \yii\filters\VerbFilter::class,
+            'actions' => [
+                'login' => ['POST', 'OPTIONS'],
+                'refresh' => ['POST', 'OPTIONS'],
+                'logout' => ['POST', 'OPTIONS'],
+                'logout-all' => ['POST', 'OPTIONS'],
+                'me' => ['GET', 'OPTIONS'],
+            ],
+        ];
+
+        return $behaviors;
+    }
+
+    public function actions()
+    {
+        return [
+            'options' => [
+                'class' => \yii\rest\OptionsAction::class,
+            ],
+        ];
+    }
+
+    public function actionMe()
+    {
+        /** @var \app\models\user\User $user */
+        $user = Yii::$app->params['authUser'] ?? null;
+
+        if (!$user) {
+            throw new UnauthorizedHttpException('User not authenticated');
+        }
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'status' => $user->status,
+            'roles' => $user->getRoleName(),
+            'permissions' => [],
+            'accesses' => $user->getAccesses()
         ];
     }
 
