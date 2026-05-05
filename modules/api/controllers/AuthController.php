@@ -65,7 +65,7 @@ class AuthController extends Controller
 
     public function actionMe()
     {
-        /** @var \app\models\user\User $user */
+        /** @var \app\models\User $user */
         $user = Yii::$app->params['authUser'] ?? null;
 
         if (!$user) {
