@@ -155,7 +155,9 @@ class AuthController extends Controller
 
         if (!$refreshToken) {
             $refreshToken = Yii::$app->request->headers->get('X-Refresh-Token');
-        } else {
+        }
+
+        if (!$refreshToken) {
             $refreshToken = Yii::$app->request->post('refresh_token');
         }
 
@@ -234,7 +236,7 @@ class AuthController extends Controller
 
             return [
                 'access_token' => $accessToken,
-                'refresh_token' => $refreshToken,
+                'refresh_token' => $newRefreshToken,
                 'token_type' => 'Bearer',
                 'expires_in' => Yii::$app->params['jwt']['accessTtl'],
             ];
@@ -250,6 +252,10 @@ class AuthController extends Controller
 
         if (!$refreshToken) {
             $refreshToken = Yii::$app->request->headers->get('X-Refresh-Token');
+        }
+
+        if (!$refreshToken) {
+            $refreshToken = Yii::$app->request->post('refresh_token');
         }
 
         if ($refreshToken) {
