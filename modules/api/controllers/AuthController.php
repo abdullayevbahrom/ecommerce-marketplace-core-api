@@ -78,7 +78,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'phone' => $user->phone,
             'status' => $user->status,
-            'roles' => $user->getRoleName(),
+            'roles' => [$user->getRoleName()],
             'permissions' => [],
             'accesses' => $user->getAccesses()
         ];
