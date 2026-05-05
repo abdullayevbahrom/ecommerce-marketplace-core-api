@@ -2,11 +2,11 @@
 
 namespace app\components\Jwt;
 
+use app\models\user\User;
 use Yii;
 use yii\base\ActionFilter;
 use yii\web\UnauthorizedHttpException;
 use yii\web\ForbiddenHttpException;
-use app\models\User;
 
 class JwtAuthBehavior extends ActionFilter
 {
