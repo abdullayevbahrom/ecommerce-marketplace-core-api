@@ -300,6 +300,26 @@ class Shop extends \yii\db\ActiveRecord
         return (int) ProductReview::find()->where(['in', 'product_id', $products])->count();
     }
 
+    public function getAverageRating(): float
+    {
+        $productIds = ArrayHelper::map(
+            Product::find()->select('id')->where(['shop_id' => $this->id])->asArray()->all(),
+            'id',
+            'id'
+        );
+
+        if (empty($productIds)) {
+            return 0.0;
+        }
+
+        $avg = ProductReview::find()
+            ->where(['in', 'product_id', $productIds])
+            ->andWhere(['status' => [ProductReview::STATUS_ACCEPTED, ProductReview::STATUS_PROCESSED]])
+            ->average('rate');
+
+        return $avg !== null ? round((float) $avg, 1) : 0.0;
+    }
+
     public function isFavorite()
     {
         $favorite = UserShopFavorite::findOne(['shop_id' => $this->id, 'user_id' => Yii::$app->user->identity?->id]);
@@ -336,6 +356,12 @@ class Shop extends \yii\db\ActiveRecord
             'contact_phone',
             'isFavorite' => function () {
                 return $this->isFavorite();
+            },
+            'review_count' => function () {
+                return $this->getCountReviews();
+            },
+            'rating' => function () {
+                return $this->getAverageRating();
             },
             'date'
         ];

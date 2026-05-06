@@ -2124,6 +2124,8 @@ class ProductController extends Controller
     {
         $product = Product::find()->with([
             'stock',
+            'shop',
+            'shop.shopSeller',
             'image',
             'category',
             'gallery',
