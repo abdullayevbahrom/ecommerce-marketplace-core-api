@@ -17,6 +17,48 @@ use app\models\user\User;
 
 class DidoxController extends Controller
 {
+    /**
+     * Ensure user has valid Didox token.
+     * If token is expired, try to re-authenticate against Didox using configured signer.
+     *
+     * @param User $user
+     * @throws HttpException
+     */
+    private function ensureValidUserDidoxToken(User $user): void
+    {
+        $taxId = trim((string)($user->eimzo_tax_id ?? ''));
+        if ($taxId === '') {
+            throw new HttpException(422, 'E-IMZO orqali login qiling: foydalanuvchida eimzo_tax_id topilmadi.');
+        }
+
+        if (empty($user->eimzo_didox_token_expires_at) || strtotime($user->eimzo_didox_token_expires_at) >= time()) {
+            return;
+        }
+
+        $didoxService = new \app\services\DidoxService();
+        $refreshResult = $didoxService->authenticateWithConfiguredPfx($taxId);
+
+        if (empty($refreshResult['success']) || empty($refreshResult['token'])) {
+            $errorMessage = isset($refreshResult['error']) && trim((string)$refreshResult['error']) !== ''
+                ? $this->formatErrorMessage($refreshResult['error'])
+                : 'Failed to refresh Didox token.';
+            throw new HttpException(422, 'Didox tokenni yangilab bo‘lmadi: ' . $errorMessage);
+        }
+
+        $user->eimzo_didox_token = $refreshResult['token'];
+        $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+180 minutes'));
+        $user->markDidoxAuthCompleted();
+
+        $saveFields = ['eimzo_didox_token', 'eimzo_didox_token_expires_at'];
+        if (User::hasColumn('didox_auth_completed')) {
+            $saveFields[] = 'didox_auth_completed';
+        }
+
+        if (!$user->save(false, $saveFields)) {
+            throw new HttpException(500, 'Failed to persist refreshed Didox token.');
+        }
+    }
+
     public function beforeAction($action) {
         $this->enableCsrfValidation = false;
 
@@ -688,6 +730,12 @@ class DidoxController extends Controller
         }
 
         try {
+            if (empty($user->eimzo_tax_id)) {
+                throw new HttpException(422, 'E-IMZO orqali login qiling: foydalanuvchida eimzo_tax_id topilmadi.');
+            }
+
+            $this->ensureValidUserDidoxToken($user);
+
             // Find document and verify it's assigned to current user
             $document = DidoxDocument::find()
                 ->alias('d')
@@ -785,6 +833,12 @@ class DidoxController extends Controller
         }
 
         try {
+            if (empty($user->eimzo_tax_id)) {
+                throw new HttpException(422, 'E-IMZO orqali login qiling: foydalanuvchida eimzo_tax_id topilmadi.');
+            }
+
+            $this->ensureValidUserDidoxToken($user);
+
             // Find document and verify it's assigned to current user
             $document = DidoxDocument::find()
                 ->alias('d')
@@ -810,15 +864,6 @@ class DidoxController extends Controller
             // Get user's DIDOX token
             if (empty($user->eimzo_didox_token)) {
                 throw new HttpException(401, 'User not authenticated with DIDOX. Please login with E-IMZO first.');
-            }
-
-            // Check token expiry
-            if (!empty($user->eimzo_didox_token_expires_at) && strtotime($user->eimzo_didox_token_expires_at) < time()) {
-                return [
-                    'success' => false,
-                    'didox_token_expired' => true,
-                    'message' => 'Didox token expired. Please re-authenticate with E-IMZO.',
-                ];
             }
 
             // Accept document in DIDOX using the signature

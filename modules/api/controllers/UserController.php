@@ -882,7 +882,7 @@ class UserController extends Controller
 
             // Update Didox connection data
             $user->eimzo_didox_token = $post['didox_token'];
-            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+350 minutes'));
+            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+180 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
             $user->markDidoxAuthCompleted();
 
@@ -1185,7 +1185,7 @@ class UserController extends Controller
             }
 
             $user->eimzo_didox_token = $post['didox_token'];
-            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+350 minutes'));
+            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+180 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
             $user->markDidoxAuthCompleted();
 
