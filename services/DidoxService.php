@@ -1714,14 +1714,46 @@ class DidoxService
             
             $requestData = ['signature' => $signature];
             
-            // FIXED: Use correct endpoint for signing outgoing documents
-            $response = $this->makeRequestWithHeaders('POST', '/v1/documents/' . $docId . '/sign', $requestData, $headers);
+            // Outgoing invoice/contract sign must use owner=1 context.
+            // Keep legacy no-owner endpoint as secondary fallback only.
+            $endpoints = [
+                '/v1/documents/' . $docId . '/sign?owner=1',
+                '/v1/documents/' . $docId . '/sign',
+            ];
+            $attempts = [];
+            $response = null;
+
+            foreach ($endpoints as $endpoint) {
+                $current = $this->makeRequestWithHeaders('POST', $endpoint, $requestData, $headers);
+                $attempts[] = [
+                    'endpoint' => $endpoint,
+                    'httpCode' => $current['httpCode'] ?? null,
+                    'isOk' => $current['isOk'] ?? false,
+                    'debug' => $current['debug'] ?? null,
+                    'data' => $current['data'] ?? null,
+                ];
+                $response = $current;
+
+                if (!empty($current['isOk'])) {
+                    return [
+                        'success' => true,
+                        'data' => $current['data'],
+                        'httpCode' => $current['httpCode'],
+                        'debug' => [
+                            'attempts' => $attempts,
+                        ],
+                    ];
+                }
+            }
             
             return [
                 'success' => $response['isOk'],
                 'data' => $response['data'],
                 'httpCode' => $response['httpCode'],
-                'debug' => $response['debug'] ?? null
+                'debug' => [
+                    'attempts' => $attempts,
+                    'last' => $response['debug'] ?? null,
+                ]
             ];
             
         } catch (\Exception $e) {

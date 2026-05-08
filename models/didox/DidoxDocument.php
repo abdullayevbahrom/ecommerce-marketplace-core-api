@@ -590,28 +590,30 @@ class DidoxDocument extends \yii\db\ActiveRecord
             return false;
         }
 
-        // Try different possible locations for the document ID
+        // Prefer root `_id` for owner=1 GET flow and keep other IDs as fallbacks.
         $documentId = null;
 
-        // First priority: _id field (MongoDB-style ID from DIDOX)
-        if (isset($responseData['_id'])) {
-            $documentId = $responseData['_id'];
-        }
-        // Second priority: documentid field 
-        elseif (isset($responseData['documentid'])) {
-            $documentId = $responseData['documentid'];
-        }
-        // Third priority: doc_id field (sometimes returned on creation)
-        elseif (isset($responseData['doc_id'])) {
-            $documentId = $responseData['doc_id'];
-        }
-        // Fourth priority: facturaid in various nested locations
-        elseif (isset($responseData['pending_document']['document_json']['facturaid'])) {
-            $documentId = $responseData['pending_document']['document_json']['facturaid'];
-        } elseif (isset($responseData['facturaid'])) {
-            $documentId = $responseData['facturaid'];
-        } elseif (isset($responseData['document_json']['facturaid'])) {
-            $documentId = $responseData['document_json']['facturaid'];
+        $candidates = [
+            $responseData['_id'] ?? null,
+            $responseData['data']['_id'] ?? null,
+            $responseData['data']['document']['doc_id'] ?? null,
+            $responseData['data']['document']['id'] ?? null,
+            $responseData['data']['id'] ?? null,
+            $responseData['data']['pending_document']['document_json']['facturaid'] ?? null,
+            $responseData['data']['doc_id'] ?? null,
+            $responseData['data']['documentid'] ?? null,
+            $responseData['doc_id'] ?? null,
+            $responseData['documentid'] ?? null,
+            $responseData['pending_document']['document_json']['facturaid'] ?? null,
+            $responseData['facturaid'] ?? null,
+            $responseData['document_json']['facturaid'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                $documentId = trim($candidate);
+                break;
+            }
         }
 
         if ($documentId && (!$this->didox_id || empty($this->didox_id))) {

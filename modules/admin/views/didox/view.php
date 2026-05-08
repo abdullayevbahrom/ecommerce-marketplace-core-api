@@ -15,6 +15,8 @@ if ($model->isArbitrary()) {
 }
 $this->params['breadcrumbs'][] = ['label' => 'Документы DIDOX', 'url' => ['index']];
 $this->params['breadcrumbs'][] = $this->title;
+$this->registerJsFile('https://test.e-imzo.uz/demo/e-imzo.js', ['position' => \yii\web\View::POS_HEAD]);
+$this->registerJsFile('https://test.e-imzo.uz/demo/e-imzo-client.js', ['position' => \yii\web\View::POS_HEAD]);
 ?>
 
 <style>
@@ -585,6 +587,9 @@ $this->params['breadcrumbs'][] = $this->title;
                                 <button type="button" id="btn-sign-and-send" class="btn-eimzo success" disabled>
                                     <i class="fa fa-certificate"></i> Подписать и отправить в DIDOX
                                 </button>
+                                <button type="button" id="btn-auto-sign-pfx" class="btn-eimzo success">
+                                    <i class="fa fa-bolt"></i> Auto Sign (PFX signer)
+                                </button>
                             </div>
                             
                             <!-- Signature Result -->
@@ -658,11 +663,22 @@ const BACKEND_ROUTES = {
     getDocumentForSigning: <?= json_encode(\yii\helpers\Url::to(['/admin/didox/get-document-for-signing'])) ?>,
     createTimestamp: <?= json_encode(\yii\helpers\Url::to(['/admin/didox/create-timestamp'])) ?>,
     signDocument: <?= json_encode(\yii\helpers\Url::to(['/admin/didox/sign-document'])) ?>,
+    autoSignDocument: <?= json_encode(\yii\helpers\Url::to(['/admin/didox/auto-sign-document'])) ?>,
 };
+const DESKTOP_EIMZO_API_KEYS = [
+    'null', 'E0A205EC4E7B78BBB56AFF83A733A1BB9FD39D562E67978CC5E7D73B0951DB1954595A20672A63332535E13CC6EC1E1FC8857BB09E0855D7E76E411B6FA16E9D',
+    'localhost', '96D0C1491615C82B9A54D9989779DF825B690748224C2B04F500F370D51827CE2644D8D4A82C18184D73AB8530BB8ED537269603F61DB0D03D2104ABF789970B',
+    '127.0.0.1', 'A7BCFA5D490B351BE0754130DF03A068F855DB4333D43921125B9CF2670EF6A40370C646B90401955E1F7BC9CDBF59CE0B2C5467D820BE189C845D0B79CFC96F',
+];
 
 let ws = null;
 let certificates = [];
 let selectedCertificate = null;
+let certificatesLoadedOnce = false;
+let pendingLoadKey = false;
+let waitingForPkcs7 = false;
+let signingInProgress = false;
+let ignoreNextWsClose = false;
 let loginData = {};
 let documentData = <?= json_encode([
     'id' => $model->id,
@@ -686,7 +702,44 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupEventHandlers() {
     document.getElementById('btn-connect-eimzo').addEventListener('click', connectToEIMZO);
     document.getElementById('btn-sign-and-send').addEventListener('click', signAndSendDocument);
+    document.getElementById('btn-auto-sign-pfx').addEventListener('click', autoSignWithConfiguredPfx);
     document.getElementById('eimzo-certificates').addEventListener('change', onCertificateSelect);
+}
+
+async function autoSignWithConfiguredPfx() {
+    const autoBtn = document.getElementById('btn-auto-sign-pfx');
+    const manualBtn = document.getElementById('btn-sign-and-send');
+
+    try {
+        autoBtn.disabled = true;
+        manualBtn.disabled = true;
+        updateStatus("Запуск Auto Sign через backend PFX signer...", "info");
+
+        const response = await fetch(BACKEND_ROUTES.autoSignDocument, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                documentId: documentData.id,
+                autoSendToPartner: true
+            })
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.message || `HTTP ${response.status}`);
+        }
+
+        updateStatus(payload.message || "Auto Sign (PFX) выполнен успешно.", "success");
+        updateEIMZOStep(5, true);
+        setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+        console.error("Auto Sign (PFX) error:", error);
+        updateStatus("Ошибка Auto Sign (PFX): " + error.message, "error");
+        autoBtn.disabled = false;
+        manualBtn.disabled = false;
+    }
 }
 
 // Initialize EIMZO
@@ -695,6 +748,25 @@ function initializeEIMZO() {
     
     // Try to connect automatically
     setTimeout(connectToEIMZO, 1000);
+}
+
+function ensureOfficialClientReady() {
+    return new Promise((resolve, reject) => {
+        if (typeof EIMZOClient === 'undefined') {
+            reject(new Error('Official E-IMZO client script is not loaded'));
+            return;
+        }
+        EIMZOClient.API_KEYS = DESKTOP_EIMZO_API_KEYS.slice();
+        EIMZOClient.checkVersion(function () {
+            EIMZOClient.installApiKeys(function () {
+                resolve();
+            }, function (e, reason) {
+                reject(new Error(reason || ('API key install failed: ' + (e || 'unknown error'))));
+            });
+        }, function (e, reason) {
+            reject(new Error(reason || ('Version check failed: ' + (e || 'unknown error'))));
+        });
+    });
 }
 
 // Connect to EIMZO
@@ -710,8 +782,23 @@ function connectToEIMZO() {
     
     ws.onopen = function() {
         console.log("E-IMZO WebSocket connected");
+        if (pendingLoadKey && selectedCertificate) {
+            pendingLoadKey = false;
+            updateStatus("Соединение восстановлено. Загрузка ключа сертификата...", "info");
+            ws.send(JSON.stringify({
+                plugin: "pfx",
+                name: "load_key",
+                arguments: [
+                    selectedCertificate.disk,
+                    selectedCertificate.path,
+                    selectedCertificate.name,
+                    selectedCertificate.alias
+                ]
+            }));
+            return;
+        }
+
         updateStatus("Соединение с E-IMZO установлено. Загрузка сертификатов...", "info");
-        
         ws.send(JSON.stringify({
             plugin: "pfx",
             name: "list_all_certificates"
@@ -724,8 +811,35 @@ function connectToEIMZO() {
         updateEIMZOStep(1, false);
     };
     
-    ws.onclose = function() {
-        console.log("E-IMZO WebSocket connection closed");
+    ws.onclose = function(event) {
+        console.log("E-IMZO WebSocket connection closed", {
+            code: event && event.code,
+            reason: event && event.reason,
+            wasClean: event && event.wasClean
+        });
+
+        if (ignoreNextWsClose) {
+            ignoreNextWsClose = false;
+            return;
+        }
+        if (waitingForPkcs7 || signingInProgress || pendingLoadKey) {
+            waitingForPkcs7 = false;
+            signingInProgress = false;
+            pendingLoadKey = false;
+            updateStatus(`Подпись не создана: E-IMZO закрыл соединение (code: ${event?.code || 'n/a'}, reason: ${event?.reason || '-'})`, "error");
+            updateEIMZOStep(4, false);
+            document.getElementById('btn-sign-and-send').disabled = false;
+            return;
+        }
+
+        // E-IMZO may close socket after returning certificates; keep UI in ready state.
+        if (certificatesLoadedOnce && !waitingForPkcs7 && !signingInProgress && !pendingLoadKey) {
+            updateStatus("Сертификаты загружены. Нажмите «Подписать и отправить в DIDOX».", "success");
+            updateEIMZOStep(1, true);
+            updateEIMZOStep(2, false);
+            return;
+        }
+
         updateStatus("Соединение с E-IMZO закрыто", "error");
         updateEIMZOStep(1, false);
     };
@@ -758,6 +872,8 @@ function handleEIMZOMessage(data) {
         console.log("Signature hex length:", data.signature_hex?.length || 0);
         console.log("PKCS7 preview:", data.pkcs7_64?.substring(0, 100) + '...');
         
+        waitingForPkcs7 = false;
+        signingInProgress = false;
         loginData.pkcs7_64 = data.pkcs7_64;
         loginData.signature_hex = data.signature_hex;
         updateEIMZOStep(4, false);
@@ -779,6 +895,7 @@ function handleCertificatesList(certs) {
     console.log("✅ DIDOX Step 1 COMPLETED: Get list of keys (certificates)");
     console.log("Certificates found:", certs);
     certificates = certs;
+    certificatesLoadedOnce = true;
     
     const select = document.getElementById("eimzo-certificates");
     select.innerHTML = "";
@@ -1080,6 +1197,13 @@ function loadCertificateKey() {
         return;
     }
     
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        pendingLoadKey = true;
+        updateStatus("Переподключение к E-IMZO для загрузки ключа...", "info");
+        connectToEIMZO();
+        return;
+    }
+
     ws.send(JSON.stringify({
         plugin: "pfx",
         name: "load_key",
@@ -1103,21 +1227,54 @@ function createEIMZOSignature() {
     
     console.log('✅ Step 5: Sending E-IMZO signature request...');
     console.log('E-IMZO arguments:', [
-        loginData.documentBase64.substring(0, 100) + '... (base64)',
         loginData.keyId,
-        "no"
+        loginData.documentBase64.substring(0, 100) + '... (base64)',
+        "yes"
     ]);
     
     
     updateStatus("Создание цифровой подписи для DIDOX документа...", "info");
     
 
-    // Sign the base64 document data from DIDOX
-    ws.send(JSON.stringify({
-        plugin: "pkcs7",
-        name: "create_pkcs7",
-        arguments: [loginData.documentBase64, loginData.keyId, "no"]
-    }));
+    // Use one-shot CAPIWS call (same as e-imzo-doc flow) to get both pkcs7_64 and signature_hex.
+    if (typeof CAPIWS === 'undefined' || typeof CAPIWS.callFunction !== 'function') {
+        updateStatus("Ошибка: CAPIWS недоступен (e-imzo.js не загружен)", "error");
+        document.getElementById('btn-sign-and-send').disabled = false;
+        return;
+    }
+
+    ignoreNextWsClose = true;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.close(); } catch (e) { console.warn("WS close warning:", e); }
+    }
+
+    CAPIWS.callFunction(
+        {
+            plugin: "pkcs7",
+            name: "create_pkcs7",
+            arguments: [loginData.documentBase64, loginData.keyId, "yes"]
+        },
+        function (event, data) {
+            if (data && data.success && data.pkcs7_64) {
+                console.log("✅ DIDOX Step 5 COMPLETED: E-IMZO signature created via CAPIWS");
+                loginData.pkcs7_64 = data.pkcs7_64;
+                loginData.signature_hex = data.signature_hex || data.signatureHex || null;
+                console.log("Signature hex available:", !!loginData.signature_hex);
+                updateEIMZOStep(4, false);
+                addTimestampToSignature();
+                return;
+            }
+
+            console.error("❌ create_pkcs7 failed response:", data);
+            updateStatus("Ошибка создания PKCS7: " + (data?.reason || "unknown error"), "error");
+            document.getElementById('btn-sign-and-send').disabled = false;
+        },
+        function (e) {
+            console.error("❌ create_pkcs7 websocket error:", e);
+            updateStatus("Ошибка создания PKCS7 (WebSocket): " + (e || "unknown error"), "error");
+            document.getElementById('btn-sign-and-send').disabled = false;
+        }
+    );
 }
 
 // Add timestamp to signature
@@ -1169,14 +1326,18 @@ async function addTimestampToSignature() {
             loginData.timestampedSignature = data.timeStampTokenB64;
             updateStatus("Временная метка добавлена. Автоматическая отправка в DIDOX...", "success");
             updateEIMZOStep(4, true);
-            
-            // Show signature result
-            showSignatureResult();
-            
-            // Automatically proceed to send to DIDOX
-            setTimeout(() => {
-                sendToDidox();
-            }, 1000);
+
+            // Show signature result (best-effort) and always continue to DIDOX send step.
+            try {
+                showSignatureResult();
+            } catch (renderError) {
+                console.error("Signature result render warning:", renderError);
+            } finally {
+                console.log('➡️ Proceeding to DIDOX Step 8 in 1s...');
+                setTimeout(() => {
+                    sendToDidox();
+                }, 1000);
+            }
         } else {
             console.error('❌ Step 6 FAILED: No timeStampTokenB64 in response');
             console.error('Response data:', data);
@@ -1245,13 +1406,18 @@ async function sendToDidox() {
             auto_send_to_partner: true
         });
         
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
+
         const response = await fetch(BACKEND_ROUTES.signDocument, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
         
         console.log('DIDOX API signing response status:', response.status);
         console.log('DIDOX API signing response OK:', response.ok);
@@ -1284,7 +1450,13 @@ async function sendToDidox() {
             signature_length: (loginData.timestampedSignature || loginData.pkcs7_64)?.length || 0
         });
         
-        updateStatus("Ошибка отправки в DIDOX API: " + error.message, "error");
+        const isAbort = error && error.name === 'AbortError';
+        updateStatus(
+            isAbort
+                ? "Подписание в DIDOX заняло слишком много времени (timeout 90s). Проверьте статус документа и попробуйте ещё раз."
+                : "Ошибка отправки в DIDOX API: " + error.message,
+            "error"
+        );
         
         // Re-enable button to allow retry
         document.getElementById('btn-sign-and-send').disabled = false;

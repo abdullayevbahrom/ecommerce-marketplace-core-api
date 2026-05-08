@@ -957,10 +957,41 @@ class DidoxController extends Controller
                 ];
             }
             
-            // Get document data from DIDOX API using the provided didox_id
-            // This calls: GET /v1/documents/{didox_id}?owner=1
-            Yii::info('Making DIDOX API request: GET /v1/documents/' . $didoxId . '?owner=1', 'didox-debug');
-            $result = $didoxService->getDocumentForSigning($didoxId, $userKey);
+            // Build ID candidates because Didox can expose different ids in create payloads.
+            $existingDidoxData = $model->getDidoxDataArray();
+            $idCandidates = array_values(array_unique(array_filter([
+                $didoxId,
+                $model->didox_id,
+                $existingDidoxData['_id'] ?? null,
+                $existingDidoxData['data']['_id'] ?? null,
+                $existingDidoxData['data']['document']['doc_id'] ?? null,
+                $existingDidoxData['data']['document']['id'] ?? null,
+                $existingDidoxData['data']['id'] ?? null,
+                $existingDidoxData['pending_document']['document_json']['facturaid'] ?? null,
+                $existingDidoxData['data']['pending_document']['document_json']['facturaid'] ?? null,
+                $existingDidoxData['document_json']['facturaid'] ?? null,
+                $existingDidoxData['facturaid'] ?? null,
+            ])));
+
+            $result = null;
+            $usedDidoxId = null;
+            $attempts = [];
+            foreach ($idCandidates as $candidateId) {
+                Yii::info('Making DIDOX API request: GET /v1/documents/' . $candidateId . '?owner=1', 'didox-debug');
+                $current = $didoxService->getDocumentForSigning((string)$candidateId, $userKey);
+                $attempts[] = [
+                    'didox_id' => (string)$candidateId,
+                    'httpCode' => $current['httpCode'] ?? null,
+                    'success' => !empty($current['success']),
+                    'message' => $current['data']['error'] ?? $current['error'] ?? null,
+                ];
+                if (!empty($current['success'])) {
+                    $result = $current;
+                    $usedDidoxId = (string)$candidateId;
+                    break;
+                }
+                $result = $current;
+            }
             
             // Log the DIDOX API response for debugging
             Yii::info('DIDOX API response: ' . json_encode($result), 'didox-debug');
@@ -990,8 +1021,10 @@ class DidoxController extends Controller
                     'message' => 'Document data retrieved successfully from DIDOX API',
                     'data' => [
                         'document_id' => $model->id,
-                        'didox_id' => $didoxId,
-                        'didox_endpoint' => '/v1/documents/' . $didoxId . '?owner=1',
+                        'didox_id' => $usedDidoxId ?: $didoxId,
+                        'didox_endpoint' => '/v1/documents/' . ($usedDidoxId ?: $didoxId) . '?owner=1',
+                        'id_candidates' => $idCandidates,
+                        'id_attempts' => $attempts,
                         'document_json' => $documentJson, // This is DIDOX data.json converted to JSON
                         'document_base64' => $documentBase64, // This is DIDOX data.json converted to base64
                         'base64_length' => strlen($documentBase64),
@@ -1023,7 +1056,9 @@ class DidoxController extends Controller
                     'didox_details' => [
                         'http_code' => $didoxHttpCode,
                         'response' => $didoxData,
-                        'endpoint' => '/v1/documents/' . $model->didox_id . '?owner=1'
+                        'endpoint' => '/v1/documents/' . $model->didox_id . '?owner=1',
+                        'id_candidates' => $idCandidates,
+                        'id_attempts' => $attempts,
                     ]
                 ];
             }
@@ -1141,9 +1176,69 @@ class DidoxController extends Controller
                 'seller_tin' => $signingSellerTin,
             ]);
             Yii::info('DIDOX signing identity context: ' . json_encode($signerContext), 'didox-debug');
+
+            // DIDOX may return different IDs for read/sign operations.
+            // Build a candidate list and try signing with each one until success.
+            $existingDidoxData = $model->getDidoxDataArray();
+            $signIdCandidates = array_values(array_unique(array_filter([
+                $model->didox_id,
+                $existingDidoxData['pending_document']['document_json']['facturaid'] ?? null,
+                $existingDidoxData['data']['pending_document']['document_json']['facturaid'] ?? null,
+                $existingDidoxData['data']['document']['doc_id'] ?? null,
+                $existingDidoxData['data']['document']['id'] ?? null,
+                $existingDidoxData['data']['id'] ?? null,
+                $existingDidoxData['_id'] ?? null,
+                $existingDidoxData['data']['_id'] ?? null,
+                $signingDocumentResult['data']['data']['json']['facturaid'] ?? null,
+                $signingDocumentResult['data']['pending_document']['document_json']['facturaid'] ?? null,
+                $signingDocumentResult['data']['data']['pending_document']['document_json']['facturaid'] ?? null,
+            ])));
+
+            $attemptSignWithCandidates = function (string $token) use ($didoxService, $signIdCandidates, $signature): array {
+                $allAttempts = [];
+                $lastResult = null;
+                $usedId = null;
+
+                foreach ($signIdCandidates as $candidateId) {
+                    $current = $didoxService->signDocument((string)$candidateId, $signature, $token);
+                    $candidateAttempts = [];
+                    if (isset($current['debug']['attempts']) && is_array($current['debug']['attempts'])) {
+                        foreach ($current['debug']['attempts'] as $attempt) {
+                            $attempt['document_id'] = (string)$candidateId;
+                            $candidateAttempts[] = $attempt;
+                        }
+                    } else {
+                        $candidateAttempts[] = [
+                            'document_id' => (string)$candidateId,
+                            'httpCode' => $current['httpCode'] ?? null,
+                            'isOk' => $current['success'] ?? false,
+                        ];
+                    }
+                    $allAttempts = array_merge($allAttempts, $candidateAttempts);
+                    $lastResult = $current;
+
+                    if (!empty($current['success'])) {
+                        $usedId = (string)$candidateId;
+                        if (!isset($current['debug']) || !is_array($current['debug'])) {
+                            $current['debug'] = [];
+                        }
+                        $current['debug']['candidate_attempts'] = $allAttempts;
+                        return [$current, $usedId, $allAttempts];
+                    }
+                }
+
+                if ($lastResult === null) {
+                    $lastResult = ['success' => false, 'error' => 'No sign ID candidates available'];
+                }
+                if (!isset($lastResult['debug']) || !is_array($lastResult['debug'])) {
+                    $lastResult['debug'] = [];
+                }
+                $lastResult['debug']['candidate_attempts'] = $allAttempts;
+                return [$lastResult, $usedId, $allAttempts];
+            };
             
             // Sign document using DIDOX service
-            $result = $didoxService->signDocument($model->didox_id, $signature, $userKey);
+            [$result, $usedSignId, $candidateAttempts] = $attemptSignWithCandidates((string)$userKey);
             
             // Log the full DIDOX response for debugging
             Yii::info('DIDOX signDocument response: ' . json_encode($result), 'didox-debug');
@@ -1240,6 +1335,7 @@ class DidoxController extends Controller
                         'data' => [
                             'document_id' => $model->id,
                             'didox_id' => $model->didox_id,
+                            'signed_with_id' => $usedSignId,
                             'status' => $model->didox_status,
                             'status_from_didox' => $newStatus,
                             'signed_at' => $model->didox_signed_at,
@@ -1267,6 +1363,140 @@ class DidoxController extends Controller
                 $didoxHttpCode = isset($result['httpCode']) ? $result['httpCode'] : null;
                 $didoxData = isset($result['data']) ? $result['data'] : null;
                 $didoxError = isset($result['error']) ? $result['error'] : null;
+
+                // Admin manual flow fallback: if session token lost document context, re-auth and retry once.
+                $noDocumentMessage = '';
+                if (is_array($didoxData) && isset($didoxData['data']['message']) && is_string($didoxData['data']['message'])) {
+                    $noDocumentMessage = $didoxData['data']['message'];
+                } elseif (is_array($didoxData) && isset($didoxData['message']) && is_string($didoxData['message'])) {
+                    $noDocumentMessage = $didoxData['message'];
+                }
+                $isNoDocument = stripos($noDocumentMessage, 'No Document') !== false;
+                if ($isNoDocument) {
+                    $reAuth = $didoxService->authenticateWithConfiguredPfx((string)$taxId);
+                    if (!empty($reAuth['success']) && !empty($reAuth['token'])) {
+                        $freshUserKey = (string)$reAuth['token'];
+                        $session->set('didox_token', $freshUserKey);
+                        $session->set('didox_taxid', (string)$taxId);
+                        $session->set('didox_connection_type', 'token');
+                        $session->set('didox_auth_method', 're_auth_on_sign');
+
+                        [$retryResult, $retryUsedSignId, $retryCandidateAttempts] = $attemptSignWithCandidates($freshUserKey);
+                        Yii::info('DIDOX signDocument retry-after-reauth response: ' . json_encode($retryResult), 'didox-debug');
+
+                        if (!empty($retryResult['success'])) {
+                            $result = $retryResult;
+                            $didoxHttpCode = $result['httpCode'] ?? 200;
+                            $didoxData = $result['data'] ?? null;
+                            $didoxError = null;
+                        } else {
+                            // If document is already signed in DIDOX, don't fail with misleading "No Document".
+                            $docStateResult = $didoxService->getDocumentForSigning($model->didox_id, $freshUserKey);
+                            if (!empty($docStateResult['success']) && !empty($docStateResult['data']['data']['document'])) {
+                                $didoxDocument = $docStateResult['data']['data']['document'];
+                                $docStatus = isset($didoxDocument['doc_status']) ? (int)$didoxDocument['doc_status'] : (isset($didoxDocument['status']) ? (int)$didoxDocument['status'] : null);
+                                if ($docStatus === 1) {
+                                    $model->didox_status = 1;
+                                    $model->didox_signed_at = date('Y-m-d H:i:s');
+                                    $model->didox_error_data = null;
+                                    $model->save(false);
+
+                                    Yii::$app->response->statusCode = 200;
+                                    return [
+                                        'success' => true,
+                                        'message' => 'Document is already signed in DIDOX',
+                                        'data' => [
+                                            'document_id' => $model->id,
+                                            'didox_id' => $model->didox_id,
+                                            'signed_with_id' => $retryUsedSignId,
+                                            'status' => $model->didox_status,
+                                            'status_from_didox' => $docStatus,
+                                            'signed_at' => $model->didox_signed_at,
+                                            'already_signed' => true,
+                                        ],
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // If retry succeeded, continue as successful flow.
+                if (!empty($result['success'])) {
+                    $responseData = $result['data'];
+                    $documentData = isset($responseData['data']['document']) ? $responseData['data']['document'] :
+                        (isset($responseData['document']) ? $responseData['document'] : $responseData);
+
+                    $newStatus = 1;
+                    if (isset($documentData['doc_status'])) {
+                        $newStatus = (int)$documentData['doc_status'];
+                    } elseif (isset($documentData['status'])) {
+                        $newStatus = (int)$documentData['status'];
+                    }
+
+                    $model->didox_status = $newStatus;
+                    $model->didox_signed_at = date('Y-m-d H:i:s');
+                    $model->didox_error_data = null;
+
+                    if ($certificateInfo) {
+                        $existingData = $model->getDidoxDataArray();
+                        $existingData['certificate_info'] = $certificateInfo;
+                        $existingData['signer_tax_id'] = $taxId;
+                        $existingData['signed_at'] = date('Y-m-d H:i:s');
+                        $model->setDidoxData($existingData);
+                    }
+
+                    $model->extractAndSetDidoxDocumentId($result['data']);
+                    $existingData = $model->getDidoxDataArray();
+                    $mergedData = array_merge($existingData, $result['data']);
+                    $model->setDidoxData($mergedData);
+
+                    if ($model->save(false)) {
+                        $sentToPartner = false;
+                        $sendPartnerResult = null;
+
+                        if ($autoSendToPartner) {
+                            $freshUserKey = $session->get('didox_token', $userKey);
+                            $sendPartnerResult = $didoxService->sendDocumentToPartner($model->didox_id, $freshUserKey);
+                            if ($sendPartnerResult['success']) {
+                                $sendResponseData = $sendPartnerResult['data'];
+                                $sendDocData = isset($sendResponseData['data']['document']) ? $sendResponseData['data']['document'] :
+                                    (isset($sendResponseData['document']) ? $sendResponseData['document'] : $sendResponseData);
+
+                                if (isset($sendDocData['doc_status'])) {
+                                    $model->didox_status = (int)$sendDocData['doc_status'];
+                                } elseif (isset($sendDocData['status'])) {
+                                    $model->didox_status = (int)$sendDocData['status'];
+                                }
+
+                                $model->extractAndSetDidoxDocumentId($sendPartnerResult['data']);
+                                $existingData = $model->getDidoxDataArray();
+                                $mergedData = array_merge($existingData, $sendPartnerResult['data']);
+                                $model->setDidoxData($mergedData);
+                                $model->didox_error_data = null;
+                                $model->save(false);
+                                $sentToPartner = true;
+                            }
+                        }
+
+                        Yii::$app->response->statusCode = 200;
+                        return [
+                            'success' => true,
+                            'message' => $autoSendToPartner
+                                ? ($sentToPartner ? 'Document signed and sent to partner successfully (reauthenticated token)' : 'Document signed successfully (reauthenticated token), but sending to partner failed')
+                                : 'Document signed successfully (reauthenticated token)',
+                            'data' => [
+                                'document_id' => $model->id,
+                                'didox_id' => $model->didox_id,
+                                'status' => $model->didox_status,
+                                'status_from_didox' => $newStatus,
+                                'signed_at' => $model->didox_signed_at,
+                                'sent_to_partner' => $sentToPartner,
+                                'send_result' => $sendPartnerResult,
+                            ],
+                        ];
+                    }
+                }
                 
                 // Determine appropriate HTTP status code based on DIDOX response
                 if ($didoxHttpCode) {
@@ -1287,26 +1517,64 @@ class DidoxController extends Controller
                     $errorMessage = $didoxData;
                 }
                 
-                // Store comprehensive error in document for debugging
+                // Store compact error in document (avoid DB overflow on large payloads)
                 $debugInfo = isset($result['debug']) ? $result['debug'] : null;
+                $debugAttempts = [];
+                if (is_array($debugInfo) && isset($debugInfo['attempts']) && is_array($debugInfo['attempts'])) {
+                    foreach ($debugInfo['attempts'] as $attempt) {
+                        $debugAttempts[] = [
+                            'endpoint' => $attempt['endpoint'] ?? null,
+                            'httpCode' => $attempt['httpCode'] ?? null,
+                            'isOk' => $attempt['isOk'] ?? null,
+                            'message' => $attempt['data']['data']['message'] ?? null,
+                        ];
+                    }
+                }
+                if (is_array($debugInfo) && isset($debugInfo['candidate_attempts']) && is_array($debugInfo['candidate_attempts'])) {
+                    foreach ($debugInfo['candidate_attempts'] as $attempt) {
+                        $debugAttempts[] = [
+                            'document_id' => $attempt['document_id'] ?? null,
+                            'endpoint' => $attempt['endpoint'] ?? null,
+                            'httpCode' => $attempt['httpCode'] ?? null,
+                            'isOk' => $attempt['isOk'] ?? null,
+                            'message' => $attempt['data']['data']['message'] ?? null,
+                        ];
+                    }
+                }
+                $didoxResponseMessage = null;
+                if (is_array($didoxData)) {
+                    $didoxResponseMessage = $didoxData['data']['message'] ?? $didoxData['message'] ?? null;
+                } elseif (is_string($didoxData)) {
+                    $didoxResponseMessage = mb_substr($didoxData, 0, 500);
+                }
                 $errorData = [
                     'timestamp' => date('Y-m-d H:i:s'),
                     'action' => 'sign_document',
                     'error_message' => $errorMessage,
                     'didox_http_code' => $didoxHttpCode,
-                    'didox_response' => $didoxData,
-                    'full_result' => $result,
+                    'didox_response_message' => $didoxResponseMessage,
                     'tax_id' => $taxId,
                     'document_id' => $model->didox_id,
-                    'signature_full' => $signature,
                     'signature_length' => strlen($signature),
                     'request_url' => '/v1/documents/' . $model->didox_id . '/sign',
-                    'debug_info' => $debugInfo,
+                    'debug_attempts' => $debugAttempts,
+                    'sign_id_candidates' => $signIdCandidates,
                     'identity_context' => $signerContext,
                 ];
-                
-                $model->didox_error_data = json_encode($errorData, JSON_PRETTY_PRINT);
-                $model->save(false);
+
+                $encodedErrorData = json_encode($errorData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($encodedErrorData === false) {
+                    $encodedErrorData = '{"error":"failed_to_encode_error_data"}';
+                }
+                if (strlen($encodedErrorData) > 60000) {
+                    $encodedErrorData = substr($encodedErrorData, 0, 60000);
+                }
+                try {
+                    $model->didox_error_data = $encodedErrorData;
+                    $model->save(false);
+                } catch (\Throwable $saveError) {
+                    Yii::error('Failed to save didox_error_data: ' . $saveError->getMessage(), 'didox');
+                }
                 
                 return [
                     'success' => false, 
@@ -1320,24 +1588,14 @@ class DidoxController extends Controller
                     'error_details' => [
                         'user_key_exists' => !empty($userKey),
                         'signature_length' => strlen($signature),
-                        'signature_full' => $signature,
                         'tax_id' => $taxId,
                         'identity_context' => $signerContext,
                     ],
                     'debug_info' => [
-                        'full_didox_result' => $result,
-                        'request_sent' => [
-                            'url' => '/v1/documents/' . $model->didox_id . '/sign',
-                            'method' => 'POST',
-                            'headers' => [
-                                'Partner-Authorization' => 'CONFIGURED',
-                                'user-key' => !empty($userKey) ? 'SET' : 'MISSING'
-                            ],
-                            'payload' => [
-                                'signature' => $signature
-                            ]
-                        ],
-                        'didox_debug' => $debugInfo,
+                        'request_url' => '/v1/documents/' . $model->didox_id . '/sign',
+                        'didox_http_code' => $didoxHttpCode,
+                        'attempts' => $debugAttempts,
+                        'sign_id_candidates' => $signIdCandidates,
                         'identity_context' => $signerContext,
                     ]
                 ];
@@ -1365,8 +1623,19 @@ class DidoxController extends Controller
                     'identity_context' => isset($signerContext) ? $signerContext : null,
                 ];
                 
-                $model->didox_error_data = json_encode($errorData, JSON_PRETTY_PRINT);
-                $model->save(false);
+                $encodedErrorData = json_encode($errorData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($encodedErrorData === false) {
+                    $encodedErrorData = '{"error":"failed_to_encode_system_error_data"}';
+                }
+                if (strlen($encodedErrorData) > 60000) {
+                    $encodedErrorData = substr($encodedErrorData, 0, 60000);
+                }
+                try {
+                    $model->didox_error_data = $encodedErrorData;
+                    $model->save(false);
+                } catch (\Throwable $saveError) {
+                    Yii::error('Failed to save didox system error data: ' . $saveError->getMessage(), 'didox');
+                }
             }
             
             return [
@@ -1378,6 +1647,130 @@ class DidoxController extends Controller
                     'line' => $e->getLine(),
                     'code' => $e->getCode()
                 ]
+            ];
+        }
+    }
+
+    /**
+     * Auto sign document via configured PFX signer flow (no browser E-IMZO interaction).
+     * Uses the same backend flow as automatic signing: authenticate by PFX -> get data -> sign -> timestamp -> send.
+     */
+    public function actionAutoSignDocument() {
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+
+        if (!Yii::$app->request->isPost) {
+            Yii::$app->response->statusCode = 405;
+            return ['success' => false, 'message' => 'Only POST requests allowed'];
+        }
+
+        $rawInput = file_get_contents('php://input');
+        $data = json_decode($rawInput, true);
+        if (!$data) {
+            Yii::$app->response->statusCode = 400;
+            return ['success' => false, 'message' => 'Invalid JSON data'];
+        }
+
+        $documentId = $data['documentId'] ?? null;
+        if (!$documentId) {
+            Yii::$app->response->statusCode = 400;
+            return [
+                'success' => false,
+                'message' => 'Missing required parameter: documentId',
+            ];
+        }
+
+        try {
+            $model = $this->findModel($documentId);
+
+            if (!$model->isDidoxDocument()) {
+                Yii::$app->response->statusCode = 422;
+                return [
+                    'success' => false,
+                    'message' => 'Document is not connected to DIDOX',
+                    'error_details' => [
+                        'document_id' => $model->id,
+                        'didox_id' => $model->didox_id,
+                    ]
+                ];
+            }
+
+            if (!$model->canBeSignedInDidox()) {
+                Yii::$app->response->statusCode = 422;
+                return [
+                    'success' => false,
+                    'message' => 'Document cannot be signed in current status',
+                    'error_details' => [
+                        'document_id' => $model->id,
+                        'current_status' => $model->didox_status,
+                        'status_label' => $model->getDidoxStatusLabel(),
+                    ]
+                ];
+            }
+
+            $didoxService = new DidoxService();
+            $result = $didoxService->autoSignAndSendDocumentWithConfiguredPfx((string)$model->didox_id);
+
+            if (!empty($result['success'])) {
+                $documentStateData = $result['document_state']['data'] ?? null;
+                $stateDocument = null;
+                if (is_array($documentStateData)) {
+                    $stateDocument = $documentStateData['data']['document'] ?? ($documentStateData['document'] ?? $documentStateData);
+                }
+
+                if (is_array($stateDocument)) {
+                    if (isset($stateDocument['doc_status'])) {
+                        $model->didox_status = (int)$stateDocument['doc_status'];
+                    } elseif (isset($stateDocument['status'])) {
+                        $model->didox_status = (int)$stateDocument['status'];
+                    }
+                    $model->setDidoxData($documentStateData);
+                } else {
+                    $model->didox_status = DidoxDocument::STATUS_WAITING_PARTNER_SIGNATURE;
+                }
+
+                $model->didox_signed_at = date('Y-m-d H:i:s');
+                $model->clearDidoxErrors();
+                $model->save(false);
+
+                return [
+                    'success' => true,
+                    'message' => 'Document signed and sent via configured PFX flow.',
+                    'data' => [
+                        'document_id' => $model->id,
+                        'didox_id' => $model->didox_id,
+                        'didox_status' => $model->didox_status,
+                        'status_label' => $model->getDidoxStatusLabel(),
+                        'flow_stage' => $result['stage'] ?? null,
+                    ]
+                ];
+            }
+
+            $model->setDidoxErrorData([
+                'timestamp' => date('Y-m-d H:i:s'),
+                'action' => 'auto_sign_document',
+                'error_message' => $result['error'] ?? 'Auto sign failed',
+                'stage' => $result['stage'] ?? null,
+                'didox_id' => $model->didox_id,
+            ]);
+            $model->save(false);
+
+            Yii::$app->response->statusCode = 422;
+            return [
+                'success' => false,
+                'message' => 'Auto sign failed: ' . ($result['error'] ?? 'Unknown error'),
+                'didox_details' => [
+                    'didox_id' => $model->didox_id,
+                    'stage' => $result['stage'] ?? null,
+                    'sign_result' => $result['sign_result'] ?? ($result['didox_sign_result'] ?? null),
+                    'send_result' => $result['send_result'] ?? null,
+                ]
+            ];
+        } catch (\Throwable $e) {
+            Yii::$app->response->statusCode = 500;
+            Yii::error('Auto sign document error: ' . $e->getMessage() . "\nTrace: " . $e->getTraceAsString(), 'didox');
+            return [
+                'success' => false,
+                'message' => 'System error: ' . $e->getMessage(),
             ];
         }
     }
