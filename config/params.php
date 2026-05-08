@@ -40,8 +40,8 @@ $config = [
     'senderName' => 'Example.com mailer',
 
     // Didox E-IMZO integration settings
-    'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjM4LCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzYwOTM2NzIwfQ.Dr8fBTTwJ2O5KRh98tOtBeF4vfc8w4hxTye0hJ-qPSc', // Add your Didox partner token here
-    // 'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MzcxLCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzc4MjI3NTk1fQ.Cf0uSMM2A2tUIdkcY0jRUrmpFkWxLUX36i-EA7wNM1o', // Add your Didox partner token here prod
+    //'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjM4LCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzYwOTM2NzIwfQ.Dr8fBTTwJ2O5KRh98tOtBeF4vfc8w4hxTye0hJ-qPSc', // Add your Didox partner token here
+    'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MzcxLCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzc4MjI3NTk1fQ.Cf0uSMM2A2tUIdkcY0jRUrmpFkWxLUX36i-EA7wNM1o', // Add your Didox partner token here prod
     'didoxTestTaxId' => '123456789', // TIN for testing Didox integration for https://testapi.einvoice.example.com (should be registered in Didox system) prod https://api.einvoice.example.com
 
     // BTS delivery service integration settings

@@ -205,6 +205,7 @@ class SettingsController extends Controller{
                 $allowedMimeTypes = [
                     'application/x-pkcs12',
                     'application/pkcs12',
+                    'application/octet-stream',
                 ];
 
                 $extension = strtolower((string)$uploadedFile->extension);

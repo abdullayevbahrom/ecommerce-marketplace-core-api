@@ -34,6 +34,11 @@ $this->params['breadcrumbs'][] = $this->title;
                 <?=Yii::$app->session->getFlash('pfx_saved');?>
             </div>
         <?php }?>
+        <?php if (Yii::$app->session->hasFlash('pfx_error')) {?>
+            <div class="callout callout-danger text-center">
+                <?=Yii::$app->session->getFlash('pfx_error');?>
+            </div>
+        <?php }?>
 
         <div class="nav-tabs-custom">
             <ul class="nav nav-tabs">
