@@ -731,10 +731,16 @@ class DidoxController extends Controller
 
         try {
             if (empty($user->eimzo_tax_id)) {
-                throw new HttpException(422, 'E-IMZO orqali login qiling: foydalanuvchida eimzo_tax_id topilmadi.');
+                throw new HttpException(422, 'Please login with E-IMZO again.');
             }
 
-            $this->ensureValidUserDidoxToken($user);
+            if (empty($user->eimzo_didox_token)) {
+                throw new HttpException(401, 'Please login with E-IMZO again.');
+            }
+
+            if (!empty($user->eimzo_didox_token_expires_at) && strtotime($user->eimzo_didox_token_expires_at) < time()) {
+                throw new HttpException(401, 'Please login with E-IMZO again.');
+            }
 
             // Find document and verify it's assigned to current user
             $document = DidoxDocument::find()
@@ -761,11 +767,6 @@ class DidoxController extends Controller
             // Check if document is in correct status for signing (STATUS_WAITING_YOUR_SIGNATURE = 2)
             if ($document->didox_status != 1) {
                 throw new HttpException(422, 'Document is not waiting for your signature. Current status: ' . $document->getDidoxStatusLabel());
-            }
-
-            // Get user's DIDOX token
-            if (empty($user->eimzo_didox_token)) {
-                throw new HttpException(401, 'User not authenticated with DIDOX. Please login with E-IMZO first.');
             }
 
             // Get document data from DIDOX API for incoming documents
@@ -834,10 +835,16 @@ class DidoxController extends Controller
 
         try {
             if (empty($user->eimzo_tax_id)) {
-                throw new HttpException(422, 'E-IMZO orqali login qiling: foydalanuvchida eimzo_tax_id topilmadi.');
+                throw new HttpException(422, 'Please login with E-IMZO again.');
             }
 
-            $this->ensureValidUserDidoxToken($user);
+            if (empty($user->eimzo_didox_token)) {
+                throw new HttpException(401, 'Please login with E-IMZO again.');
+            }
+
+            if (!empty($user->eimzo_didox_token_expires_at) && strtotime($user->eimzo_didox_token_expires_at) < time()) {
+                throw new HttpException(401, 'Please login with E-IMZO again.');
+            }
 
             // Find document and verify it's assigned to current user
             $document = DidoxDocument::find()

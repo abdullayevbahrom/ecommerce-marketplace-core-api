@@ -18,6 +18,41 @@ use app\models\Log;
 class DidoxOrderService
 {
     /**
+     * Optionally force outgoing invoice payload totals to 1 for testing.
+     * Controlled by params['didoxInvoiceForceSumOne'].
+     */
+    protected static function maybeForceInvoicePayloadSumOne(array $apiData): array
+    {
+        if (empty(Yii::$app->params['didoxInvoiceForceSumOne'])) {
+            return $apiData;
+        }
+
+        if (!isset($apiData['ProductList']['Products']) || !is_array($apiData['ProductList']['Products']) || empty($apiData['ProductList']['Products'])) {
+            return $apiData;
+        }
+
+        // Zero all line sums first, then set first product to sum=1.
+        foreach ($apiData['ProductList']['Products'] as $idx => $product) {
+            $apiData['ProductList']['Products'][$idx]['Summa'] = '0';
+            $apiData['ProductList']['Products'][$idx]['DeliverySum'] = '0.00';
+            $apiData['ProductList']['Products'][$idx]['VatRate'] = '0';
+            $apiData['ProductList']['Products'][$idx]['VatSum'] = '0.00';
+            $apiData['ProductList']['Products'][$idx]['DeliverySumWithVat'] = '0.00';
+        }
+
+        $apiData['ProductList']['Products'][0]['Count'] = '1';
+        $apiData['ProductList']['Products'][0]['Summa'] = '1';
+        $apiData['ProductList']['Products'][0]['DeliverySum'] = '1.00';
+        $apiData['ProductList']['Products'][0]['VatRate'] = '0';
+        $apiData['ProductList']['Products'][0]['VatSum'] = '0.00';
+        $apiData['ProductList']['Products'][0]['DeliverySumWithVat'] = '1.00';
+
+        $apiData['ProductList']['HasVat'] = false;
+
+        return $apiData;
+    }
+
+    /**
      * Attempt to auto sign and send a freshly created Didox document.
      */
     protected static function autoSignCreatedDocument(DidoxService $didoxService, DidoxDocument $document, array &$result, string $label)
@@ -224,6 +259,7 @@ class DidoxOrderService
                     // Attempt upload to DIDOX
                     try {
                         $apiData = $invoiceDoc->generateDidoxApiStructure();
+                        $apiData = self::maybeForceInvoicePayloadSumOne($apiData);
                         // Ensure doctype is set
                         $apiData['doctype'] = $invoiceDoc->didox_doc_type ?: '002';
 
@@ -478,6 +514,7 @@ class DidoxOrderService
                 $invoiceDoc->refresh();
 
                 $apiData = $invoiceDoc->generateDidoxApiStructure();
+                $apiData = self::maybeForceInvoicePayloadSumOne($apiData);
                 $apiData['doctype'] = $invoiceDoc->didox_doc_type ?: '002';
 
                 // Log full API structure including products for debugging

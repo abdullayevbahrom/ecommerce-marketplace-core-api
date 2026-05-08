@@ -43,6 +43,7 @@ $config = [
     //'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjM4LCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzYwOTM2NzIwfQ.Dr8fBTTwJ2O5KRh98tOtBeF4vfc8w4hxTye0hJ-qPSc', // Add your Didox partner token here
     'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MzcxLCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzc4MjI3NTk1fQ.Cf0uSMM2A2tUIdkcY0jRUrmpFkWxLUX36i-EA7wNM1o', // Add your Didox partner token here prod
     'didoxTestTaxId' => '123456789', // TIN for testing Didox integration for https://testapi.einvoice.example.com (should be registered in Didox system) prod https://api.einvoice.example.com
+    'didoxInvoiceForceSumOne' => filter_var(getenv('DIDOX_INVOICE_FORCE_SUM_ONE') ?: false, FILTER_VALIDATE_BOOL),
 
     // BTS delivery service integration settings
     'bts_token' => 'sample_logistics_token', // Your current BTS token
@@ -117,6 +118,8 @@ $config = [
         // Status polling timeout (seconds)
         'mobileStatusTimeout' => 120,
     ],
+    // If enabled, outgoing Didox invoice payload is forced to total sum = 1 for testing.
+
     'telegram' => [
         'botToken' => $botToken,
         'chatId' => $chatId,
