@@ -1787,19 +1787,58 @@ class DidoxService
                 'Content-Type: application/json',
                 'Partner-Authorization: ' . $this->partnerToken
             ];
-            
+
             if ($userKey) {
                 $headers[] = 'user-key: ' . $userKey;
             }
-            
-            $response = $this->makeRequestWithHeaders('POST', '/v1/documents/' . $docId . '/cancel', [], $headers);
-            
+
+            $toSign = $this->getDocumentToSign($docId, 'cancel', $userKey);
+            $payload = $toSign['data']['data'] ?? null;
+            if (!$payload) {
+                return [
+                    'success' => false,
+                    'error' => 'Failed to get cancel payload for signing',
+                    'httpCode' => $toSign['httpCode'] ?? null,
+                    'data' => $toSign,
+                ];
+            }
+
+            $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE);
+            $payloadB64 = base64_encode((string)$payloadJson);
+
+            $signed = $this->signConfiguredPfxPayload($payloadB64);
+            if (empty($signed['success']) || empty($signed['pkcs7']) || empty($signed['signature'])) {
+                return [
+                    'success' => false,
+                    'error' => $signed['error'] ?? 'Failed to sign cancel payload',
+                    'data' => $signed,
+                ];
+            }
+
+            $timestampRes = $this->createTimestamp($signed['pkcs7'], $signed['signature']);
+            $finalSignature = $timestampRes['data']['timeStampTokenB64'] ?? '';
+            if ($finalSignature === '') {
+                return [
+                    'success' => false,
+                    'error' => 'Failed to timestamp cancel signature',
+                    'data' => $timestampRes,
+                ];
+            }
+
+            $response = $this->makeRequestWithHeaders('POST', '/v1/documents/' . $docId . '/delete', [
+                'signature' => $finalSignature,
+            ], $headers);
+
             return [
                 'success' => $response['isOk'],
                 'data' => $response['data'],
-                'httpCode' => $response['httpCode']
+                'httpCode' => $response['httpCode'],
+                'debug' => [
+                    'tosign' => $toSign,
+                    'delete_debug' => $response['debug'] ?? null,
+                ],
             ];
-            
+
         } catch (\Exception $e) {
             Yii::error('DIDOX cancel document error: ' . $e->getMessage(), __METHOD__);
             return [
@@ -2160,81 +2199,275 @@ class DidoxService
             if ($userKey) {
                 $headers[] = 'user-key: ' . $userKey;
             }
-            
-            // For incoming documents, use owner=0 to get toSign value
-            $response = $this->makeRequestWithHeaders('GET', '/v1/documents/' . $docId . '?owner=0', [], $headers);
-            
-            error_log('getIncomingDocumentForSigning response:');
-            error_log(json_encode($response));
-            
-            if ($response['isOk']) {
-                // Extract toSign value from DIDOX response
+            $extractPayload = function ($sourceData) {
                 $toSignValue = null;
-                if (isset($response['data']['toSign'])) {
-                    $toSignValue = $response['data']['toSign'];
-                } elseif (isset($response['data']['data']['toSign'])) {
-                    $toSignValue = $response['data']['data']['toSign'];
-                } elseif (is_string($response['data'])) {
-                    // Sometimes DIDOX returns the toSign value directly as a string
-                    $toSignValue = $response['data'];
+                $jsonValue = null;
+                $matchedToSignPath = null;
+                $matchedJsonPath = null;
+
+                $toSignKeys = ['tosign', 'to_sign', 'sign', 'signature'];
+                $jsonKeys = ['json', 'documentjson', 'document_json'];
+
+                $isLikelyBase64 = function (string $v): bool {
+                    $s = trim($v);
+                    if ($s === '' || strlen($s) < 128) {
+                        return false;
+                    }
+                    return (bool)preg_match('/^[A-Za-z0-9+\/=]+$/', $s);
+                };
+
+                $walker = function ($node, string $path = '') use (&$walker, &$toSignValue, &$jsonValue, &$matchedToSignPath, &$matchedJsonPath, $toSignKeys, $jsonKeys, $isLikelyBase64) {
+                    if (is_array($node)) {
+                        foreach ($node as $k => $v) {
+                            $kStr = (string)$k;
+                            $nextPath = $path === '' ? $kStr : ($path . '.' . $kStr);
+                            $kNorm = strtolower($kStr);
+
+                            if (is_string($v)) {
+                                $trimmed = trim($v);
+                                if ($trimmed === '') {
+                                    continue;
+                                }
+
+                                if ($toSignValue === null) {
+                                    if (in_array($kNorm, $toSignKeys, true) && $isLikelyBase64($trimmed)) {
+                                        $toSignValue = $trimmed;
+                                        $matchedToSignPath = $nextPath;
+                                    } elseif (($kNorm === 'value' || $kNorm === 'data') && $isLikelyBase64($trimmed)) {
+                                        // /tosign endpoint sometimes returns raw payload in generic fields
+                                        $toSignValue = $trimmed;
+                                        $matchedToSignPath = $nextPath;
+                                    }
+                                }
+
+                                if ($jsonValue === null && in_array($kNorm, $jsonKeys, true)) {
+                                    $jsonValue = $trimmed;
+                                    $matchedJsonPath = $nextPath;
+                                }
+                            } else {
+                                $walker($v, $nextPath);
+                            }
+                        }
+                        return;
+                    }
+
+                    if (is_string($node) && $toSignValue === null) {
+                        $trimmed = trim($node);
+                        if ($isLikelyBase64($trimmed)) {
+                            $toSignValue = $trimmed;
+                            $matchedToSignPath = $path === '' ? 'root_string' : $path;
+                        }
+                    }
+                };
+
+                $walker($sourceData, '');
+
+                return [$toSignValue, $jsonValue, $matchedToSignPath, $matchedJsonPath];
+            };
+
+            $attemptSpecs = [
+                ['method' => 'POST', 'endpoint' => '/v1/documents/' . $docId . '/tosign', 'body' => ['action' => 'accept']],
+                ['method' => 'GET',  'endpoint' => '/v1/documents/' . $docId . '?owner=0', 'body' => []],
+                ['method' => 'GET',  'endpoint' => '/v1/documents/' . $docId . '?owner=1', 'body' => []],
+                ['method' => 'GET',  'endpoint' => '/v1/documents/' . $docId, 'body' => []],
+            ];
+
+            $debugAttempts = [];
+            $selected = null;
+            $selectedResponse = null;
+            $selectedToSign = null;
+            $selectedJson = null;
+
+            foreach ($attemptSpecs as $spec) {
+                $resp = $this->makeRequestWithHeaders($spec['method'], $spec['endpoint'], $spec['body'], $headers);
+                [$ts, $js, $tsPath, $jsPath] = $extractPayload($resp['data'] ?? null);
+                $debugAttempts[] = [
+                    'endpoint' => $spec['endpoint'],
+                    'method' => $spec['method'],
+                    'httpCode' => $resp['httpCode'] ?? null,
+                    'isOk' => !empty($resp['isOk']),
+                    'toSign_found' => !empty($ts),
+                    'toSign_length' => $ts ? strlen($ts) : 0,
+                    'toSign_path' => $tsPath,
+                    'json_found' => !empty($js),
+                    'json_length' => $js ? strlen($js) : 0,
+                    'json_path' => $jsPath,
+                ];
+
+                if (!empty($resp['isOk']) && (!empty($ts) || !empty($js))) {
+                    $selected = $spec;
+                    $selectedResponse = $resp;
+                    $selectedToSign = $ts;
+                    $selectedJson = $js;
+                    break;
                 }
-                
+            }
+
+            if ($selectedResponse !== null) {
                 return [
                     'success' => true,
                     'data' => [
-                        'toSign' => $toSignValue,
-                        'original_response' => $response['data']
+                        'toSign' => $selectedToSign,
+                        'json' => $selectedJson,
+                        'original_response' => $selectedResponse['data']
                     ],
-                    'httpCode' => $response['httpCode'],
+                    'httpCode' => $selectedResponse['httpCode'],
                     'debug' => [
-                        'endpoint' => '/v1/documents/' . $docId . '?owner=0',
-                        'method' => 'GET',
-                        'toSign_found' => !empty($toSignValue),
-                        'toSign_length' => $toSignValue ? strlen($toSignValue) : 0
-                    ]
-                ];
-            } else {
-                $resolvedError = null;
-                if (is_array($response['data'] ?? null)) {
-                    if (isset($response['data']['error'])) {
-                        $resolvedError = $this->formatErrorMessage($response['data']['error']);
-                    } elseif (isset($response['data']['message'])) {
-                        $resolvedError = $this->formatErrorMessage($response['data']['message']);
-                    } elseif (isset($response['data']['errors'])) {
-                        $resolvedError = $this->formatErrorMessage($response['data']['errors']);
-                    } elseif (isset($response['data']['data']['message'])) {
-                        $resolvedError = $this->formatErrorMessage($response['data']['data']['message']);
-                    }
-                } elseif (is_string($response['data'] ?? null) && trim($response['data']) !== '') {
-                    $resolvedError = trim($response['data']);
-                }
-
-                if ($resolvedError === null || $resolvedError === '') {
-                    $resolvedError = 'DIDOX request failed';
-                    if (!empty($response['httpCode'])) {
-                        $resolvedError .= ' (HTTP ' . $response['httpCode'] . ')';
-                    }
-                    if (!empty($response['data'])) {
-                        $resolvedError .= ': ' . $this->formatErrorMessage($response['data']);
-                    }
-                }
-
-                return [
-                    'success' => false,
-                    'data' => $response['data'],
-                    'httpCode' => $response['httpCode'],
-                    'error' => $resolvedError,
-                    'debug' => [
-                        'endpoint' => '/v1/documents/' . $docId . '?owner=0',
-                        'method' => 'GET'
+                        'endpoint' => $selected['endpoint'],
+                        'method' => $selected['method'],
+                        'toSign_found' => !empty($selectedToSign),
+                        'toSign_length' => $selectedToSign ? strlen($selectedToSign) : 0,
+                        'json_found' => !empty($selectedJson),
+                        'json_length' => $selectedJson ? strlen($selectedJson) : 0,
+                        'attempts' => $debugAttempts
                     ]
                 ];
             }
+
+            return [
+                'success' => false,
+                'data' => null,
+                'httpCode' => 422,
+                'error' => 'No sign payload (toSign/json) found across incoming endpoints.',
+                'debug' => [
+                    'attempts' => $debugAttempts
+                ]
+            ];
             
         } catch (\Exception $e) {
             return [
                 'success' => false,
                 'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Get incoming document base64 payload for signing.
+     * Endpoint: GET /v1/documents/{docId}/documentBase64
+     * @param string $docId
+     * @param string $userKey
+     * @return array
+     */
+    public function getIncomingDocumentBase64(string $docId, string $userKey = ''): array
+    {
+        try {
+            $headers = [
+                'Content-Type: application/json',
+                'Partner-Authorization: ' . $this->partnerToken,
+            ];
+            if ($userKey !== '') {
+                $headers[] = 'user-key: ' . $userKey;
+            }
+
+            $response = $this->makeRequestWithHeaders(
+                'GET',
+                '/v1/documents/' . $docId . '/documentBase64',
+                [],
+                $headers
+            );
+
+            $base64 = '';
+            $data = $response['data'] ?? null;
+            if (is_string($data)) {
+                $base64 = trim($data);
+            } elseif (is_array($data)) {
+                $base64 = trim((string)(
+                    $data['documentBase64']
+                    ?? $data['document_base64']
+                    ?? (is_string($data['data'] ?? null) ? $data['data'] : '')
+                    ?? ($data['data']['documentBase64'] ?? '')
+                    ?? ($data['data']['document_base64'] ?? '')
+                ));
+            }
+
+            if (!$response['isOk'] || $base64 === '') {
+                $err = 'documentBase64 is empty';
+                if (is_array($data)) {
+                    $err = $data['error'] ?? ($data['message'] ?? $err);
+                } elseif (is_string($data) && trim($data) !== '') {
+                    $err = trim($data);
+                }
+                return [
+                    'success' => false,
+                    'httpCode' => $response['httpCode'] ?? 422,
+                    'error' => $this->formatErrorMessage($err),
+                    'data' => $data,
+                ];
+            }
+
+            return [
+                'success' => true,
+                'httpCode' => $response['httpCode'] ?? 200,
+                'data' => [
+                    'documentBase64' => $base64,
+                    'original_response' => $data,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Join signatures via DIDOX DSVS endpoint.
+     * Endpoint: POST /v1/dsvs/signature/join
+     * @param string $signature1 signature for toSign
+     * @param string $signature2 signature for documentBase64 with timestamp
+     * @param string $userKey
+     * @return array
+     */
+    public function joinSignatures(string $signature1, string $signature2, string $userKey = ''): array
+    {
+        try {
+            $headers = [
+                'Content-Type: application/json',
+                'Partner-Authorization: ' . $this->partnerToken,
+            ];
+            if ($userKey !== '') {
+                $headers[] = 'user-key: ' . $userKey;
+            }
+
+            $requestData = [
+                'signature1' => trim($signature1),
+                'signature2' => trim($signature2),
+            ];
+            $response = $this->makeRequestWithHeaders('POST', '/v1/dsvs/signature/join', $requestData, $headers);
+
+            $pkcs7 = trim((string)(
+                $response['data']['pkcs7B64']
+                ?? ($response['data']['data']['pkcs7B64'] ?? '')
+                ?? ($response['data']['pkcs7b64'] ?? '')
+                ?? ($response['data']['data']['pkcs7b64'] ?? '')
+            ));
+
+            if (!$response['isOk'] || $pkcs7 === '') {
+                return [
+                    'success' => false,
+                    'httpCode' => $response['httpCode'] ?? 422,
+                    'error' => $this->formatErrorMessage(
+                        $response['data']['error']
+                        ?? ($response['data']['message'] ?? 'Join signature returned empty pkcs7B64')
+                    ),
+                    'data' => $response['data'] ?? null,
+                ];
+            }
+
+            return [
+                'success' => true,
+                'httpCode' => $response['httpCode'] ?? 200,
+                'data' => [
+                    'pkcs7B64' => $pkcs7,
+                    'original_response' => $response['data'] ?? null,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -2258,25 +2491,91 @@ class DidoxService
                 $headers[] = 'user-key: ' . $userKey;
             }
             
-            $requestData = [
-                'signature' => $signature
+            $signatureCandidates = is_array($signature) ? $signature : [$signature];
+            $signatureCandidates = array_values(array_filter(array_unique(array_map(function ($s) {
+                return is_string($s) ? trim($s) : '';
+            }, $signatureCandidates)), function ($s) {
+                return $s !== '';
+            }));
+            if (empty($signatureCandidates)) {
+                return [
+                    'success' => false,
+                    'error' => 'Signature is required'
+                ];
+            }
+
+            // Incoming accept must use owner=0 in many DIDOX environments.
+            // Try owner=0 first, then fallback to plain endpoint for compatibility.
+            $endpoints = [
+                '/v1/documents/' . $docId . '/sign?owner=0',
+                '/v1/documents/' . $docId . '/sign?owner=1',
+                '/v1/documents/' . $docId . '/sign',
             ];
-            
-            // Use the accept endpoint for incoming documents
-            $response = $this->makeRequestWithHeaders('POST', '/v1/documents/' . $docId . '/sign', $requestData, $headers);
-            
+
+            $response = null;
+            $attempts = [];
+            foreach ($signatureCandidates as $idx => $signatureValue) {
+                $requestData = ['signature' => $signatureValue];
+                foreach ($endpoints as $endpoint) {
+                    $resp = $this->makeRequestWithHeaders('POST', $endpoint, $requestData, $headers);
+                    $attempts[] = [
+                        'signature_index' => $idx,
+                        'signature_length' => strlen($signatureValue),
+                        'endpoint' => $endpoint,
+                        'httpCode' => $resp['httpCode'] ?? null,
+                        'isOk' => $resp['isOk'] ?? false,
+                        'data' => $resp['data'] ?? null,
+                        'response_raw' => $resp['debug']['response_raw'] ?? null,
+                        'request_url' => $resp['debug']['request_url'] ?? null,
+                    ];
+                    $response = $resp;
+                    $msg = $resp['data']['data']['message'] ?? ($resp['data']['message'] ?? '');
+                    if (is_string($msg) && stripos($msg, 'timestamp certificate is not valid') !== false) {
+                        // This is a decisive validation error; do not overwrite it with weaker fallback errors.
+                        break 2;
+                    }
+                    if (!empty($resp['isOk'])) {
+                        break 2;
+                    }
+                }
+            }
+
             error_log('acceptIncomingDocument');
-            error_log(json_encode($response));
+            error_log(json_encode(['attempts' => $attempts, 'final' => $response]));
+            $resolvedError = null;
+            if (!$response['isOk']) {
+                if (is_array($response['data'] ?? null)) {
+                    if (isset($response['data']['error'])) {
+                        $resolvedError = $this->formatErrorMessage($response['data']['error']);
+                    } elseif (isset($response['data']['message'])) {
+                        $resolvedError = $this->formatErrorMessage($response['data']['message']);
+                    } elseif (isset($response['data']['errors'])) {
+                        $resolvedError = $this->formatErrorMessage($response['data']['errors']);
+                    } elseif (isset($response['data']['data']['message'])) {
+                        $resolvedError = $this->formatErrorMessage($response['data']['data']['message']);
+                    }
+                } elseif (is_string($response['data'] ?? null) && trim($response['data']) !== '') {
+                    $resolvedError = trim($response['data']);
+                }
+
+                if ($resolvedError === null || $resolvedError === '') {
+                    $resolvedError = 'DIDOX request failed';
+                    if (!empty($response['httpCode'])) {
+                        $resolvedError .= ' (HTTP ' . $response['httpCode'] . ')';
+                    }
+                }
+            }
+
             return [
                 'success' => $response['isOk'],
                 'data' => $response['data'],
                 'httpCode' => $response['httpCode'],
-                'error' => !$response['isOk'] && isset($response['data']['error']) ? 
-                    $this->formatErrorMessage($response['data']['error']) : null,
+                'error' => $resolvedError,
                 'debug' => [
-                    'endpoint' => '/v1/documents/' . $docId . '/sign',
+                    'endpoint' => '/v1/documents/' . $docId . '/sign?owner=0',
                     'method' => 'POST',
-                    'request_data' => $requestData
+                    'signature_candidates_count' => count($signatureCandidates),
+                    'attempts' => $attempts
                 ]
             ];
         } catch (\Exception $e) {

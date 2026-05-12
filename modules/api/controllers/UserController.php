@@ -985,7 +985,7 @@ class UserController extends Controller
         $post = Yii::$app->request->post();
 
         // Validate required fields according to Didox documentation
-        $requiredFields = ['tax_id', 'email', 'mobile', 'password', 'pkcs7_64', 'signature_hex', 'final_signature'];
+        $requiredFields = ['tax_id', 'email', 'mobile', 'password', 'pkcs7_64', 'signature_hex'];
         foreach ($requiredFields as $field) {
             if (!isset($post[$field]) || empty($post[$field])) {
                 Yii::$app->response->statusCode = 422;
@@ -1014,16 +1014,28 @@ class UserController extends Controller
                 return ['errors' => ['timestamp' => 'Failed to create timestamp: ' . (isset($timestampResult['error']) ? $timestampResult['error'] : 'Unknown error')]];
             }
 
-            // Step 2: Prepare Didox registration data with mandatory fields
+            // Step 2: Extract final timestamped signature for Didox signup
+            $timestampData = $timestampResult['data'] ?? [];
+            $timestampNestedData = $timestampData['data'] ?? [];
+            $finalSignature = $timestampData['timeStampTokenB64']
+                ?? $timestampNestedData['timeStampTokenB64']
+                ?? ($post['final_signature'] ?? null);
+
+            if (empty($finalSignature)) {
+                Yii::$app->response->statusCode = 500;
+                return ['errors' => ['signature' => 'Final timestamp signature (timeStampTokenB64) not found']];
+            }
+
+            // Step 3: Prepare Didox registration data with mandatory fields
             $didoxRegistrationData = [
                 'email' => $post['email'],
                 'mobile' => $post['mobile'],
                 'password' => $post['password'],
                 'accept' => true, // User accepts the terms (mandatory)
-                'signature' => $post['final_signature'] // Signed INN with attached timestamp in base64
+                'signature' => $finalSignature // Signed INN with attached timestamp in base64
             ];
 
-            // Step 3: Register user with Didox
+            // Step 4: Register user with Didox
             $registrationResult = $didoxService->registerUser($didoxRegistrationData);
 
             if (!$registrationResult['success']) {
@@ -1032,17 +1044,24 @@ class UserController extends Controller
                     return ['errors' => ['tax_id' => 'User already exists in Didox. Please use login endpoint.']];
                 } else {
                     Yii::$app->response->statusCode = 500;
-                    return ['errors' => ['didox' => 'Didox registration failed: ' . (isset($registrationResult['error']) ? $registrationResult['error'] : 'Unknown error')]];
+                    $didoxError = $registrationResult['error'] ?? 'Unknown error';
+                    $didoxHttpCode = $registrationResult['httpCode'] ?? null;
+                    $didoxData = $registrationResult['data'] ?? null;
+                    return ['errors' => [
+                        'didox' => 'Didox registration failed: ' . $didoxError,
+                        'didox_http_code' => $didoxHttpCode,
+                        'didox_response' => $didoxData
+                    ]];
                 }
             }
 
-            // Step 4: Extract certificate information if provided
+            // Step 5: Extract certificate information if provided
             $certificateInfo = [];
             if (isset($post['certificate_info'])) {
                 $certificateInfo = $didoxService->extractCertificateInfo($post['certificate_info']);
             }
 
-            // Step 5: Create new user in our system
+            // Step 6: Create new user in our system
             $user = new User();
             $user->eimzo_tax_id = $post['tax_id'];
             $user->role = User::ROLE_USER;
@@ -1098,7 +1117,7 @@ class UserController extends Controller
                 $user->organization_name = $post['organization_name'];
             }
 
-            // Step 6: Store registration data
+            // Step 7: Store registration data
             $user->eimzo_didox_token = isset($registrationResult['data']['token']) ? $registrationResult['data']['token'] : null;
             $user->eimzo_last_login = date('Y-m-d H:i:s');
 

@@ -265,11 +265,20 @@ class EimzoService
 
             $didoxService = new DidoxService();
             $tsResult = $didoxService->createTimestamp($pkcs7b64, $signatureHex);
-            if (!$tsResult['success'] || empty($tsResult['data']['timeStampTokenB64'])) {
+            if (!$tsResult['success']) {
                 return ['success' => false, 'error' => 'Didox timestamp failed'];
             }
-
-            $pkcs7b64 = $tsResult['data']['timeStampTokenB64'];
+            $tsData = $tsResult['data'] ?? [];
+            $pkcs7WithTs = $tsData['pkcs7b64'] ?? null;
+            $tokenOnly = $tsData['timeStampTokenB64'] ?? null;
+            if (!empty($pkcs7WithTs)) {
+                $pkcs7b64 = $pkcs7WithTs;
+            } elseif (!empty($tokenOnly)) {
+                // Fallback only when service doesn't provide timestamped PKCS7.
+                $pkcs7b64 = $tokenOnly;
+            } else {
+                return ['success' => false, 'error' => 'Didox timestamp returned no pkcs7b64/timeStampTokenB64'];
+            }
         }
 
         return ['success' => true, 'pkcs7b64' => $pkcs7b64];

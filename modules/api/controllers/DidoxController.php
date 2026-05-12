@@ -14,6 +14,8 @@ use yii\data\ActiveDataProvider;
 use app\models\didox\DidoxDocument;
 use app\models\didox\DidoxDocumentSignature;
 use app\models\user\User;
+use app\models\order\Order;
+use app\models\order\product\OrderProduct;
 
 class DidoxController extends Controller
 {
@@ -80,7 +82,7 @@ class DidoxController extends Controller
         // Use HttpBearerAuth - requires 'Authorization: Bearer {token}' header
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::class,
-            'optional' => ['options', 'test', 'timestamp']
+            'optional' => ['options', 'test', 'timestamp', 'authenticate-eimzo']
         ];
 
         $auth = $behaviors['authenticator'];
@@ -99,7 +101,7 @@ class DidoxController extends Controller
         ];
 
         $behaviors['authenticator'] = $auth;
-        $behaviors['authenticator']['except'] = ['options'];
+        $behaviors['authenticator']['except'] = ['options', 'timestamp', 'authenticate-eimzo', 'test'];
 
         return $behaviors;
     }
@@ -764,9 +766,16 @@ class DidoxController extends Controller
                 throw new HttpException(422, 'Document is not connected to DIDOX');
             }
 
-            // Check if document is in correct status for signing (STATUS_WAITING_YOUR_SIGNATURE = 2)
-            if ($document->didox_status != 1) {
-                throw new HttpException(422, 'Document is not waiting for your signature. Current status: ' . $document->getDidoxStatusLabel());
+            // In practice, incoming docs may appear as either:
+            // 1) STATUS_WAITING_PARTNER_SIGNATURE
+            // 2) STATUS_WAITING_YOUR_SIGNATURE
+            // depending on DIDOX side/state sync. Allow both for Step 8.
+            $allowedStatuses = [
+                (int)DidoxDocument::STATUS_WAITING_PARTNER_SIGNATURE,
+                (int)DidoxDocument::STATUS_WAITING_YOUR_SIGNATURE,
+            ];
+            if (!in_array((int)$document->didox_status, $allowedStatuses, true)) {
+                throw new HttpException(422, 'Document is not in a signable incoming state. Current status: ' . $document->getDidoxStatusLabel());
             }
 
             // Get document data from DIDOX API for incoming documents
@@ -776,18 +785,67 @@ class DidoxController extends Controller
             if ($result['success']) {
                 // Extract the toSign value from DIDOX response
                 $toSignValue = $result['data']['toSign'] ?? null;
+                $originalResponse = $result['data']['original_response'] ?? null;
+
+                $jsonValue = null;
+                if (is_array($originalResponse)) {
+                    if (isset($originalResponse['json']) && is_string($originalResponse['json'])) {
+                        $jsonValue = $originalResponse['json'];
+                    } elseif (isset($originalResponse['data']['json']) && is_string($originalResponse['data']['json'])) {
+                        $jsonValue = $originalResponse['data']['json'];
+                    }
+                }
+                $jsonBase64 = null;
+                if (is_string($jsonValue) && trim($jsonValue) !== '') {
+                    $jsonBase64 = base64_encode($jsonValue);
+                }
+
+                // Keep both payload variants for compatibility:
+                // - toSign: DIDOX incoming sign payload
+                // - json_base64: same style as admin auto-sign flow
+                $signPayloadCandidates = [];
+                foreach ([$toSignValue, $jsonBase64] as $candidate) {
+                    if (is_string($candidate)) {
+                        $candidate = trim($candidate);
+                    } else {
+                        $candidate = '';
+                    }
+                    if ($candidate !== '' && !in_array($candidate, $signPayloadCandidates, true)) {
+                        $signPayloadCandidates[] = $candidate;
+                    }
+                }
                 
-                if (empty($toSignValue)) {
-                    throw new HttpException(422, 'No toSign value found in DIDOX response. Document may not be ready for signing.');
+                if (empty($signPayloadCandidates)) {
+                    throw new HttpException(422, 'No sign payload found in DIDOX response. Document may not be ready for signing.');
+                }
+
+                // Backend-side fallback for documentBase64:
+                // If response doesn't include it directly, fetch from /documentBase64 endpoint.
+                $documentBase64 = '';
+                if (isset($result['data']['documentBase64']) && is_string($result['data']['documentBase64'])) {
+                    $documentBase64 = trim((string)$result['data']['documentBase64']);
+                }
+                if ($documentBase64 === '' && isset($result['data']['document_base64']) && is_string($result['data']['document_base64'])) {
+                    $documentBase64 = trim((string)$result['data']['document_base64']);
+                }
+                if ($documentBase64 === '') {
+                    $docBase64Res = $didoxService->getIncomingDocumentBase64((string)$didoxId, (string)$user->eimzo_didox_token);
+                    if (!empty($docBase64Res['success'])) {
+                        $documentBase64 = trim((string)($docBase64Res['data']['documentBase64'] ?? ''));
+                    }
                 }
 
                 return [
                     'success' => true,
-                    'message' => 'Document toSign value retrieved successfully from DIDOX',
+                    'message' => 'Document sign payload retrieved successfully from DIDOX',
                     'data' => [
                         'document_id' => $document->id,
                         'didox_id' => $didoxId,
                         'to_sign_value' => $toSignValue, // This is base64 data with sender's signature
+                        'document_base64' => $documentBase64,
+                        'json_value' => $jsonValue,
+                        'json_base64' => $jsonBase64,
+                        'sign_payload_candidates' => $signPayloadCandidates,
                         'owner' => 0, // Incoming document
                         'status' => $document->didox_status,
                         'status_label' => $document->getDidoxStatusLabel(),
@@ -801,6 +859,9 @@ class DidoxController extends Controller
                 } else {
                     $errorMessage .= 'Unknown error';
                 }
+                if (!empty($result['debug'])) {
+                    $errorMessage .= ' | debug: ' . json_encode($result['debug'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                }
                 throw new HttpException(422, $errorMessage);
             }
 
@@ -810,6 +871,71 @@ class DidoxController extends Controller
             Yii::error('Get incoming document for signing error: ' . $e->getMessage(), __METHOD__);
             throw new HttpException(500, 'Failed to retrieve document for signing');
         }
+    }
+
+    /**
+     * Get incoming document base64 payload directly from DIDOX.
+     * POST /api/didox/get-incoming-document-base64
+     *
+     * Body: { "didox_id": "..." }
+     */
+    public function actionGetIncomingDocumentBase64()
+    {
+        $user = Yii::$app->user->identity;
+        if (!$user) {
+            throw new HttpException(401, 'Authentication required');
+        }
+
+        $didoxId = Yii::$app->request->post('didox_id');
+        if (empty($didoxId)) {
+            throw new HttpException(400, 'didox_id parameter is required');
+        }
+
+        if (empty($user->eimzo_didox_token)) {
+            throw new HttpException(401, 'Please login with E-IMZO again.');
+        }
+        if (!empty($user->eimzo_didox_token_expires_at) && strtotime($user->eimzo_didox_token_expires_at) < time()) {
+            throw new HttpException(401, 'Please login with E-IMZO again.');
+        }
+
+        $document = DidoxDocument::find()
+            ->alias('d')
+            ->joinWith(['order o'])
+            ->where(['d.didox_id' => $didoxId])
+            ->andWhere(['d.status' => DidoxDocument::LOCAL_STATUS_ACTIVE])
+            ->andWhere([
+                'or',
+                ['d.to_user_id' => $user->id],
+                ['o.user_id' => $user->id]
+            ])
+            ->one();
+
+        if (!$document) {
+            throw new HttpException(404, 'Document not found or not assigned to you');
+        }
+
+        $didoxService = new \app\services\DidoxService();
+        $result = $didoxService->getIncomingDocumentBase64((string)$didoxId, (string)$user->eimzo_didox_token);
+
+        if (empty($result['success'])) {
+            $errorMessage = 'Failed to get documentBase64 from DIDOX';
+            if (!empty($result['error'])) {
+                $errorMessage .= ': ' . $this->formatErrorMessage($result['error']);
+            }
+            if (!empty($result['debug'])) {
+                $errorMessage .= ' | debug: ' . json_encode($result['debug'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+            throw new HttpException(422, $errorMessage);
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'didox_id' => $didoxId,
+                'document_base64' => (string)($result['data']['documentBase64'] ?? ''),
+                'debug' => $result['debug'] ?? null,
+            ],
+        ];
     }
 
     /**
@@ -827,10 +953,16 @@ class DidoxController extends Controller
 
         $post = Yii::$app->request->post();
         $didoxId = $post['didox_id'] ?? null;
-        $signature = $post['signature'] ?? null; // This is the timeStampTokenB64
+        $signature1 = (string)($post['signature1'] ?? '');
+        $signature2 = (string)($post['signature2'] ?? '');
+        $signature1Candidates = $post['signature1_candidates'] ?? [];
+        $signature2Candidates = $post['signature2_candidates'] ?? [];
 
-        if (empty($didoxId) || empty($signature)) {
-            throw new HttpException(400, 'didox_id and signature parameters are required');
+        if (empty($didoxId)) {
+            throw new HttpException(400, 'didox_id is required');
+        }
+        if (trim($signature1) === '' || trim($signature2) === '') {
+            throw new HttpException(422, 'Single signature mode is not supported for incoming accept. Use join flow with signature1 and signature2.');
         }
 
         try {
@@ -863,9 +995,13 @@ class DidoxController extends Controller
                 throw new HttpException(404, 'Document not found or not assigned to you');
             }
 
-            // Check if document can be signed
-            if ($document->didox_status != 1) {
-                throw new HttpException(422, 'Document is not waiting for your signature. Current status: ' . $document->getDidoxStatusLabel());
+            // Same as Step 8: allow both waiting statuses for incoming accept.
+            $allowedStatuses = [
+                (int)DidoxDocument::STATUS_WAITING_PARTNER_SIGNATURE,
+                (int)DidoxDocument::STATUS_WAITING_YOUR_SIGNATURE,
+            ];
+            if (!in_array((int)$document->didox_status, $allowedStatuses, true)) {
+                throw new HttpException(422, 'Document is not in a signable incoming state. Current status: ' . $document->getDidoxStatusLabel());
             }
 
             // Get user's DIDOX token
@@ -873,9 +1009,22 @@ class DidoxController extends Controller
                 throw new HttpException(401, 'User not authenticated with DIDOX. Please login with E-IMZO first.');
             }
 
-            // Accept document in DIDOX using the signature
-            $didoxService = new \app\services\DidoxService();
-            $result = $didoxService->acceptIncomingDocument($didoxId, $signature, $user->eimzo_didox_token);
+            if (!is_array($signature1Candidates)) {
+                $signature1Candidates = [];
+            }
+            if (!is_array($signature2Candidates)) {
+                $signature2Candidates = [];
+            }
+
+            $flowService = new \app\services\DidoxDocFlowService();
+            $result = $flowService->acceptIncomingByJoin(
+                $didoxId,
+                $signature1,
+                $signature2,
+                $user->eimzo_didox_token,
+                $signature2Candidates,
+                $signature1Candidates
+            );
 
             if ($result['success']) {
                 // Update document status
@@ -884,7 +1033,11 @@ class DidoxController extends Controller
 
                 // Store the response data
                 $existingData = $document->getDidoxDataArray();
-                $mergedData = array_merge($existingData, $result['data']);
+                if (!is_array($existingData)) {
+                    $existingData = [];
+                }
+                $incomingData = is_array($result['data'] ?? null) ? $result['data'] : [];
+                $mergedData = array_merge($existingData, $incomingData);
                 $document->setDidoxData($mergedData);
 
                 $document->save(false);
@@ -893,8 +1046,8 @@ class DidoxController extends Controller
                 DidoxDocumentSignature::createFromAccept(
                     $document,
                     $user,
-                    $signature,
-                    $result['data'] ?? []
+                    trim($signature2) !== '' ? trim($signature2) : trim($signature1),
+                    $incomingData
                 );
 
                 return [
@@ -915,6 +1068,9 @@ class DidoxController extends Controller
                 } else {
                     $errorMessage .= 'Unknown error';
                 }
+                if (!empty($result['debug'])) {
+                    $errorMessage .= ' | debug: ' . json_encode($result['debug'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                }
                 throw new HttpException(422, $errorMessage);
             }
 
@@ -922,7 +1078,7 @@ class DidoxController extends Controller
             throw $e;
         } catch (\Exception $e) {
             Yii::error('Accept incoming document error: ' . $e->getMessage(), __METHOD__);
-            throw new HttpException(500, 'Failed to accept document');
+            throw new HttpException(500, 'Failed to accept document: ' . $e->getMessage());
         }
     }
 
@@ -1066,6 +1222,129 @@ class DidoxController extends Controller
         } catch (\Exception $e) {
             Yii::error('Didox timestamp error: ' . $e->getMessage(), __METHOD__);
             throw new HttpException(500, 'Failed to create timestamp');
+        }
+    }
+
+    /**
+     * Authenticate with E-IMZO signature via DIDOX API (no admin session required)
+     * POST /api/didox/authenticate-eimzo
+     *
+     * Body: { "taxId": "123456789", "signature": "base64..." }
+     */
+    public function actionAuthenticateEimzo()
+    {
+        $taxId = Yii::$app->request->post('taxId');
+        $signature = Yii::$app->request->post('signature');
+
+        if (empty($taxId) || empty($signature)) {
+            throw new HttpException(400, 'taxId and signature are required');
+        }
+
+        $didoxService = new \app\services\DidoxService();
+        $result = $didoxService->authenticateWithEimzo((string)$taxId, (string)$signature);
+
+        if (!empty($result['success']) && !empty($result['token'])) {
+            return [
+                'success' => true,
+                'token' => $result['token'],
+                'data' => $result['data'] ?? null,
+                'message' => $result['message'] ?? 'Authentication successful',
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => $result['error'] ?? 'Authentication failed',
+            'httpCode' => $result['httpCode'] ?? 422,
+            'data' => $result['data'] ?? null,
+        ];
+    }
+
+    /**
+     * Create 1-som test order for current user and run Didox invoice auto-sign flow.
+     * POST /api/didox/create-test-order-autosign
+     */
+    public function actionCreateTestOrderAutosign()
+    {
+        $user = Yii::$app->user->identity;
+        if (!$user) {
+            throw new HttpException(401, 'Authentication required');
+        }
+
+        // Pick any product (prefer IKPU filled products)
+        $product = \app\models\product\Product::find()
+            ->where(['not', ['ikpu_code' => null]])
+            ->one();
+        if (!$product) {
+            $product = \app\models\product\Product::find()->one();
+        }
+        if (!$product) {
+            throw new HttpException(422, 'No products available for test order creation');
+        }
+
+        $tx = Yii::$app->db->beginTransaction();
+        try {
+            $order = new Order();
+            $order->user_id = (int)$user->id;
+            $order->price = 1;
+            $order->status = 1;
+            $order->date = date('Y-m-d H:i:s');
+            $order->address = $user->address ?: 'Test address';
+            $order->delivery_id = 1;
+
+            if (!$order->save()) {
+                throw new \RuntimeException('Failed to create order: ' . json_encode($order->errors, JSON_UNESCAPED_UNICODE));
+            }
+
+            $orderProduct = new OrderProduct();
+            $orderProduct->order_id = (int)$order->id;
+            $orderProduct->product_id = (int)$product->id;
+            $orderProduct->amount = 1;
+            $orderProduct->price = 1;
+            $orderProduct->product_price = 1;
+            $orderProduct->date = date('Y-m-d H:i:s');
+
+            if (!$orderProduct->save()) {
+                throw new \RuntimeException('Failed to create order product: ' . json_encode($orderProduct->errors, JSON_UNESCAPED_UNICODE));
+            }
+
+            $order->price = 1;
+            $order->save(false);
+
+            $result = \app\services\DidoxOrderService::createInvoice($order);
+
+            $docs = DidoxDocument::find()
+                ->where(['order_id' => $order->id])
+                ->orderBy(['id' => SORT_DESC])
+                ->all();
+
+            $docData = [];
+            foreach ($docs as $doc) {
+                $docData[] = [
+                    'id' => $doc->id,
+                    'didox_id' => $doc->didox_id,
+                    'didox_status' => $doc->didox_status,
+                    'didox_status_label' => $doc->getDidoxStatusLabel(),
+                    'didox_signed_at' => $doc->didox_signed_at,
+                    'didox_error_data' => $doc->didox_error_data ? json_decode($doc->didox_error_data, true) : null,
+                ];
+            }
+
+            $tx->commit();
+
+            return [
+                'success' => true,
+                'data' => [
+                    'order_id' => $order->id,
+                    'product_id' => $product->id,
+                    'didox_result' => $result,
+                    'documents' => $docData,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            $tx->rollBack();
+            Yii::error('create-test-order-autosign error: ' . $e->getMessage(), __METHOD__);
+            throw new HttpException(500, 'Failed to create autosign test order: ' . $e->getMessage());
         }
     }
 }

@@ -10,6 +10,7 @@ use app\models\didox\DidoxDocumentArbitrary;
 use app\models\didox\DidoxDocumentIncludedProducts;
 use app\models\shop\seller\ShopSeller;
 use app\models\user\User;
+use app\models\user\UserMyid;
 use app\models\Log;
 
 /**
@@ -830,27 +831,89 @@ class DidoxOrderService
         ];
 
         if ($user) {
-            // First try to use Order's stored fields
-            if (!empty($order->inn)) {
+            $userType = $user->hasAttribute('type') ? (string)$user->getAttribute('type') : '';
+            $buyerType = trim($userType);
+            $isPhysical = $buyerType === 'fiz';
+
+            $pinfl = '';
+            if (User::hasColumn('pinfl')) {
+                $pinfl = trim((string)$user->getAttribute('pinfl'));
+            }
+            if ($pinfl === '') {
+                $myid = UserMyid::find()
+                    ->select(['pinfl'])
+                    ->where(['user_id' => $user->id])
+                    ->orderBy(['id' => SORT_DESC])
+                    ->one();
+                if ($myid && !empty($myid->pinfl)) {
+                    $pinfl = trim((string)$myid->pinfl);
+                }
+            }
+            if ($pinfl === '' && User::hasColumn('eimzo_certificate_info')) {
+                $eimzoData = $user->getAttribute('eimzo_certificate_info');
+                if (is_string($eimzoData) && trim($eimzoData) !== '') {
+                    $decoded = json_decode($eimzoData, true);
+                    if (is_array($decoded)) {
+                        $pinfl = trim((string)($decoded['pinfl'] ?? $decoded['PINFL'] ?? $decoded['personalNum'] ?? ''));
+                        if ($pinfl === '' && !empty($decoded['alias']) && is_string($decoded['alias'])) {
+                            if (preg_match('/1\.2\.860\.3\.16\.1\.2=([0-9]{14})/', $decoded['alias'], $m)) {
+                                $pinfl = $m[1];
+                            }
+                        }
+                        if ($pinfl === '' && isset($decoded['original_certificate']) && is_array($decoded['original_certificate'])) {
+                            $orig = $decoded['original_certificate'];
+                            $pinfl = trim((string)($orig['PINFL'] ?? $orig['pinfl'] ?? ''));
+                            if ($pinfl === '' && isset($orig['raw']) && is_array($orig['raw'])) {
+                                $pinfl = trim((string)($orig['raw']['PINFL'] ?? $orig['raw']['pinfl'] ?? ''));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Prefer PINFL whenever it is available and valid (14 digits).
+            // Didox accepts INN/PINFL in one buyer field; for physical persons PINFL is required.
+            // We intentionally prioritize PINFL even when order->inn is present, because order->inn
+            // can contain a legacy/incorrect 9-digit value for fiz users.
+            if (preg_match('/^\d{14}$/', $pinfl)) {
+                $info['tin'] = $pinfl;
+            } elseif (!empty($order->inn)) {
                 $info['tin'] = $order->inn;
             } else {
-                $info['tin'] = $user->eimzo_tax_id ?: ($user->inn ?: '');
+                $eimzoTaxId = $user->hasAttribute('eimzo_tax_id') ? (string)$user->getAttribute('eimzo_tax_id') : '';
+                $userInn = $user->hasAttribute('inn') ? (string)$user->getAttribute('inn') : '';
+                $info['tin'] = $eimzoTaxId !== '' ? $eimzoTaxId : $userInn;
+            }
+
+            // If user is explicitly physical but TIN is not PINFL-length, keep it for now and let
+            // caller logs show missing PINFL source; this helps diagnose data issues quickly.
+            if ($isPhysical && !preg_match('/^\d{14}$/', (string)$info['tin'])) {
+                Log::log('didox_order', "[BUYER INFO] Physical user without valid PINFL for Didox", [
+                    'user_id' => $user->id,
+                    'order_id' => $order->id,
+                    'resolved_tin' => $info['tin'],
+                    'user_type' => $buyerType,
+                    'pinfl_found' => $pinfl,
+                ], 'warning');
             }
 
             if (!empty($order->account)) {
                 $info['account'] = $order->account;
             } else {
-                $info['account'] = $user->account ?? '';
+                $info['account'] = $user->hasAttribute('account') ? (string)$user->getAttribute('account') : '';
             }
 
             if (!empty($order->bank_id)) {
                 $info['bank_id'] = $order->bank_id;
             } else {
-                $info['bank_id'] = $user->mfo ?? '';
+                $info['bank_id'] = $user->hasAttribute('mfo') ? (string)$user->getAttribute('mfo') : '';
             }
 
-            $fullName = array_filter([$user->name, $user->lastname]);
-            $info['name'] = implode(' ', $fullName) ?: ($user->organization_name ?? 'Client');
+            $userName = $user->hasAttribute('name') ? (string)$user->getAttribute('name') : '';
+            $userLastname = $user->hasAttribute('lastname') ? (string)$user->getAttribute('lastname') : '';
+            $organizationName = $user->hasAttribute('organization_name') ? (string)$user->getAttribute('organization_name') : '';
+            $fullName = array_filter([$userName, $userLastname]);
+            $info['name'] = implode(' ', $fullName) ?: ($organizationName ?: 'Client');
 
             // Address logic similar to DidoxController
             $address = '';
@@ -861,7 +924,8 @@ class DidoxOrderService
                 }
             }
             if (empty($address)) {
-                $address = $user->last_address ?: $order->address ?: 'Unknown';
+                $lastAddress = $user->hasAttribute('last_address') ? (string)$user->getAttribute('last_address') : '';
+                $address = $lastAddress ?: $order->address ?: 'Unknown';
             }
             $info['address'] = $address;
         } else {
