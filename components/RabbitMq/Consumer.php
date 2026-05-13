@@ -40,6 +40,7 @@ class Consumer
 
                     match ($validated['event_type']) {
                         'moderation.created' => (new \app\components\RabbitMq\Handlers\ModerationCreatedHandler())->handle($validated),
+                        'product.asl_belgisi.updated' => (new \app\components\RabbitMq\Handlers\AslBelgisiUpdatedHandler())->handle($validated),
                         'product.created' => (new \app\components\RabbitMq\Handlers\ProductCreatedHandler())->handle($validated),
                         'product.updated' => (new \app\components\RabbitMq\Handlers\ProductUpdatedHandler())->handle($validated),
                         'product.deleted' => (new \app\components\RabbitMq\Handlers\ProductDeletedHandler())->handle($validated),

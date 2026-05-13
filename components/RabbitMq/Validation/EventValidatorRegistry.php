@@ -234,6 +234,16 @@ class EventValidatorRegistry
                     [['metadata'], 'safe'],
                 ]
             ))->validate($message),
+            'product.asl_belgisi.updated' => (new PayloadEventValidator(
+                ['product.asl_belgisi.updated'],
+                ['product', 'product_asl_belgisi'],
+                [
+                    [['yii_product_id'], 'required'],
+                    [['yii_product_id', 'sklad_product_id'], 'integer'],
+                    [['asl_belgisi_status', 'asl_belgisi_checked_at'], 'safe'],
+                    [['asl_belgisi_data'], 'safe'],
+                ]
+            ))->validate($message),
             'stock.created', 'branch.created' => (new PayloadEventValidator(
                 ['stock.created', 'branch.created'],
                 ['stock', 'branch'],
