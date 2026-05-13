@@ -250,8 +250,12 @@ class EventValidatorRegistry
                 [
                     [['id', 'shop_id', 'yii_shop_id', 'status', 'sort'], 'integer'],
                     [['name_ru', 'name_uz', 'name_en', 'address', 'phone', 'responsible_person'], 'safe'],
+                    [['for_marketplace'], 'safe'],
                 ],
                 function (array $payload): void {
+                    if (isset($payload['for_marketplace']) && (int) $payload['for_marketplace'] === 0) {
+                        return;
+                    }
                     if (empty($payload['shop_id']) && empty($payload['yii_shop_id'])) {
                         throw new EventValidationException('Create payload must contain shop identifier');
                     }

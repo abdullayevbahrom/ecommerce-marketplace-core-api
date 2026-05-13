@@ -11,13 +11,26 @@ class StockCreatedHandler
     {
         $payload = $message['payload'];
         $warehouseBranchId = $message['entity_id'];
+        $shopId = $payload['yii_shop_id'] ?? $payload['shop_id'] ?? null;
+
+        // Local sklad branches (for_marketplace=0) or payloads without shop id must not create shop stocks.
+        if ((isset($payload['for_marketplace']) && (int) $payload['for_marketplace'] === 0) || empty($shopId)) {
+            Yii::warning('Skipping stock.created sync due to non-marketplace or missing shop identifier', [
+                'event_id' => $message['event_id'] ?? null,
+                'entity_id' => $warehouseBranchId,
+                'yii_shop_id' => $payload['yii_shop_id'] ?? null,
+                'shop_id' => $payload['shop_id'] ?? null,
+                'for_marketplace' => $payload['for_marketplace'] ?? null,
+            ], __METHOD__);
+            return;
+        }
 
         $tx = Yii::$app->db->beginTransaction();
 
         try {
             $stock = new Stock();
             $stock->suppressSyncEvents = true;
-            $stock->shop_id = $payload['yii_shop_id'] ?? $payload['shop_id'] ?? null;
+            $stock->shop_id = $shopId;
             $stock->name_uz = $payload['name_uz'] ?? null;
             $stock->name_ru = $payload['name_ru'] ?? null;
             $stock->name_en = $payload['name_en'] ?? null;
