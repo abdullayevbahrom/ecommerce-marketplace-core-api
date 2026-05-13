@@ -58,6 +58,25 @@ class Shop extends \yii\db\ActiveRecord
         return 'shop';
     }
 
+    public function beforeValidate()
+    {
+        if (!parent::beforeValidate()) {
+            return false;
+        }
+
+        $contactDigits = preg_replace('/\D/', '', (string) $this->contact_phone);
+        if ($contactDigits !== '') {
+            $this->contact_phone = $contactDigits;
+        }
+
+        $phoneDigits = preg_replace('/\D/', '', (string) $this->phone);
+        if ($phoneDigits !== '') {
+            $this->phone = $phoneDigits;
+        }
+
+        return true;
+    }
+
     public function rules()
     {
         return [
@@ -67,6 +86,11 @@ class Shop extends \yii\db\ActiveRecord
             [['name_ru'], 'required', 'message' => 'Заполните поле'],
             ['login', 'checkLogin'],
             [['description_ru', 'description_uz', 'description_en', 'contact_user', 'contact_phone'], 'string'],
+            [['contact_phone', 'phone'], 'filter', 'filter' => function ($value) {
+                $digits = preg_replace('/\D/', '', (string) $value);
+                return $digits === '' ? null : $digits;
+            }],
+            [['contact_phone'], 'match', 'pattern' => '/^998\d{9}$/', 'message' => 'Формат телефона должен быть 998XXXXXXXXX'],
             [['status', 'user_id'], 'integer'],
             [['date'], 'safe'],
             [['name_ru', 'name_uz', 'name_en'], 'string', 'max' => 255],

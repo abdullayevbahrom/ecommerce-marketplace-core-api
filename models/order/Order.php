@@ -446,6 +446,36 @@ class Order extends \yii\db\ActiveRecord
         $senderPhone = self::formatPhoneForBts($shop->contact_phone);
         $receiverPhone = self::formatPhoneForBts($orderInfo->phone ?: $user->phone);
 
+        if ($senderPhone === null) {
+            $errorMessage = 'BTS integration failed: sender phone is invalid. Required format: +998XXXXXXXXX';
+            foreach ($orderProducts as $orderProduct) {
+                $orderProduct->bts_status_info = $errorMessage;
+                $orderProduct->save(false);
+            }
+            Yii::warning([
+                'message' => 'BTS sender phone invalid',
+                'shop_id' => $shop->id ?? null,
+                'stock_id' => $stock->id ?? null,
+                'raw_sender_phone' => $shop->contact_phone ?? null,
+            ], __METHOD__);
+            return false;
+        }
+
+        if ($receiverPhone === null) {
+            $errorMessage = 'BTS integration failed: receiver phone is invalid. Required format: +998XXXXXXXXX';
+            foreach ($orderProducts as $orderProduct) {
+                $orderProduct->bts_status_info = $errorMessage;
+                $orderProduct->save(false);
+            }
+            Yii::warning([
+                'message' => 'BTS receiver phone invalid',
+                'user_id' => $user->id ?? null,
+                'order_id' => $this->id ?? null,
+                'raw_receiver_phone' => $orderInfo->phone ?: $user->phone,
+            ], __METHOD__);
+            return false;
+        }
+
         // BTS API v1 uses nested objects: sender, receiver, cargo
         $data = [
             "pickup_type" => "courier", // courier=вызов курьера, self=самовывоз в офис BTS
@@ -853,9 +883,13 @@ class Order extends \yii\db\ActiveRecord
     /**
      * Normalize phone to BTS required format: +998XXXXXXXXX
      */
-    public static function formatPhoneForBts($phone)
+    public static function formatPhoneForBts($phone): ?string
     {
         $digits = preg_replace('/\D/', '', $phone ?? '');
+
+        if ($digits === '') {
+            return null;
+        }
 
         if (strlen($digits) === 9) {
             $digits = '998' . $digits;
@@ -865,6 +899,6 @@ class Order extends \yii\db\ActiveRecord
             return '+' . $digits;
         }
 
-        return '+' . $digits;
+        return null;
     }
 }

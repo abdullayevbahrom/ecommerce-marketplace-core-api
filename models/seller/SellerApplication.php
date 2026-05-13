@@ -28,6 +28,20 @@ class SellerApplication extends \yii\db\ActiveRecord
         return 'seller_application';
     }
 
+    public function beforeValidate()
+    {
+        if (!parent::beforeValidate()) {
+            return false;
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $this->phone);
+        if ($digits !== '') {
+            $this->phone = $digits;
+        }
+
+        return true;
+    }
+
     /**
      * {@inheritdoc}
      */
@@ -54,9 +68,8 @@ class SellerApplication extends \yii\db\ActiveRecord
             // Clean phone number (remove all non-digits)
             $cleanPhone = preg_replace('/\D/', '', $this->phone);
             
-            // Check if exactly 12 digits
-            if (strlen($cleanPhone) != 12) {
-                $this->addError($attribute, 'Номер телефона должен содержать ровно 12 цифр');
+            if (!preg_match('/^998\d{9}$/', $cleanPhone)) {
+                $this->addError($attribute, 'Формат телефона должен быть 998XXXXXXXXX');
                 return;
             }
             

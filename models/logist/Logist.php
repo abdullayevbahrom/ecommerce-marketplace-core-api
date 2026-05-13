@@ -43,6 +43,20 @@ class Logist extends \yii\db\ActiveRecord
         return 'logist';
     }
 
+    public function beforeValidate()
+    {
+        if (!parent::beforeValidate()) {
+            return false;
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $this->contact_phone);
+        if ($digits !== '') {
+            $this->contact_phone = $digits;
+        }
+
+        return true;
+    }
+
     /**
      * {@inheritdoc}
      */
@@ -56,6 +70,11 @@ class Logist extends \yii\db\ActiveRecord
             [['user_id', 'sort', 'status'], 'integer'],
             [['date', 'sub_category_id', 'prices'], 'safe'],
             [['name_ru', 'name_uz', 'name_en', 'description_ru', 'description_uz', 'description_en', 'contact_user', 'contact_phone', 'login', 'password'], 'string', 'max' => 255],
+            [['contact_phone'], 'filter', 'filter' => function ($value) {
+                $digits = preg_replace('/\D/', '', (string) $value);
+                return $digits === '' ? null : $digits;
+            }],
+            [['contact_phone'], 'match', 'pattern' => '/^998\d{9}$/', 'message' => 'Формат телефона должен быть 998XXXXXXXXX'],
             // [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg'],
         ];
     }

@@ -28,6 +28,20 @@ class SellerApplication extends \yii\db\ActiveRecord
         return 'seller_application';
     }
 
+    public function beforeValidate()
+    {
+        if (!parent::beforeValidate()) {
+            return false;
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $this->phone);
+        if ($digits !== '') {
+            $this->phone = $digits;
+        }
+
+        return true;
+    }
+
     /**
      * {@inheritdoc}
      */
@@ -37,7 +51,7 @@ class SellerApplication extends \yii\db\ActiveRecord
             [['name', 'phone'], 'required', 'message' => 'Заполните поле'],
             [['name'], 'string', 'max' => 255],
             [['phone'], 'string', 'max' => 255],
-            ['phone', 'match', 'pattern' => '/^[\d+\-\s\(\)]+$/', 'message' => 'Неверный формат номера телефона'],
+            ['phone', 'validatePhone'],
             [['status'], 'integer'],
             [['status'], 'in', 'range' => [self::STATUS_PENDING, self::STATUS_APPROVED, self::STATUS_REJECTED]],
             [['admin_notes'], 'string'],
@@ -98,6 +112,18 @@ class SellerApplication extends \yii\db\ActiveRecord
         }
         
         return false;
+    }
+
+    public function validatePhone($attribute, $params)
+    {
+        if (!$this->hasErrors()) {
+            $cleanPhone = preg_replace('/\D/', '', (string) $this->phone);
+            if (!preg_match('/^998\d{9}$/', $cleanPhone)) {
+                $this->addError($attribute, 'Формат телефона должен быть 998XXXXXXXXX');
+                return;
+            }
+            $this->phone = $cleanPhone;
+        }
     }
 
     /**

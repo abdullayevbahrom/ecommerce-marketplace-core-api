@@ -124,6 +124,20 @@ class User extends ActiveRecord implements IdentityInterface
         return 'user';
     }
 
+    public function beforeValidate()
+    {
+        if (!parent::beforeValidate()) {
+            return false;
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $this->phone);
+        if ($digits !== '') {
+            $this->phone = $digits;
+        }
+
+        return true;
+    }
+
     public static function hasColumn(string $name): bool
     {
         return static::getTableSchema()->getColumn($name) !== null;
@@ -300,16 +314,11 @@ class User extends ActiveRecord implements IdentityInterface
     public function checkPhone($attribute, $params)
     {
         if (!$this->hasErrors()) {
-            if (!preg_match("/^[\d+]+$/", $this->phone)) {
-                return $this->addError($attribute, 'Вводите только цифры');
+            $normalizedPhone = preg_replace('/\D/', '', (string) $this->phone);
+            if (!preg_match('/^998\d{9}$/', $normalizedPhone)) {
+                return $this->addError($attribute, 'Формат телефона должен быть 998XXXXXXXXX');
             }
-
-            // Extract only digits from phone number (remove + and any other non-digit characters)
-            $digitsOnly = preg_replace('/\D/', '', $this->phone);
-
-            if (strlen($digitsOnly) != 12) {
-                return $this->addError($attribute, 'Количество цифр должно быть 12');
-            }
+            $this->phone = $normalizedPhone;
 
             $user = $this->findByUsername($this->phone);
 
@@ -324,12 +333,11 @@ class User extends ActiveRecord implements IdentityInterface
     public function checkPhoneAdmin($attribute, $params)
     {
         if (!$this->hasErrors()) {
-            if (!preg_match("/^[\d+]+$/", $this->phone)) {
-                return $this->addError($attribute, 'Вводите только цифры');
+            $normalizedPhone = preg_replace('/\D/', '', (string) $this->phone);
+            if (!preg_match('/^998\d{9}$/', $normalizedPhone)) {
+                return $this->addError($attribute, 'Формат телефона должен быть 998XXXXXXXXX');
             }
-            // if ((mb_strlen($this->phone) < 13) || (mb_strlen($this->phone) > 13)) {
-            //     return $this->addError($attribute, 'Количество цифр должно быть 12');
-            // }
+            $this->phone = $normalizedPhone;
 
             $user = self::findOne(['phone' => $this->phone, 'role' => Yii::$app->user->identity->role]);
 
@@ -358,12 +366,11 @@ class User extends ActiveRecord implements IdentityInterface
     public function checkPhoneModerator($attribute, $params)
     {
         if (!$this->hasErrors()) {
-            if (!preg_match("/^[\d+]+$/", $this->phone)) {
-                return $this->addError($attribute, 'Вводите только цифры');
+            $normalizedPhone = preg_replace('/\D/', '', (string) $this->phone);
+            if (!preg_match('/^998\d{9}$/', $normalizedPhone)) {
+                return $this->addError($attribute, 'Формат телефона должен быть 998XXXXXXXXX');
             }
-            // if ((mb_strlen($this->phone) < 13) || (mb_strlen($this->phone) > 13)) {
-            //     return $this->addError($attribute, 'Количество цифр должно быть 12');
-            // }
+            $this->phone = $normalizedPhone;
 
             $user = self::findOne(['phone' => $this->phone, 'role' => User::ROLE_MODERATOR]);
 
