@@ -26,15 +26,18 @@ class DidoxController extends Controller
      * @param User $user
      * @throws HttpException
      */
-    private function ensureValidUserDidoxToken(User $user): void
+    private function ensureValidUserDidoxToken(User $user, bool $forceRefresh = false): void
     {
         $taxId = trim((string)($user->eimzo_tax_id ?? ''));
         if ($taxId === '') {
             throw new HttpException(422, 'E-IMZO orqali login qiling: foydalanuvchida eimzo_tax_id topilmadi.');
         }
 
-        if (empty($user->eimzo_didox_token_expires_at) || strtotime($user->eimzo_didox_token_expires_at) >= time()) {
-            return;
+        if (!$forceRefresh) {
+            $expiresAt = trim((string)$user->eimzo_didox_token_expires_at);
+            if ($expiresAt === '' || strtotime($expiresAt) >= time()) {
+                return;
+            }
         }
 
         $didoxService = new \app\services\DidoxService();
@@ -736,13 +739,12 @@ class DidoxController extends Controller
                 throw new HttpException(422, 'Please login with E-IMZO again.');
             }
 
-            if (empty($user->eimzo_didox_token)) {
+            if (empty($user->eimzo_didox_token) && empty($user->eimzo_didox_token_expires_at)) {
                 throw new HttpException(401, 'Please login with E-IMZO again.');
             }
 
-            if (!empty($user->eimzo_didox_token_expires_at) && strtotime($user->eimzo_didox_token_expires_at) < time()) {
-                throw new HttpException(401, 'Please login with E-IMZO again.');
-            }
+            // Proactively refresh token when it is expired according to our DB timestamp.
+            $this->ensureValidUserDidoxToken($user);
 
             // Find document and verify it's assigned to current user
             $document = DidoxDocument::find()
@@ -781,6 +783,22 @@ class DidoxController extends Controller
             // Get document data from DIDOX API for incoming documents
             $didoxService = new \app\services\DidoxService();
             $result = $didoxService->getIncomingDocumentForSigning($didoxId, $user->eimzo_didox_token);
+
+            // If DIDOX still returns 401 (token revoked/invalid on DIDOX side), force refresh and retry once.
+            $attempts = isset($result['debug']['attempts']) && is_array($result['debug']['attempts'])
+                ? $result['debug']['attempts']
+                : [];
+            $all401 = !empty($attempts);
+            foreach ($attempts as $attempt) {
+                if ((int)($attempt['httpCode'] ?? 0) !== 401) {
+                    $all401 = false;
+                    break;
+                }
+            }
+            if (!empty($result['success']) === false && $all401) {
+                $this->ensureValidUserDidoxToken($user, true);
+                $result = $didoxService->getIncomingDocumentForSigning($didoxId, $user->eimzo_didox_token);
+            }
 
             if ($result['success']) {
                 // Extract the toSign value from DIDOX response
@@ -1143,11 +1161,19 @@ class DidoxController extends Controller
             $document->save(false);
 
             // Save rejection record
+            $didoxResponseForAudit = $result['data'] ?? [];
+            if (!is_array($didoxResponseForAudit)) {
+                $didoxResponseForAudit = [
+                    'raw' => (string)$didoxResponseForAudit,
+                    'httpCode' => $result['httpCode'] ?? null,
+                    'success' => $result['success'] ?? null,
+                ];
+            }
             DidoxDocumentSignature::createFromReject(
                 $document,
                 $user,
                 $comment,
-                $result['data'] ?? []
+                $didoxResponseForAudit
             );
 
             return [
