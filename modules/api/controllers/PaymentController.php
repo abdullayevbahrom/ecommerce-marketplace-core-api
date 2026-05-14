@@ -15,6 +15,7 @@ use yii\filters\VerbFilter;
 use yii\rest\OptionsAction;
 use app\models\order\Order;
 use app\models\order\product\OrderProduct;
+use yii\helpers\Json;
 
 class PaymentController extends Controller {
 
@@ -52,8 +53,8 @@ class PaymentController extends Controller {
         ];
 
         $behaviors['authenticator'] = [
-            'class' => HttpBearerAuth::className(),
-            'optional' => ['notify'],
+            'class' => HttpBearerAuth::class,
+            'optional' => ['notify', 'pos-branch', 'pos-session'],
             'except' => ['options'],
         ];
 
@@ -440,8 +441,26 @@ class PaymentController extends Controller {
         $skladUrl = Yii::$app->params['skladApiUrl'] ?? 'https://api.warehouse.example.com';
 
         try {
-            $response = file_get_contents("{$skladUrl}/api/pay/{$token}");
-            return json_decode($response, true);
+            $response = @file_get_contents("{$skladUrl}/api/pay/{$token}");
+            if ($response === false) {
+                Yii::$app->response->statusCode = 404;
+                return ['success' => false, 'error' => 'Session not found'];
+            }
+            $payload = Json::decode($response);
+            if (!is_array($payload)) {
+                Yii::$app->response->statusCode = 503;
+                return ['success' => false, 'error' => 'Invalid response from sklad'];
+            }
+
+            if (($payload['success'] ?? false) !== true || !isset($payload['data']) || !is_array($payload['data'])) {
+                Yii::$app->response->statusCode = 404;
+                return $payload;
+            }
+
+            return [
+                'success' => true,
+                'data' => $this->mapPosSessionToOrderDetail($payload['data']),
+            ];
         } catch (\Exception $e) {
             Yii::$app->response->statusCode = 503;
             return ['success' => false, 'error' => 'Could not fetch session'];
@@ -470,11 +489,108 @@ class PaymentController extends Controller {
                 Yii::$app->response->statusCode = 404;
                 return ['success' => false, 'error' => 'No active order for this branch'];
             }
-            return json_decode($response, true);
+            $payload = Json::decode($response);
+            if (!is_array($payload)) {
+                Yii::$app->response->statusCode = 503;
+                return ['success' => false, 'error' => 'Invalid response from sklad'];
+            }
+
+            if (($payload['success'] ?? false) !== true || !isset($payload['data']) || !is_array($payload['data'])) {
+                Yii::$app->response->statusCode = 404;
+                return $payload;
+            }
+
+            return [
+                'success' => true,
+                'data' => $this->mapPosSessionToOrderDetail($payload['data'], (int)$branchId),
+            ];
         } catch (\Exception $e) {
             Yii::$app->response->statusCode = 503;
             return ['success' => false, 'error' => 'Could not reach sklad'];
         }
+    }
+
+    /**
+     * Convert sklad POS session payload to order/detail-like structure.
+     */
+    private function mapPosSessionToOrderDetail(array $session, ?int $branchId = null): array
+    {
+        $items = isset($session['items']) && is_array($session['items']) ? $session['items'] : [];
+        $orderProducts = [];
+
+        foreach ($items as $idx => $item) {
+            $quantity = (float)($item['quantity'] ?? 0);
+            $unitPrice = (float)($item['price'] ?? 0);
+            $lineTotal = $quantity * $unitPrice;
+            $productId = isset($item['product_id']) ? (int)$item['product_id'] : null;
+            $name = (string)($item['name'] ?? 'POS item');
+
+            $orderProducts[] = [
+                'id' => $idx + 1,
+                'delivery' => null,
+                'price' => $lineTotal,
+                'product_price' => $lineTotal,
+                'unit_price' => $unitPrice,
+                'total_cost' => $lineTotal,
+                'delivery_cost' => 0,
+                'amount' => $quantity,
+                'status' => 1,
+                'product' => [
+                    'id' => $productId,
+                    'name_ru' => $name,
+                    'name_uz' => $name,
+                    'name_en' => $name,
+                    'image' => null,
+                ],
+                'refund' => null,
+                'stock' => [
+                    'id' => $branchId,
+                    'name' => $session['branch_name'] ?? null,
+                ],
+                'bts_id' => null,
+                'bts_status' => null,
+                'bts_status_info' => null,
+                'bts_price' => null,
+                'address' => null,
+            ];
+        }
+
+        return [
+            'id' => null,
+            'user' => Yii::$app->user->identity ?? null,
+            'payment' => [
+                'name_ru' => 'Crypto POS',
+                'name_uz' => 'Crypto POS',
+                'name_en' => 'Crypto POS',
+            ],
+            'delivery' => null,
+            'price' => (float)($session['total'] ?? 0),
+            'amount' => array_sum(array_map(static function ($i) {
+                return (float)($i['quantity'] ?? 0);
+            }, $items)),
+            'delivery_cost' => 0,
+            'discount_amount' => (float)($session['discount'] ?? 0),
+            'promocode' => null,
+            'name' => $session['merchant_name'] ?? null,
+            'phone' => null,
+            'address' => $session['branch_name'] ?? null,
+            'status' => 0,
+            'status_payment' => (($session['status'] ?? 'pending') === 'paid') ? 1 : 0,
+            'date' => date('Y-m-d H:i:s'),
+            'orderReceipt' => null,
+            'orderProducts' => $orderProducts,
+            'didox_documents' => [],
+            'pos_meta' => [
+                'session_token' => $session['session_token'] ?? null,
+                'session_status' => $session['status'] ?? null,
+                'subtotal' => (float)($session['subtotal'] ?? 0),
+                'expires_at' => $session['expires_at'] ?? null,
+                'is_expired' => (bool)($session['is_expired'] ?? false),
+                'branch_name' => $session['branch_name'] ?? null,
+                'merchant_name' => $session['merchant_name'] ?? null,
+                'branch_id' => $branchId,
+            ],
+        ];
     }
 
     public function actionNotify() {

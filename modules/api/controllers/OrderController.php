@@ -126,6 +126,11 @@ class OrderController extends Controller
     public function actionDetail($id)
     {
         $user = Yii::$app->user->identity;
+        if (!$user) {
+            Yii::$app->response->statusCode = 401;
+            return ['errors' => ['auth' => 'Unauthorized']];
+        }
+
         $data = Order::find()
             ->with('orderProducts', 'orderProducts.product', 'orderProducts.product.image', 'didoxDocuments')
             ->where(['id' => $id, 'user_id' => $user->id])
