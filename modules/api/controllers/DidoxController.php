@@ -746,8 +746,11 @@ class DidoxController extends Controller
                 throw new HttpException(401, 'Please login with E-IMZO again.');
             }
 
-            // Proactively refresh token when it is expired according to our DB timestamp.
-            $this->ensureValidUserDidoxToken($user);
+            // User flow: do not auto-refresh Didox token from backend signer.
+            // User must re-login via /api/user/eimzo-login when token is expired/revoked.
+            if (strtotime((string)$user->eimzo_didox_token_expires_at) < time()) {
+                throw new HttpException(401, 'DIDOX token expired. Please login with E-IMZO again.');
+            }
 
             // Find document and verify it's assigned to current user
             $document = DidoxDocument::find()
@@ -787,7 +790,7 @@ class DidoxController extends Controller
             $didoxService = new \app\services\DidoxService();
             $result = $didoxService->getIncomingDocumentForSigning($didoxId, $user->eimzo_didox_token);
 
-            // If DIDOX still returns 401 (token revoked/invalid on DIDOX side), force refresh and retry once.
+            // If DIDOX returns 401, require user re-login (no backend auto-refresh in user flow).
             $attempts = isset($result['debug']['attempts']) && is_array($result['debug']['attempts'])
                 ? $result['debug']['attempts']
                 : [];
@@ -799,23 +802,7 @@ class DidoxController extends Controller
                 }
             }
             if (!empty($result['success']) === false && $all401) {
-                $this->ensureValidUserDidoxToken($user, true);
-                $result = $didoxService->getIncomingDocumentForSigning($didoxId, $user->eimzo_didox_token);
-
-                $retryAttempts = isset($result['debug']['attempts']) && is_array($result['debug']['attempts'])
-                    ? $result['debug']['attempts']
-                    : [];
-                $retryAll401 = !empty($retryAttempts);
-                foreach ($retryAttempts as $attempt) {
-                    if ((int)($attempt['httpCode'] ?? 0) !== 401) {
-                        $retryAll401 = false;
-                        break;
-                    }
-                }
-
-                if (!empty($result['success']) === false && $retryAll401) {
-                    throw new HttpException(401, 'DIDOX token is invalid or revoked. Please login with E-IMZO again.');
-                }
+                throw new HttpException(401, 'DIDOX token is invalid or revoked. Please login with E-IMZO again.');
             }
 
             if ($result['success']) {
