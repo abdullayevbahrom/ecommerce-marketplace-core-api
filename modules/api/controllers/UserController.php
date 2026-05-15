@@ -1205,7 +1205,7 @@ class UserController extends Controller
             }
 
             $didoxService = new DidoxService();
-            $result = $didoxService->getTokenFromTimestamp($taxId, $pkcs7, $signatureHex);
+            $result = $didoxService->getTokenFromTimestamp((int)$taxId, $pkcs7, $signatureHex);
 
             if (isset($post['certificate_info'])) {
                 $certificateInfo = $didoxService->extractCertificateInfo($post['certificate_info']);
@@ -1214,7 +1214,22 @@ class UserController extends Controller
                 }
             }
 
-            $user->eimzo_didox_token = $result['data']['token'];
+            $didoxToken = null;
+            if (is_array($result)) {
+                if (isset($result['data']) && is_array($result['data']) && isset($result['data']['token'])) {
+                    $didoxToken = $result['data']['token'];
+                } elseif (isset($result['token'])) {
+                    $didoxToken = $result['token'];
+                }
+            }
+
+            if (empty($didoxToken)) {
+                Yii::error('E-IMZO login token extraction failed. Result: ' . json_encode($result, JSON_UNESCAPED_UNICODE), __METHOD__);
+                Yii::$app->response->statusCode = 422;
+                return ['errors' => ['service' => is_array($result) && isset($result['error']) ? $result['error'] : 'Didox token not returned']];
+            }
+
+            $user->eimzo_didox_token = $didoxToken;
             $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+360 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
             $user->markDidoxAuthCompleted();
