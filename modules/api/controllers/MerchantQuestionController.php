@@ -49,6 +49,7 @@ class MerchantQuestionController extends Controller
             'class' => VerbFilter::class,
             'actions' => [
                 'index' => ['GET'],
+                'show' => ['GET'],
                 'create' => ['POST'],
                 'close' => ['POST'],
                 'options' => ['OPTIONS'],
@@ -113,6 +114,52 @@ class MerchantQuestionController extends Controller
                 'per_page' => $dataProvider->pagination->pageSize,
                 'page_count' => $dataProvider->pagination->getPageCount(),
             ],
+        ];
+    }
+
+    public function actionShow($id)
+    {
+        $user = Yii::$app->user->identity;
+
+        if (!$user) {
+            throw new HttpException(401, 'Unauthorized');
+        }
+
+        /** @var MerchantQuestion|null $question */
+        $question = MerchantQuestion::find()
+            ->with([
+                'messages',
+                'client' => function ($q) {
+                    $q->select(['id', 'phone', 'name']);
+                },
+                'merchant' => function ($q) {
+                    $q->select(['id', 'phone', 'name']);
+                },
+            ])
+            ->where(['id' => (int)$id])
+            ->one();
+
+        if (!$question) {
+            throw new HttpException(404, 'Question not found');
+        }
+
+        if (!in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR], true)) {
+            if ($user->role === User::ROLE_SHOP && (int)$question->merchant_id !== (int)$user->id) {
+                throw new HttpException(403, 'Access denied');
+            }
+
+            if ($user->role === User::ROLE_USER && (int)$question->client_id !== (int)$user->id) {
+                throw new HttpException(403, 'Access denied');
+            }
+
+            if (!in_array($user->role, [User::ROLE_SHOP, User::ROLE_USER], true)) {
+                throw new HttpException(403, 'Access denied');
+            }
+        }
+
+        return [
+            'success' => true,
+            'data' => $question,
         ];
     }
 

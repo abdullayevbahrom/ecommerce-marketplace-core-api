@@ -818,24 +818,20 @@ class DidoxService
         }
     }
 
-    public function getTokenFromTimestamp(int $taxId, string $pkcs7_64, string $signature_hex)
+    public function getTokenFromTimestamp(int $taxId, string $pkcs7, string $signature_hex)
     {
         try {
-            $timestampData = [
-                'pkcs7' => $pkcs7_64,
-                'signatureHex' => $signature_hex
-            ];
-            
-            $response = $this->makeRequest('POST', '/v1/dsvs/timestamp', $timestampData);
+            $timeStampTokenB64Data = $this->createTimestamp($pkcs7, $signature_hex);
 
-            $tokenData = ['signature' => $response['data']['timeStampTokenB64']];
+            $tokenData = ['signature' => $timeStampTokenB64Data['data']['timeStampTokenB64']];
 
             $response = $this->makeRequest('POST', "/v1/auth/{$taxId}/token/ru", $tokenData);
             
             return [
                 'success' => $response['isOk'],
                 'data' => $response['data'],
-                'httpCode' => $response['httpCode']
+                'httpCode' => $response['httpCode'],
+                'token' => \is_array($response['data']) && !empty($response['data']['token']) ? $response['data']['token'] : null,
             ];
             
         } catch (\Exception $e) {

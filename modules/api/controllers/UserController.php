@@ -1002,9 +1002,9 @@ class UserController extends Controller
         $post = Yii::$app->request->post();
 
         // Validate required fields according to Didox documentation
-        $requiredFields = ['tax_id', 'email', 'mobile', 'password', 'pkcs7_64', 'signature_hex'];
+        $requiredFields = ['tax_id', 'email', 'mobile', 'password', 'pkcs7', 'signature_hex'];
         foreach ($requiredFields as $field) {
-            if (!isset($post[$field]) || empty($post[$field])) {
+            if (empty($post[$field])) {
                 Yii::$app->response->statusCode = 422;
                 return ['errors' => [$field => ucfirst(str_replace('_', ' ', $field)) . ' is required']];
             }
@@ -1013,18 +1013,11 @@ class UserController extends Controller
         // Set user type - default to 'fiz' if not provided
         $userType = isset($post['user_type']) && in_array($post['user_type'], ['fiz', 'yur']) ? $post['user_type'] : 'fiz';
 
-        // Check if user already exists in our system
-        $existingUser = User::findOne(['eimzo_tax_id' => $post['tax_id']]);
-        if ($existingUser) {
-            Yii::$app->response->statusCode = 422;
-            return ['errors' => ['tax_id' => 'User already exists. Please use login endpoint instead.']];
-        }
-
         try {
             $didoxService = new DidoxService();
 
             // Step 1: Create timestamp signature according to Didox documentation
-            $timestampResult = $didoxService->createTimestamp($post['pkcs7_64'], $post['signature_hex']);
+            $timestampResult = $didoxService->createTimestamp($post['pkcs7'], $post['signature_hex']);
 
             if (!$timestampResult['success']) {
                 Yii::$app->response->statusCode = 500;
@@ -1080,17 +1073,28 @@ class UserController extends Controller
                 $certificateInfo = $didoxService->extractCertificateInfo($post['certificate_info']);
             }
 
-            // Step 6: Create new user in our system
-            $user = new User();
-            $user->eimzo_tax_id = $post['tax_id'];
-            $user->role = User::ROLE_USER;
-            $user->status = 1;
-            $user->password = Yii::$app->security->generatePasswordHash(
-                Yii::$app->security->generateRandomString(16)
-            ); // Random secure password for E-IMZO auth users
-            $user->email = $post['email']; // Set from mandatory field
-            $user->phone = $post['mobile']; // Set from mandatory field
-            $user->type = $userType; // Set user type (fiz/yur)
+            $phone = $post['mobile'] ? preg_replace('/[^\d]/', '', trim($post['mobile'])) : null;
+            $user = User::find()
+                ->where(['or', ['eimzo_tax_id' => $post['tax_id']], ['phone' => $phone],])
+                ->one();
+
+            if ($user) {
+                $user->eimzo_tax_id = $post['tax_id'];
+                $user->phone = $phone;
+                $user->email = $post['email'];
+            } else {
+                // Step 6: Create new user in our system
+                $user = new User();
+                $user->eimzo_tax_id = $post['tax_id'];
+                $user->role = User::ROLE_USER;
+                $user->status = 1;
+                $user->password = Yii::$app->security->generatePasswordHash(
+                    Yii::$app->security->generateRandomString(16)
+                );
+                $user->email = $post['email']; // Set from mandatory field
+                $user->phone = $phone; // Set from mandatory field
+                $user->type = $userType; // Set user type (fiz/yur)
+            }
 
             // Set fields from certificate info
             if (!empty($certificateInfo)) {
@@ -1205,7 +1209,7 @@ class UserController extends Controller
             }
 
             $didoxService = new DidoxService();
-            $result = $didoxService->getTokenFromTimestamp((int)$taxId, $pkcs7, $signatureHex);
+            $result = $didoxService->getTokenFromTimestamp((int) $taxId, $pkcs7, $signatureHex);
 
             if (isset($post['certificate_info'])) {
                 $certificateInfo = $didoxService->extractCertificateInfo($post['certificate_info']);
@@ -1214,22 +1218,12 @@ class UserController extends Controller
                 }
             }
 
-            $didoxToken = null;
-            if (is_array($result)) {
-                if (isset($result['data']) && is_array($result['data']) && isset($result['data']['token'])) {
-                    $didoxToken = $result['data']['token'];
-                } elseif (isset($result['token'])) {
-                    $didoxToken = $result['token'];
-                }
+            if ($result['success'] === false || $result['token'] === null) {
+                Yii::$app->response->statusCode = \is_array($result['data']) ? 422 : 400;
+                return ['didox_auth_completed' => $result['success'], 'erorr' => $result['data']];
             }
 
-            if (empty($didoxToken)) {
-                Yii::error('E-IMZO login token extraction failed. Result: ' . json_encode($result, JSON_UNESCAPED_UNICODE), __METHOD__);
-                Yii::$app->response->statusCode = 422;
-                return ['errors' => ['service' => is_array($result) && isset($result['error']) ? $result['error'] : 'Didox token not returned']];
-            }
-
-            $user->eimzo_didox_token = $didoxToken;
+            $user->eimzo_didox_token = $result['token'];
             $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+360 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
             $user->markDidoxAuthCompleted();
