@@ -830,7 +830,7 @@ class DidoxService
 
             $tokenData = ['signature' => $response['data']['timeStampTokenB64']];
 
-            $response = $this->makeRequest('POST', "/v1/auth/{$taxId}/toke/ru", $tokenData);
+            $response = $this->makeRequest('POST', "/v1/auth/{$taxId}/token/ru", $tokenData);
             
             return [
                 'success' => $response['isOk'],

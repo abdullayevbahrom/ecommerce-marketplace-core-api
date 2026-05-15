@@ -1189,7 +1189,7 @@ class UserController extends Controller
         $post = Yii::$app->request->post();
         $pkcs7 = isset($post['pkcs7']) ? $post['pkcs7'] : null;
         $signatureHex = isset($post['signature_hex']) ? $post['signature_hex'] : null;
-        $taxId = isset($post['taxId']) ? $post['taxId'] : (isset($post['tax_id']) ? $post['tax_id'] : null);
+        $taxId = isset($post['tax_id']) ? $post['tax_id'] : null;
 
         if (empty($pkcs7) || empty($taxId) || empty($signatureHex)) {
             Yii::$app->response->statusCode = 422;
