@@ -35,7 +35,7 @@ $this->title = 'E-IMZO Doc Style Check';
 <div class="wrap">
     <div class="card">
         <h1>E-IMZO Login (Doc Example Style)</h1>
-        <div class="muted">Route: <b>/main/eimzo-login-check</b>. Flow (Didox pfx): <b>list_all_certificates -> load_key -> create_pkcs7(base64(TIN)) -> /api/didox/timestamp -> /api/didox/authenticate-eimzo</b>.</div>
+        <div class="muted">Route: <b>/main/eimzo-login-check</b>. Flow: <b>list_all_certificates -> load_key -> create_pkcs7(base64(TIN)) -> /api/user/eimzo-login (pkcs7 + signature_hex + tax_id)</b>.</div>
     </div>
 
     <div class="card">
@@ -151,7 +151,6 @@ $this->title = 'E-IMZO Doc Style Check';
         pkcs7: null,
         signatureHex: null,
         taxId: null,
-        didoxToken: null,
         authPayload: null,
         appToken: null,
         incomingSignPayloads: [],
@@ -422,20 +421,6 @@ $this->title = 'E-IMZO Doc Style Check';
         }
     }
 
-    async function backendAuthDidox(taxId, signature) {
-        const res = await postJson('/api/didox/authenticate-eimzo', {
-            taxId: taxId,
-            signature: signature
-        });
-        // Keep backward-compatible shape for existing UI code.
-        return {
-            success: true,
-            token: res.token,
-            data: res.data || null,
-            message: res.message || 'DIDOX auth success'
-        };
-    }
-
     function fillCerts(items) {
         state.certs = {};
         els.keySelect.innerHTML = '<option value="">Choose a certificate...</option>';
@@ -480,24 +465,14 @@ $this->title = 'E-IMZO Doc Style Check';
         state.pkcs7 = signed.pkcs7;
         state.signatureHex = signed.signatureHex;
         if (!state.signatureHex) throw new Error('signature_hex topilmadi (create_pkcs7 response)');
-
-        setStatus('Attaching Didox timestamp...', 'info');
-        const timestampedSignature = await createDidoxTimestamp(state.pkcs7, state.signatureHex);
-        const authSignature = timestampedSignature.timeStampTokenB64;
-        if (!authSignature) throw new Error('Didox timestamp token (timeStampTokenB64) topilmadi');
-
-        setStatus('Authenticating via DIDOX...', 'info');
-        const auth = await backendAuthDidox(state.taxId, authSignature);
-
-        state.didoxToken = auth.token || null;
-        state.authPayload = auth;
+        state.authPayload = { tax_id: state.taxId };
 
         els.registerBtn.disabled = false;
         els.loginBtn.disabled = false;
 
-        setStatus('DIDOX auth success', 'success');
-        setResult(auth);
-        log('signinPFX success', { auth, taxId: state.taxId });
+        setStatus('PFX signin success', 'success');
+        setResult({ success: true, tax_id: state.taxId, pkcs7_ready: true, signature_hex_ready: true });
+        log('signinPFX success', { taxId: state.taxId });
     }
 
     async function signinToken() {
@@ -511,36 +486,21 @@ $this->title = 'E-IMZO Doc Style Check';
         state.pkcs7 = signed.pkcs7;
         state.signatureHex = signed.signatureHex;
         if (!state.signatureHex) throw new Error('signature_hex topilmadi (create_pkcs7 response)');
-
-        setStatus('Attaching Didox timestamp...', 'info');
-        const timestampedSignature = await createDidoxTimestamp(state.pkcs7, state.signatureHex);
-        const authSignature = timestampedSignature.timeStampTokenB64;
-        if (!authSignature) throw new Error('Didox timestamp token (timeStampTokenB64) topilmadi');
-
-        const taxIdFromAuth = state.taxId || null;
-        setStatus('Authenticating via DIDOX...', 'info');
-        const auth = await backendAuthDidox(taxIdFromAuth, authSignature);
-
-        state.didoxToken = auth.token || null;
-        state.authPayload = auth;
+        state.authPayload = { tax_id: state.taxId };
 
         els.registerBtn.disabled = false;
         els.loginBtn.disabled = false;
 
-        setStatus('Token auth success', 'success');
-        setResult(auth);
-        log('signinToken success', auth);
+        setStatus('Token signin success', 'success');
+        setResult({ success: true, tax_id: state.taxId, pkcs7_ready: true, signature_hex_ready: true });
+        log('signinToken success', { taxId: state.taxId });
     }
 
     async function registerViaApi() {
-        if (!state.pkcs7) throw new Error('Avval Signin qiling');
+        if (!state.pkcs7 || !state.signatureHex) throw new Error('Avval Signin qiling');
         if (!els.email.value.trim() || !els.mobile.value.trim() || !els.password.value.trim()) {
             throw new Error('Email/mobile/password kiriting');
         }
-
-        const ts = await postJson('/api/eimzo/timestamp', { pkcs7b64: state.pkcs7 });
-        const finalSignature = (ts.data && ts.data.pkcs7b64) ? ts.data.pkcs7b64 : null;
-        if (!finalSignature) throw new Error('Timestamp failed');
 
         const taxId = state.taxId || (state.authPayload && state.authPayload.user && state.authPayload.user.eimzo_tax_id);
         if (!taxId) throw new Error('Tax ID topilmadi');
@@ -551,9 +511,8 @@ $this->title = 'E-IMZO Doc Style Check';
             mobile: els.mobile.value.trim(),
             password: els.password.value.trim(),
             user_type: els.userType.value,
-            pkcs7_64: state.pkcs7,
-            signature_hex: state.signatureHex || '00',
-            final_signature: finalSignature,
+            pkcs7: state.pkcs7,
+            signature_hex: state.signatureHex,
             certificate_info: state.selectedCert || {}
         };
 
@@ -566,10 +525,11 @@ $this->title = 'E-IMZO Doc Style Check';
     async function loginViaApi() {
         const taxId = state.taxId || (state.authPayload && state.authPayload.user && state.authPayload.user.eimzo_tax_id);
         if (!taxId) throw new Error('Tax ID topilmadi');
-        if (!state.didoxToken) throw new Error('didox_token topilmadi. authenticate-eimzo javobini tekshiring.');
+        if (!state.pkcs7 || !state.signatureHex) throw new Error('pkcs7/signature_hex topilmadi. Avval Signin qiling.');
 
         const payload = {
-            didox_token: state.didoxToken,
+            pkcs7: state.pkcs7,
+            signature_hex: state.signatureHex,
             tax_id: taxId,
             certificate_info: state.selectedCert || {}
         };
