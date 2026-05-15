@@ -1187,9 +1187,9 @@ class UserController extends Controller
     public function actionEimzoLogin()
     {
         $post = Yii::$app->request->post();
-        $pkcs7 = $post('pkcs7');
-        $signatureHex = $post('signature_hex');
-        $taxId = $post('taxId');
+        $pkcs7 = isset($post['pkcs7']) ? $post['pkcs7'] : null;
+        $signatureHex = isset($post['signature_hex']) ? $post['signature_hex'] : null;
+        $taxId = isset($post['taxId']) ? $post['taxId'] : (isset($post['tax_id']) ? $post['tax_id'] : null);
 
         if (empty($pkcs7) || empty($taxId) || empty($signatureHex)) {
             Yii::$app->response->statusCode = 422;
