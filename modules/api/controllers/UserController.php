@@ -493,7 +493,7 @@ class UserController extends Controller
                 $keys = ['user_id', 'address'];
                 $vals = [];
                 $addresses = is_array($model->address) ? $model->address : [$model->address];
-                
+
                 foreach ($addresses as $key => $value) {
                     if ($value) {
                         $vals[] = [
@@ -882,7 +882,7 @@ class UserController extends Controller
 
             // Update Didox connection data
             $user->eimzo_didox_token = $post['didox_token'];
-            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+180 minutes'));
+            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+360 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
             $user->markDidoxAuthCompleted();
 
@@ -928,16 +928,22 @@ class UserController extends Controller
                 }
             }
 
-            if (isset($profileData['email'])) $user->email = $profileData['email'];
+            if (isset($profileData['email']))
+                $user->email = $profileData['email'];
             if (isset($profileData['address'])) {
                 $user->address = $profileData['address'];
                 $user->address_legal = $profileData['address'];
             }
-            if (isset($profileData['oked'])) $user->oked = $profileData['oked'];
-            if (isset($profileData['account'])) $user->account = $profileData['account'];
-            if (isset($profileData['mfo'])) $user->mfo = $profileData['mfo'];
-            if (isset($profileData['bankCode'])) $user->bank = $profileData['bankCode'];
-            if (isset($profileData['vatRegCode'])) $user->inn = $profileData['vatRegCode'];
+            if (isset($profileData['oked']))
+                $user->oked = $profileData['oked'];
+            if (isset($profileData['account']))
+                $user->account = $profileData['account'];
+            if (isset($profileData['mfo']))
+                $user->mfo = $profileData['mfo'];
+            if (isset($profileData['bankCode']))
+                $user->bank = $profileData['bankCode'];
+            if (isset($profileData['vatRegCode']))
+                $user->inn = $profileData['vatRegCode'];
             if (!empty($profileData['director'])) {
                 $user->manager = $profileData['director'];
             } elseif (!empty($profileData['accountant'])) {
@@ -948,18 +954,29 @@ class UserController extends Controller
             // Phone is intentionally excluded — it is owned by the SMS-OTP signup flow and the
             // unique index `idx_unique_phone` would reject an update if Didox returns a phone
             // already claimed by another account.
-            if (empty($user->email) && isset($profileData['email'])) $user->email = $profileData['email'];
-            if (empty($user->organization_name) && isset($profileData['fullName'])) $user->organization_name = $profileData['fullName'];
-            if (empty($user->address) && isset($profileData['address'])) $user->address = $profileData['address'];
-            if (empty($user->address_legal) && isset($profileData['address'])) $user->address_legal = $profileData['address'];
-            if (empty($user->oked) && isset($profileData['oked'])) $user->oked = $profileData['oked'];
-            if (empty($user->account) && isset($profileData['account'])) $user->account = $profileData['account'];
-            if (empty($user->mfo) && isset($profileData['mfo'])) $user->mfo = $profileData['mfo'];
-            if (empty($user->bank) && isset($profileData['bankCode'])) $user->bank = $profileData['bankCode'];
-            if (empty($user->inn) && isset($profileData['vatRegCode'])) $user->inn = $profileData['vatRegCode'];
+            if (empty($user->email) && isset($profileData['email']))
+                $user->email = $profileData['email'];
+            if (empty($user->organization_name) && isset($profileData['fullName']))
+                $user->organization_name = $profileData['fullName'];
+            if (empty($user->address) && isset($profileData['address']))
+                $user->address = $profileData['address'];
+            if (empty($user->address_legal) && isset($profileData['address']))
+                $user->address_legal = $profileData['address'];
+            if (empty($user->oked) && isset($profileData['oked']))
+                $user->oked = $profileData['oked'];
+            if (empty($user->account) && isset($profileData['account']))
+                $user->account = $profileData['account'];
+            if (empty($user->mfo) && isset($profileData['mfo']))
+                $user->mfo = $profileData['mfo'];
+            if (empty($user->bank) && isset($profileData['bankCode']))
+                $user->bank = $profileData['bankCode'];
+            if (empty($user->inn) && isset($profileData['vatRegCode']))
+                $user->inn = $profileData['vatRegCode'];
             if (empty($user->manager)) {
-                if (!empty($profileData['director'])) $user->manager = $profileData['director'];
-                elseif (!empty($profileData['accountant'])) $user->manager = $profileData['accountant'];
+                if (!empty($profileData['director']))
+                    $user->manager = $profileData['director'];
+                elseif (!empty($profileData['accountant']))
+                    $user->manager = $profileData['accountant'];
             }
         }
     }
@@ -1047,11 +1064,13 @@ class UserController extends Controller
                     $didoxError = $registrationResult['error'] ?? 'Unknown error';
                     $didoxHttpCode = $registrationResult['httpCode'] ?? null;
                     $didoxData = $registrationResult['data'] ?? null;
-                    return ['errors' => [
-                        'didox' => 'Didox registration failed: ' . $didoxError,
-                        'didox_http_code' => $didoxHttpCode,
-                        'didox_response' => $didoxData
-                    ]];
+                    return [
+                        'errors' => [
+                            'didox' => 'Didox registration failed: ' . $didoxError,
+                            'didox_http_code' => $didoxHttpCode,
+                            'didox_response' => $didoxData
+                        ]
+                    ];
                 }
             }
 
@@ -1168,33 +1187,25 @@ class UserController extends Controller
     public function actionEimzoLogin()
     {
         $post = Yii::$app->request->post();
+        $pkcs7 = $post('pkcs7');
+        $signatureHex = $post('signature_hex');
+        $taxId = $post('taxId');
 
-        if (!isset($post['didox_token'])) {
+        if (empty($pkcs7) || empty($taxId) || empty($signatureHex)) {
             Yii::$app->response->statusCode = 422;
-            return ['errors' => ['didox_token' => 'Didox token is required']];
-        }
-
-        if (!isset($post['tax_id'])) {
-            Yii::$app->response->statusCode = 422;
-            return ['errors' => ['tax_id' => 'Tax ID is required']];
+            return ['errors' => ['tax_id' => 'pkcs7, signature_hex, taxId is required',]];
         }
 
         try {
-            $didoxService = new DidoxService();
-
-            $tokenValidation = $didoxService->validateAndExtractTokenInfo($post['didox_token'], $post['tax_id']);
-
-            if (!$tokenValidation['valid']) {
-                Yii::$app->response->statusCode = 401;
-                return ['errors' => ['token' => 'Invalid or expired Didox token: ' . ($tokenValidation['error'] ?? 'Unknown error')]];
-            }
-
-            $user = User::findOne(['eimzo_tax_id' => $post['tax_id']]);
+            $user = User::findOne(['eimzo_tax_id' => $taxId]);
 
             if (!$user) {
                 Yii::$app->response->statusCode = 404;
                 return ['errors' => ['tax_id' => 'Пользователь не найден. Сначала войдите через ЭЦП.']];
             }
+
+            $didoxService = new DidoxService();
+            $result = $didoxService->getTokenFromTimestamp($taxId, $pkcs7, $signatureHex);
 
             if (isset($post['certificate_info'])) {
                 $certificateInfo = $didoxService->extractCertificateInfo($post['certificate_info']);
@@ -1203,11 +1214,10 @@ class UserController extends Controller
                 }
             }
 
-            $user->eimzo_didox_token = $post['didox_token'];
-            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+180 minutes'));
+            $user->eimzo_didox_token = $result['data']['token'];
+            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+360 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
             $user->markDidoxAuthCompleted();
-
             $user->token = $user->generateToken();
 
             if ($user->save(false)) {
@@ -1359,9 +1369,11 @@ class UserController extends Controller
         $language = Yii::$app->request->get('language') ?? 'ru';
         $regions = \yii\services\BTS::getRegions($language);
 
-        return ['data' => [
-            'regions' => $regions
-        ]];
+        return [
+            'data' => [
+                'regions' => $regions
+            ]
+        ];
     }
 
     /**
@@ -1383,9 +1395,11 @@ class UserController extends Controller
             $cityList[$id] = $city['name'];
         }
 
-        return ['data' => [
-            'cities' => $cityList,
-            'region_id' => (int)$region_id
-        ]];
+        return [
+            'data' => [
+                'cities' => $cityList,
+                'region_id' => (int) $region_id
+            ]
+        ];
     }
 }

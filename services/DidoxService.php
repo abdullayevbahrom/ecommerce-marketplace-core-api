@@ -818,6 +818,35 @@ class DidoxService
         }
     }
 
+    public function getTokenFromTimestamp(int $taxId, string $pkcs7_64, string $signature_hex)
+    {
+        try {
+            $timestampData = [
+                'pkcs7' => $pkcs7_64,
+                'signatureHex' => $signature_hex
+            ];
+            
+            $response = $this->makeRequest('POST', '/v1/dsvs/timestamp', $timestampData);
+
+            $tokenData = ['signature' => $response['data']['timeStampTokenB64']];
+
+            $response = $this->makeRequest('POST', "/v1/auth/{$taxId}/toke/ru", $tokenData);
+            
+            return [
+                'success' => $response['isOk'],
+                'data' => $response['data'],
+                'httpCode' => $response['httpCode']
+            ];
+            
+        } catch (\Exception $e) {
+            Yii::error('Didox timestamp creation error: ' . $e->getMessage(), __METHOD__);
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
     /**
      * Register user with Didox following the official documentation
      * @param array $userData - User registration data

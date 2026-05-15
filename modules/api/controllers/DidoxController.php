@@ -54,7 +54,7 @@ class DidoxController extends Controller
         }
 
         $user->eimzo_didox_token = $refreshResult['token'];
-        $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+180 minutes'));
+        $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+360 minutes'));
         $user->markDidoxAuthCompleted();
 
         $saveFields = ['eimzo_didox_token', 'eimzo_didox_token_expires_at'];
@@ -1289,6 +1289,27 @@ class DidoxController extends Controller
             'httpCode' => $result['httpCode'] ?? 422,
             'data' => $result['data'] ?? null,
         ];
+    }
+    
+    public function actionToken()
+    {
+        $pkcs7 = Yii::$app->request->post('pkcs7');
+        $signatureHex = Yii::$app->request->post('signature_hex');
+        $taxId = Yii::$app->request->post('taxId');
+
+        if (empty($pkcs7) || empty($taxId) || empty($signatureHex)) {
+            throw new HttpException(400, 'pkcs7, signatureHex, taxId is required');
+        }
+
+        try {
+            $didoxService = new \app\services\DidoxService();
+            $result = $didoxService->getTokenFromTimestamp($taxId, $pkcs7, $signatureHex);
+
+            return $result;
+        } catch (\Exception $e) {
+            Yii::error('Didox timestamp error: ' . $e->getMessage(), __METHOD__);
+            throw new HttpException(500, 'Failed to create timestamp');
+        }
     }
 
     /**
