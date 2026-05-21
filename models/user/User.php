@@ -2,6 +2,9 @@
 
 namespace app\models\user;
 
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+use GuzzleHttp\Client;
 use Yii;
 use yii\db\ActiveRecord;
 use yii\helpers\Html;
@@ -478,7 +481,184 @@ class User extends ActiveRecord implements IdentityInterface
 
     public static function findIdentityByAccessToken($token, $type = null)
     {
+        $mode = strtolower((string) (Yii::$app->params['auth']['mode'] ?? 'legacy'));
+
+        if ($mode === 'gateway') {
+            return static::findByGatewayAccessToken((string) $token);
+        }
+
+        if ($mode === 'hybrid') {
+            $gatewayUser = static::findByGatewayAccessToken((string) $token);
+            if ($gatewayUser) {
+                return $gatewayUser;
+            }
+
+            return static::findOne(['token' => $token]);
+        }
+
         return static::findOne(['token' => $token]);
+    }
+
+    private static function findByGatewayAccessToken(string $token): ?self
+    {
+        $payload = static::decodeGatewayJwt($token);
+        if (!$payload) {
+            return null;
+        }
+
+        Yii::$app->params['jwtPayload'] = $payload;
+
+        $sub = $payload['sub'] ?? null;
+        $user = null;
+
+        if (is_string($sub) && static::hasColumn('global_user_id')) {
+            $user = static::findOne(['global_user_id' => $sub]);
+        }
+
+        if (!$user && (is_int($sub) || ctype_digit((string) $sub))) {
+            $user = static::findOne(['id' => (int) $sub]);
+        }
+
+        if (!$user) {
+            return null;
+        }
+
+        if ((int) $user->status !== self::STATUS_ACTIVE) {
+            return null;
+        }
+
+        return $user;
+    }
+
+    private static function decodeGatewayJwt(string $token): ?array
+    {
+        if (substr_count($token, '.') !== 2) {
+            return null;
+        }
+
+        $cfg = Yii::$app->params['auth']['gateway'] ?? [];
+        $issuer = (string) ($cfg['issuer'] ?? 'auth-gateway');
+        $audience = (string) ($cfg['audience'] ?? 'marketplace');
+
+        $keys = static::getGatewayJwtKeys(false);
+        if (!$keys) {
+            return null;
+        }
+
+        try {
+            $decoded = (array) JWT::decode($token, $keys);
+        } catch (\Throwable) {
+            // Key rotation case: refresh cached JWKS once and retry.
+            $keys = static::getGatewayJwtKeys(true);
+            if (!$keys) {
+                return null;
+            }
+
+            try {
+                $decoded = (array) JWT::decode($token, $keys);
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        if (($decoded['iss'] ?? null) !== $issuer) {
+            return null;
+        }
+
+        $aud = $decoded['aud'] ?? [];
+        if (is_string($aud)) {
+            $aud = [$aud];
+        } elseif (!is_array($aud)) {
+            $aud = [];
+        }
+
+        if (!in_array($audience, $aud, true)) {
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    private static function getGatewayJwtKeys(bool $forceRefresh): ?array
+    {
+        $cfg = Yii::$app->params['auth']['gateway'] ?? [];
+        $cacheKey = 'auth_gateway_jwks_keys';
+        $ttl = (int) ($cfg['jwksCacheTtl'] ?? 3600);
+
+        if (!$forceRefresh) {
+            $cached = Yii::$app->cache->get($cacheKey);
+            if (is_array($cached) && !empty($cached)) {
+                return $cached;
+            }
+        }
+
+        $jwksUrl = (string) ($cfg['jwksUrl'] ?? '');
+        if ($jwksUrl === '') {
+            return null;
+        }
+
+        try {
+            $client = new Client([
+                'timeout' => max(0.5, ((int) ($cfg['timeoutMs'] ?? 1500)) / 1000),
+            ]);
+            $headers = [];
+            $internalToken = (string) ($cfg['internalToken'] ?? '');
+            if ($internalToken !== '') {
+                $headers['X-Internal-Token'] = $internalToken;
+            }
+
+            $res = $client->get($jwksUrl, [
+                'headers' => $headers,
+            ]);
+            if ($res->getStatusCode() !== 200) {
+                return null;
+            }
+
+            $jwks = json_decode((string) $res->getBody(), true);
+            if (!is_array($jwks)) {
+                return null;
+            }
+
+            $keys = static::buildJwtKeysFromJwks($jwks);
+            if (!is_array($keys) || empty($keys)) {
+                return null;
+            }
+
+            Yii::$app->cache->set($cacheKey, $keys, $ttl);
+            return $keys;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private static function buildJwtKeysFromJwks(array $jwks): array
+    {
+        $result = [];
+        $keys = $jwks['keys'] ?? [];
+        if (!is_array($keys)) {
+            return $result;
+        }
+
+        foreach ($keys as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $kid = isset($item['kid']) ? (string) $item['kid'] : '';
+            $alg = isset($item['alg']) ? (string) $item['alg'] : 'RS256';
+            $x5c = $item['x5c'][0] ?? null;
+
+            if ($kid === '' || !is_string($x5c) || $x5c === '') {
+                continue;
+            }
+
+            $pem = "-----BEGIN PUBLIC KEY-----\n"
+                . chunk_split(str_replace(["\n", "\r", ' '], '', $x5c), 64, "\n")
+                . "-----END PUBLIC KEY-----\n";
+
+            $result[$kid] = new Key($pem, $alg);
+        }
+
+        return $result;
     }
 
     public static function findByUsername($username)

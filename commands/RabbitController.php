@@ -119,4 +119,36 @@ class RabbitController extends Controller
             }
         }
     }
+
+    public function actionConsumeAuthOutbox(): int
+    {
+        $attempt = 0;
+        $this->ensureTopologySetup();
+
+        while (true) {
+            try {
+                (new Consumer())->consumeAuthOutboxQueue();
+
+                return ExitCode::OK;
+            } catch (AMQPIOException|AMQPConnectionClosedException|AMQPRuntimeException $e) {
+                $attempt++;
+                $delay = min(30, max(5, $attempt * 5));
+
+                $this->stderr("RabbitMQ unavailable, retrying in {$delay}s: {$e->getMessage()}\n");
+                Yii::warning([
+                    'message' => 'RabbitMQ auth outbox consumer connection failed, retrying',
+                    'attempt' => $attempt,
+                    'delay_seconds' => $delay,
+                    'error' => $e->getMessage(),
+                ], __METHOD__);
+
+                sleep($delay);
+            } catch (\Throwable $e) {
+                $this->stderr("Auth outbox consumer failed: {$e->getMessage()}\n");
+                Yii::error($e, __METHOD__);
+
+                return ExitCode::UNSPECIFIED_ERROR;
+            }
+        }
+    }
 }

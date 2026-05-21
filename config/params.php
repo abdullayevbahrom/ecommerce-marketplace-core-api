@@ -18,11 +18,20 @@ $rabbitMqExchangeSkladToMarket = getenv('RABBITMQ_EXCHANGE_SKLAD_TO_MARKET') ?: 
 $rabbitMqExchangeMarketToSklad = getenv('RABBITMQ_EXCHANGE_MARKET_TO_SKLAD') ?: 'market_to_sklad';
 $rabbitMqExchangeSkladToMarketRetry = getenv('RABBITMQ_EXCHANGE_SKLAD_TO_MARKET_RETRY') ?: 'sklad_to_market.retry';
 $rabbitMqExchangeMarketToSkladRetry = getenv('RABBITMQ_EXCHANGE_MARKET_TO_SKLAD_RETRY') ?: 'market_to_sklad.retry';
+$rabbitMqExchangeAuthOutbox = getenv('RABBITMQ_EXCHANGE_AUTH_OUTBOX') ?: 'auth.outbox';
 $rabbitMqQueueSkladSyncMain = getenv('RABBITMQ_QUEUE_SKLAD_SYNC_MAIN') ?: 'sklad.sync.main';
 $rabbitMqQueueMarketSyncMain = getenv('RABBITMQ_QUEUE_MARKET_SYNC_MAIN') ?: 'market.sync.main';
+$rabbitMqQueueAuthOutboxShop = getenv('RABBITMQ_QUEUE_AUTH_OUTBOX_SHOP') ?: 'auth.outbox.shop';
 
 $botToken = getenv('TELEGRAM_BOT_TOKEN') ?: null;
 $chatId = getenv('TELEGRAM_CHAT_ID') ?: null;
+$authMode = strtolower(getenv('AUTH_MODE') ?: 'legacy');
+$authGatewayJwksUrl = getenv('AUTH_GATEWAY_JWKS_URL') ?: 'http://auth_gateway_app/api/auth/jwks';
+$authGatewayIssuer = getenv('AUTH_GATEWAY_ISSUER') ?: 'auth-gateway';
+$authGatewayAudience = getenv('AUTH_GATEWAY_AUDIENCE') ?: 'marketplace';
+$authGatewayTimeoutMs = (int) (getenv('AUTH_GATEWAY_TIMEOUT_MS') ?: 1500);
+$authGatewayJwksCacheTtl = (int) (getenv('AUTH_GATEWAY_JWKS_CACHE_TTL') ?: 3600);
+$internalApiToken = getenv('INTERNAL_API_TOKEN') ?: '';
 
 $config = [
     'jwt' => [
@@ -34,6 +43,17 @@ $config = [
         ],
         'accessTtl' => 900,
         'refreshTtl' => 60 * 60 * 24 * 30,
+    ],
+    'auth' => [
+        'mode' => in_array($authMode, ['legacy', 'gateway', 'hybrid'], true) ? $authMode : 'legacy',
+        'gateway' => [
+            'jwksUrl' => $authGatewayJwksUrl,
+            'issuer' => $authGatewayIssuer,
+            'audience' => $authGatewayAudience,
+            'timeoutMs' => $authGatewayTimeoutMs > 0 ? $authGatewayTimeoutMs : 1500,
+            'jwksCacheTtl' => $authGatewayJwksCacheTtl > 0 ? $authGatewayJwksCacheTtl : 3600,
+            'internalToken' => $internalApiToken,
+        ],
     ],
     'adminEmail' => 'admin@example.com',
     'senderEmail' => 'noreply@example.com',
@@ -77,8 +97,10 @@ $config = [
         'exchange_market_to_sklad' => $rabbitMqExchangeMarketToSklad,
         'exchange_sklad_to_market_retry' => $rabbitMqExchangeSkladToMarketRetry,
         'exchange_market_to_sklad_retry' => $rabbitMqExchangeMarketToSkladRetry,
+        'exchange_auth_outbox' => $rabbitMqExchangeAuthOutbox,
         'queue_sklad_sync_main' => $rabbitMqQueueSkladSyncMain,
         'queue_market_sync_main' => $rabbitMqQueueMarketSyncMain,
+        'queue_auth_outbox_shop' => $rabbitMqQueueAuthOutboxShop,
     ],
     // Base URL
     'baseUrl' => 'https://api.example.com',

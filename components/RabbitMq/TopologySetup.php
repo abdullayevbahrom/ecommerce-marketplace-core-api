@@ -18,6 +18,7 @@ class TopologySetup
         $channel->exchange_declare($rabbitMq['exchange_market_to_sklad'], 'topic', false, true, false);
         $channel->exchange_declare($rabbitMq['exchange_sklad_to_market_retry'], 'topic', false, true, false);
         $channel->exchange_declare($rabbitMq['exchange_market_to_sklad_retry'], 'topic', false, true, false);
+        $channel->exchange_declare($rabbitMq['exchange_auth_outbox'], 'topic', false, true, false);
 
         $channel->queue_declare($rabbitMq['queue_market_sync_main'], false, true, false, false);
         $channel->queue_bind($rabbitMq['queue_market_sync_main'], $rabbitMq['exchange_sklad_to_market'], '#');
@@ -90,6 +91,9 @@ class TopologySetup
 
         $channel->queue_bind('sklad.sync.retry.30s', $rabbitMq['exchange_market_to_sklad_retry'], 'retry.30s');
         $channel->queue_bind('sklad.sync.retry.5m', $rabbitMq['exchange_market_to_sklad_retry'], 'retry.5m');
+
+        $channel->queue_declare($rabbitMq['queue_auth_outbox_shop'], false, true, false, false);
+        $channel->queue_bind($rabbitMq['queue_auth_outbox_shop'], $rabbitMq['exchange_auth_outbox'], 'auth.event');
 
         $channel->close();
         $connection->close();

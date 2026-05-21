@@ -119,4 +119,49 @@ class Consumer
         $channel->close();
         $connection->close();
     }
+
+    public function consumeAuthOutboxQueue(): void
+    {
+        $rabbitMq = \Yii::$app->params['rabbitmq'];
+        $queue = (string) ($rabbitMq['queue_auth_outbox_shop'] ?? 'auth.outbox.shop');
+
+        $connection = ConnectionFactory::make();
+        $channel = $connection->channel();
+        $channel->basic_qos(null, 1, null);
+
+        $channel->basic_consume(
+            $queue,
+            '',
+            false,
+            false,
+            false,
+            false,
+            function (AMQPMessage $msg) {
+                $body = json_decode($msg->getBody(), true);
+
+                try {
+                    if (!is_array($body) || empty($body['event_type']) || !isset($body['payload']) || !is_array($body['payload'])) {
+                        throw new \RuntimeException('Invalid auth outbox message body');
+                    }
+
+                    (new \app\components\RabbitMq\Handlers\AuthGatewayEventHandler())->handle($body);
+                    $msg->ack();
+                } catch (\Throwable $e) {
+                    \Yii::error([
+                        'message' => 'Auth outbox consume failed',
+                        'error' => $e->getMessage(),
+                        'payload' => $body,
+                    ], __METHOD__);
+                    $msg->ack();
+                }
+            }
+        );
+
+        while ($channel->is_consuming()) {
+            $channel->wait();
+        }
+
+        $channel->close();
+        $connection->close();
+    }
 }
