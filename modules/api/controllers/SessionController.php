@@ -47,7 +47,7 @@ class SessionController extends Controller
 
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::class,
-            'except' => ['options', 'create-operator', 'user-overview'],
+            'except' => ['options', 'create-operator', 'user-overview', 'user-overview-by-phone'],
         ];
 
         $behaviors['verbs'] = [
@@ -57,6 +57,7 @@ class SessionController extends Controller
                 'operator' => ['POST'],
                 'create-operator' => ['POST'],
                 'user-overview' => ['POST'],
+                'user-overview-by-phone' => ['POST'],
                 'options' => ['OPTIONS'],
             ],
         ];
@@ -370,6 +371,56 @@ class SessionController extends Controller
                 'favorite_products' => $this->buildFavoriteProducts($user),
                 'recently_viewed_products' => $this->buildRecentlyViewedProducts($user),
                 'cart' => $this->buildCartData($user),
+            ],
+        ];
+    }
+
+    public function actionUserOverviewByPhone()
+    {
+        Yii::$app->response->format = Response::FORMAT_JSON;
+
+        $providedToken = (string) Yii::$app->request->headers->get('X-Internal-Token', '');
+        $expectedToken = (string) (Yii::$app->params['auth']['gateway']['internalToken'] ?? '');
+        if ($providedToken === '' || $expectedToken === '' || !hash_equals($expectedToken, $providedToken)) {
+            throw new UnauthorizedHttpException('Invalid internal token');
+        }
+
+        $payload = Yii::$app->request->post();
+        $phone = preg_replace('/[^\d]/', '', (string) ArrayHelper::getValue($payload, 'phone', ''));
+        if ($phone === '') {
+            Yii::$app->response->statusCode = 422;
+            return [
+                'success' => false,
+                'message' => 'phone is required',
+            ];
+        }
+
+        $user = User::find()
+            ->where(new \yii\db\Expression("REPLACE(phone, '+', '') = :phone", [':phone' => $phone]))
+            ->orderBy([
+                'shop_id' => SORT_DESC,
+                'role' => SORT_DESC,
+                'id' => SORT_ASC,
+            ])
+            ->one();
+
+        if (!$user) {
+            Yii::$app->response->statusCode = 404;
+            return [
+                'success' => false,
+                'message' => 'User not found',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'user_id' => (int) $user->id,
+                'phone' => (string) $user->phone,
+                'name' => trim((string) ($user->name ?? '')),
+                'role' => (int) $user->role,
+                'status' => (int) $user->status,
+                'global_user_id' => $user->hasAttribute('global_user_id') ? (string) ($user->global_user_id ?? '') : null,
             ],
         ];
     }
