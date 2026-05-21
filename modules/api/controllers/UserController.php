@@ -1000,6 +1000,7 @@ class UserController extends Controller
     public function actionEimzoRegister()
     {
         $post = Yii::$app->request->post();
+        $incomingGlobalUserId = isset($post['global_user_id']) ? trim((string) $post['global_user_id']) : null;
 
         // Validate required fields according to Didox documentation
         $requiredFields = ['tax_id', 'email', 'mobile', 'password', 'pkcs7', 'signature_hex'];
@@ -1074,8 +1075,13 @@ class UserController extends Controller
             }
 
             $phone = $post['mobile'] ? preg_replace('/[^\d]/', '', trim($post['mobile'])) : null;
+            $phoneVariants = array_values(array_unique(array_filter([
+                $phone,
+                $phone ? ('+' . $phone) : null,
+                ($phone && str_starts_with($phone, '998') && strlen($phone) === 12) ? substr($phone, 3) : null,
+            ])));
             $user = User::find()
-                ->where(['or', ['eimzo_tax_id' => $post['tax_id']], ['phone' => $phone],])
+                ->where(['or', ['eimzo_tax_id' => $post['tax_id']], ['phone' => $phoneVariants],])
                 ->one();
 
             if ($user) {
@@ -1139,6 +1145,9 @@ class UserController extends Controller
             if (isset($post['organization_name'])) {
                 $user->organization_name = $post['organization_name'];
             }
+            if (!empty($incomingGlobalUserId) && User::hasColumn('global_user_id')) {
+                $user->setAttribute('global_user_id', $incomingGlobalUserId);
+            }
 
             // Step 7: Store registration data
             $user->eimzo_didox_token = isset($registrationResult['data']['token']) ? $registrationResult['data']['token'] : null;
@@ -1191,6 +1200,7 @@ class UserController extends Controller
     public function actionEimzoLogin()
     {
         $post = Yii::$app->request->post();
+        $incomingGlobalUserId = isset($post['global_user_id']) ? trim((string) $post['global_user_id']) : null;
         $pkcs7 = isset($post['pkcs7']) ? $post['pkcs7'] : null;
         $signatureHex = isset($post['signature_hex']) ? $post['signature_hex'] : null;
         $taxId = isset($post['tax_id']) ? $post['tax_id'] : null;
@@ -1223,6 +1233,9 @@ class UserController extends Controller
                 return ['didox_auth_completed' => $result['success'], 'erorr' => $result['data']];
             }
 
+            if (!empty($incomingGlobalUserId) && User::hasColumn('global_user_id')) {
+                $user->setAttribute('global_user_id', $incomingGlobalUserId);
+            }
             $user->eimzo_didox_token = $result['token'];
             $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+360 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');

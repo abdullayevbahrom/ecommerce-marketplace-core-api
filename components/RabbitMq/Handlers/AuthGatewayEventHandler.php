@@ -25,7 +25,7 @@ class AuthGatewayEventHandler
             throw new \RuntimeException('UserRegistered payload has invalid phone');
         }
 
-        $user = User::find()->where(['phone' => $phone])->one();
+        $user = $this->findUserByPhone($phone);
         if (!$user) {
             $user = new User();
             $user->phone = $phone;
@@ -63,7 +63,7 @@ class AuthGatewayEventHandler
             throw new \RuntimeException('SmsCodeRequested payload has invalid phone');
         }
 
-        $user = User::find()->where(['phone' => $phone])->one();
+        $user = $this->findUserByPhone($phone);
         if (!$user) {
             $user = new User();
             $user->phone = $phone;
@@ -86,5 +86,18 @@ class AuthGatewayEventHandler
         if (!$user->save(false)) {
             throw new \RuntimeException('Failed to save user from SmsCodeRequested event');
         }
+    }
+
+    private function findUserByPhone(string $normalizedPhone): ?User
+    {
+        $variants = [$normalizedPhone, '+' . $normalizedPhone];
+
+        if (str_starts_with($normalizedPhone, '998') && strlen($normalizedPhone) === 12) {
+            $variants[] = substr($normalizedPhone, 3); // legacy 9-digit local format
+        }
+
+        $variants = array_values(array_unique(array_filter($variants, static fn($v) => is_string($v) && $v !== '')));
+
+        return User::find()->where(['phone' => $variants])->one();
     }
 }
