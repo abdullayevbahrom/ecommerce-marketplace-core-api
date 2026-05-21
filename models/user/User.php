@@ -520,6 +520,19 @@ class User extends ActiveRecord implements IdentityInterface
         }
 
         if (!$user) {
+            $phone = static::normalizePhoneDigits((string) ($payload['phone'] ?? ''));
+            if ($phone !== '') {
+                $user = static::findOne(['phone' => $phone]);
+                if ($user && is_string($sub) && $sub !== '' && static::hasColumn('global_user_id')) {
+                    if ((string) $user->global_user_id !== $sub) {
+                        $user->global_user_id = $sub;
+                        $user->save(false, ['global_user_id']);
+                    }
+                }
+            }
+        }
+
+        if (!$user) {
             return null;
         }
 
@@ -528,6 +541,11 @@ class User extends ActiveRecord implements IdentityInterface
         }
 
         return $user;
+    }
+
+    private static function normalizePhoneDigits(string $phone): string
+    {
+        return preg_replace('/\D+/', '', $phone) ?: '';
     }
 
     private static function decodeGatewayJwt(string $token): ?array
