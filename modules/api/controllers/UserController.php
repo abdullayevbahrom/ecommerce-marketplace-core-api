@@ -1151,7 +1151,10 @@ class UserController extends Controller
 
             // Step 7: Store registration data
             $user->eimzo_didox_token = isset($registrationResult['data']['token']) ? $registrationResult['data']['token'] : null;
+            $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+360 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
+            $user->markEimzoAuthCompleted();
+            $user->markDidoxAuthCompleted();
 
             // Store certificate info
             if (!empty($certificateInfo)) {
@@ -1239,6 +1242,7 @@ class UserController extends Controller
             $user->eimzo_didox_token = $result['token'];
             $user->eimzo_didox_token_expires_at = date('Y-m-d H:i:s', strtotime('+360 minutes'));
             $user->eimzo_last_login = date('Y-m-d H:i:s');
+            $user->markEimzoAuthCompleted();
             $user->markDidoxAuthCompleted();
             $user->token = $user->generateToken();
 
