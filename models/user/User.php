@@ -533,7 +533,32 @@ class User extends ActiveRecord implements IdentityInterface
         }
 
         if (!$user) {
-            return null;
+            $phone = static::normalizePhoneDigits((string) ($payload['phone'] ?? ''));
+            if ($phone === '') {
+                return null;
+            }
+
+            // Align with UserController sendPhone/sendCode flow:
+            // create minimal active user record if phone is not found.
+            $user = new static();
+            $user->role = static::ROLE_USER;
+            $user->type = 'fiz';
+            $user->status = static::STATUS_ACTIVE;
+            $user->phone = $phone;
+            $user->token = '';
+
+            $nameFromPayload = trim((string) ($payload['name'] ?? ''));
+            if ($nameFromPayload !== '') {
+                $user->name = $nameFromPayload;
+            }
+
+            if (is_string($sub) && $sub !== '' && static::hasColumn('global_user_id')) {
+                $user->setAttribute('global_user_id', $sub);
+            }
+
+            if (!$user->save()) {
+                return null;
+            }
         }
 
         if ((int) $user->status !== self::STATUS_ACTIVE) {
@@ -592,6 +617,21 @@ class User extends ActiveRecord implements IdentityInterface
 
         if (!in_array($audience, $aud, true)) {
             return null;
+        }
+
+        // Defense-in-depth: if "accesses" claim is present, it must contain
+        // the same service audience expected by this app.
+        $accesses = $decoded['accesses'] ?? null;
+        if ($accesses !== null) {
+            if (is_string($accesses)) {
+                $accesses = [$accesses];
+            } elseif (!is_array($accesses)) {
+                $accesses = [];
+            }
+
+            if (!in_array($audience, $accesses, true)) {
+                return null;
+            }
         }
 
         return $decoded;

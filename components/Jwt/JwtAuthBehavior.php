@@ -23,15 +23,14 @@ class JwtAuthBehavior extends ActionFilter
 
         $token = $matches[1];
 
-        $payload = Yii::$app->jwtService->decodeAndVerify($token, $this->audience);
-
-        $user = User::findOne(['id' => $payload->sub]);
+        $user = User::findIdentityByAccessToken($token);
 
         if (!$user || (int) $user->status !== 1) {
             throw new UnauthorizedHttpException('User not found or disabled');
         }
 
-        $tokenPermissions = $payload->permissions ?? [];
+        $payload = Yii::$app->params['jwtPayload'] ?? [];
+        $tokenPermissions = $payload['permissions'] ?? ($payload->permissions ?? []);
 
         foreach ($this->requiredPermissions as $permission) {
             if (!in_array($permission, $tokenPermissions, true)) {
