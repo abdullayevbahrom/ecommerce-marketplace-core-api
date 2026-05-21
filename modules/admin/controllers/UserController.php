@@ -8,6 +8,7 @@ use yii\data\Pagination;
 use yii\web\UploadedFile;
 use yii\web\HttpException;
 use yii\data\ActiveDataProvider;
+use yii\db\IntegrityException;
 
 use app\models\Category;
 use app\models\order\Order;
@@ -297,10 +298,19 @@ class UserController extends Controller {
                 $saveRole = User::ROLE_USER;
             }
 
-            if ($model->saveObject($saveRole)) {
-                Yii::$app->session->setFlash('user_saved', 'Пользователь сохранен');
+            try {
+                if ($model->saveObject($saveRole)) {
+                    Yii::$app->session->setFlash('user_saved', 'Пользователь сохранен');
+                    return $this->redirect(['/admin/user/view', 'id' => $model->id]);
+                }
+            } catch (IntegrityException $e) {
+                $phone = preg_replace('/\D/', '', (string) $model->phone);
+                $model->addError('phone', 'Пользователь с таким номером уже существует');
+                Yii::$app->session->setFlash(
+                    'error',
+                    'Не удалось сохранить пользователя: номер телефона уже занят' . ($phone ? " ({$phone})" : '')
+                );
             }
-            return $this->redirect(['/admin/user/view', 'id'=>$model->id]);
         }
 
         return $this->render('create', [
