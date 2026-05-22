@@ -90,20 +90,58 @@ class CategoryController extends Controller{
         return $this->redirect(Yii::$app->request->referrer);
     }
 
-    public function actionSaveSort(){
-        if (Yii::$app->request->isAjax) {
-            $data = Yii::$app->request->post();
-            $top = explode(',', $data['top']);
-            foreach ($top as $k => $v) {
-                $id = explode('-',$v);
-                $cat = Category::findOne($id[1]);
-                $cat->sort = $id[0];
-                $cat->save(false);
-            }
-            $save = true;
-            \Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
-            return ['save'=>$save];
+    public function actionSaveSort() {
+        if (!Yii::$app->request->isAjax) {
+            throw new HttpException(400, 'Bad request');
         }
+
+        $data = Yii::$app->request->post();
+        $levels = ['top', 'second', 'third'];
+        $updated = 0;
+        $errors = [];
+
+        foreach ($levels as $level) {
+            if (empty($data[$level])) {
+                continue;
+            }
+
+            $items = explode(',', (string) $data[$level]);
+            foreach ($items as $item) {
+                $item = trim($item);
+                if ($item === '') {
+                    continue;
+                }
+
+                $parts = explode('-', $item, 2);
+                if (count($parts) < 2 || !is_numeric($parts[0]) || !is_numeric($parts[1])) {
+                    $errors[] = "Invalid payload item: {$item}";
+                    continue;
+                }
+
+                $sort = (int) $parts[0];
+                $id = (int) $parts[1];
+                $cat = Category::findOne($id);
+
+                if (!$cat) {
+                    $errors[] = "Category not found: {$id}";
+                    continue;
+                }
+
+                $cat->sort = $sort;
+                if ($cat->save(false)) {
+                    $updated++;
+                } else {
+                    $errors[] = "Failed to save category: {$id}";
+                }
+            }
+        }
+
+        Yii::$app->response->format = Response::FORMAT_JSON;
+        return [
+            'save' => empty($errors),
+            'updated' => $updated,
+            'errors' => $errors,
+        ];
     }
 
     public function actionGetCategory() {

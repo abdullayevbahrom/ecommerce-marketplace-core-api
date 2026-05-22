@@ -137,7 +137,7 @@ $(function() {
         var count = 0, top = [];
         $('.top').each(function(i) {
             count++;
-            top[i] = count+'-'+$(this).find('input').val();
+            top[i] = count+'-'+$(this).val();
         });
 
         top = top.join(',');
@@ -146,7 +146,7 @@ $(function() {
         var count_second = 0, second = [];
         $('.second').each(function(i){
             count_second++;
-            second[i] = count_second+'-'+$('.input-'+$(this).attr('data-id')).val();
+            second[i] = count_second+'-'+$(this).val();
         });
 
         second = second.join(',');
@@ -155,7 +155,7 @@ $(function() {
         var count_third = 0, third = [];
         $('.third').each(function(i){
             count_third++;
-            third[i] = count_third+'-'+$('.input-'+$(this).attr('data-id')).val();
+            third[i] = count_third+'-'+$(this).val();
         });
 
         third = third.join(',');
