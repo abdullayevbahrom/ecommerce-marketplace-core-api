@@ -7,6 +7,7 @@ use Firebase\JWT\Key;
 use GuzzleHttp\Client;
 use Yii;
 use yii\db\ActiveRecord;
+use yii\db\IntegrityException;
 use yii\helpers\Html;
 use yii\web\IdentityInterface;
 use yii\web\UploadedFile;
@@ -556,8 +557,26 @@ class User extends ActiveRecord implements IdentityInterface
                 $user->setAttribute('global_user_id', $sub);
             }
 
-            if (!$user->save()) {
-                return null;
+            try {
+                if (!$user->save()) {
+                    return null;
+                }
+            } catch (IntegrityException $e) {
+                // Concurrent create (same phone/global_user_id): reuse existing row.
+                $existing = null;
+                if (is_string($sub) && $sub !== '' && static::hasColumn('global_user_id')) {
+                    $existing = static::findOne(['global_user_id' => $sub]);
+                }
+
+                if (!$existing) {
+                    $existing = static::findOne(['phone' => $phone]);
+                }
+
+                if (!$existing) {
+                    return null;
+                }
+
+                $user = $existing;
             }
         }
 

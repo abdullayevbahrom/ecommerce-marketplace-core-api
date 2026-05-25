@@ -64,19 +64,47 @@ class SellerController extends Controller
     {
         $post = Yii::$app->request->post();
 
-        if (empty($post['name'])) {
+        $companyName = trim((string)($post['company_name'] ?? $post['companyName'] ?? ''));
+        $responsibleName = trim($post['name'] ?? '');
+        $inn = preg_replace('/\D/', '', (string)($post['inn'] ?? ''));
+
+        if ($companyName === '') {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['company_name' => ['Заполните поле']]];
+        }
+
+        if ($responsibleName === '') {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['responsible_name' => ['Заполните поле']]];
+        }
+
+        if ($inn === '') {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['inn' => ['Заполните поле']]];
+        }
+
+        if (!preg_match('/^\d{9}$/', $inn)) {
+            Yii::$app->response->statusCode = 422;
+            return ['errors' => ['inn' => ['ИНН должен состоять ровно из 9 цифр']]];
+        }
+
+        if (empty($responsibleName)) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['name' => ['Заполните поле']]];
         }
 
-        $phone = $post['phone'] ? preg_replace('/[^\d]/', '', trim($post['phone'])) : null;
+        $phone = isset($post['phone']) ? preg_replace('/\D/', '', trim((string) $post['phone'])) : null;
+
+        if (!empty($phone) && strlen($phone) === 9) {
+            $phone = '998' . $phone;
+        }
 
         if (empty($phone)) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['phone' => ['Заполните поле']]];
         }
 
-        if (strlen($phone) != 12) {
+        if (strlen($phone) !== 12) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['phone' => ['Номер телефона должен содержать ровно 12 цифр']]];
         }
@@ -91,11 +119,22 @@ class SellerController extends Controller
                 Yii::$app->response->statusCode = 422;
                 return ['errors' => ['phone' => ['Заявка с этим номером телефона уже одобрена.']]];
             }
+
+            $application = $existingApplication;
         } else {
             $application = new SellerApplication();
-            $post['phone'] = $phone;
-            $application->setAttributes($post);
         }
+
+        $post['phone'] = $phone;
+        $post['name'] = $responsibleName;
+        $application->setAttributes($post);
+
+        // Keep additional fields even if dedicated columns are absent.
+        $application->admin_notes = json_encode([
+            'company_name' => $companyName,
+            'inn' => $inn,
+            'responsible_name' => $responsibleName,
+        ], JSON_UNESCAPED_UNICODE);
 
         if (!$application->validate()) {
             Yii::$app->response->statusCode = 422;
