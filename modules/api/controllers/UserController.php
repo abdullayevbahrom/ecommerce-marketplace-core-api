@@ -1247,7 +1247,7 @@ class UserController extends Controller
             $user->token = $user->generateToken();
 
             if ($user->save(false)) {
-                return ['data' => User::find()->with('image')->where(['id' => $user->id])->one()];
+                return ['data' => User::find()->with('image')->where(['id' => $user->id])->one(), 'didox_auth_completed' => $user->isDidoxAuthCompleted()];
             } else {
                 throw new HttpException(500, 'Failed to update user data');
             }
