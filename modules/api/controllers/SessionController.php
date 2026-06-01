@@ -110,15 +110,15 @@ class SessionController extends Controller
         $shopId = null;
         if ($user->role === User::ROLE_SHOP) {
             $shop = \app\models\shop\Shop::findOne(['user_id' => $user->id]);
-            $shopId = $shop ? (int)$shop->id : null;
+            $shopId = $shop ? (int) $shop->id : null;
         }
 
         $payload = [
-            'id' => (int)$user->id,
-            'yii_id' => (int)$user->id,
-            'phone' => (string)$user->phone,
+            'id' => (int) $user->id,
+            'yii_id' => (int) $user->id,
+            'phone' => (string) $user->phone,
             'name' => trim($user->name . ' ' . $user->lastname . ' ' . $user->middlename),
-            'role' => (int)$user->role,
+            'role' => (int) $user->role,
             'is_active' => $user->status === User::STATUS_ACTIVE,
             'shop_id' => $shopId,
         ];
@@ -141,7 +141,7 @@ class SessionController extends Controller
             );
 
             $status = $response->getStatusCode();
-            $body = (string)$response->getBody();
+            $body = (string) $response->getBody();
             $data = json_decode($body, true);
 
             if ($status >= 400) {
@@ -176,12 +176,12 @@ class SessionController extends Controller
         }
 
         $payload = [
-            'id' => (int)$user->id,
-            'yii_id' => (int)$user->id,
-            'phone' => (string)$user->phone,
+            'id' => (int) $user->id,
+            'yii_id' => (int) $user->id,
+            'phone' => (string) $user->phone,
             'name' => trim($user->name . ' ' . $user->lastname . ' ' . $user->middlename),
-            'role' => (int)$user->role,
-            'email' => (string)$user->email,
+            'role' => (int) $user->role,
+            'email' => (string) $user->email,
             'is_active' => $user->status === User::STATUS_ACTIVE,
         ];
 
@@ -203,7 +203,7 @@ class SessionController extends Controller
             );
 
             $status = $response->getStatusCode();
-            $body = (string)$response->getBody();
+            $body = (string) $response->getBody();
             $res = json_decode($body, true);
 
             if ($status >= 400) {
@@ -329,7 +329,7 @@ class SessionController extends Controller
         Yii::$app->response->format = Response::FORMAT_JSON;
 
         $payload = Yii::$app->request->post();
-        $userId = (int) ArrayHelper::getValue($payload, 'user_id', 0);
+        $userId = ArrayHelper::getValue($payload, 'user_id', 0);
         $secret = Yii::$app->params['apiSecretKey'] ?? null;
 
         if (!$secret) {
@@ -352,7 +352,7 @@ class SessionController extends Controller
             throw new UnauthorizedHttpException('Invalid X-Api-Token');
         }
 
-        $user = User::findOne($userId);
+        $user = is_numeric($userId) ? User::findOne($userId) : User::findOne(['global_user_id' => $userId]);
 
         if (!$user) {
             Yii::$app->response->statusCode = 404;
@@ -367,6 +367,7 @@ class SessionController extends Controller
             'success' => true,
             'data' => [
                 'user_id' => (int) $user->id,
+                'global_user_id' => $user->hasAttribute('global_user_id') ? (string) ($user->global_user_id ?? '') : null,
                 'last_orders' => $this->buildLastOrders($user),
                 'favorite_products' => $this->buildFavoriteProducts($user),
                 'recently_viewed_products' => $this->buildRecentlyViewedProducts($user),
