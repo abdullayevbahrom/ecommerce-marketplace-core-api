@@ -1378,10 +1378,14 @@ class DidoxService
                 throw new \Exception('cURL Error: ' . $error);
             }
 
-            // Check if response is PDF (application/pdf) or error (application/json)
-            $isPdf = strpos($contentType, 'application/pdf') !== false;
-            
-            if ($httpCode >= 200 && $httpCode < 300 && $isPdf) {
+            // DIDOX may return PDF with content-type application/pdf or application/octet-stream.
+            // Also allow by file signature to avoid false negatives when content-type is missing/wrong.
+            $contentType = (string) $contentType;
+            $isPdfByType = strpos($contentType, 'application/pdf') !== false
+                || strpos($contentType, 'application/octet-stream') !== false;
+            $looksLikePdf = is_string($response) && strncmp($response, '%PDF-', 5) === 0;
+
+            if ($httpCode >= 200 && $httpCode < 300 && ($isPdfByType || $looksLikePdf)) {
                 return [
                     'success' => true,
                     'data' => $response,
@@ -1399,6 +1403,7 @@ class DidoxService
                     'httpCode' => $httpCode,
                     'debug' => [
                         'request_url' => $this->baseUrl . $url,
+                        'content_type' => $contentType,
                         'response_raw' => substr($response, 0, 500)
                     ]
                 ];

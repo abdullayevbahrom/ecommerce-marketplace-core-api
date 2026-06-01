@@ -109,9 +109,6 @@ $config = [
     'apiSecretKey' => '123',
     'warehouseSyncEnabled' => false,
 
-    // Sklad uses X-Api-Token: md5(branch_id + apiSecretKey) for authentication
-    // Same apiSecretKey is used for both Order sync and Product submissions
-
     // MyID Integration Settings
     'myid' => [
         'client_id' => 'sample_client_id',
