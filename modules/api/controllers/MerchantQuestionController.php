@@ -175,6 +175,7 @@ class MerchantQuestionController extends Controller
         }
 
         $merchantId = (int) Yii::$app->request->post('merchant_id');
+        $productId  = (int) Yii::$app->request->post('product_id');
         $message    = trim(Yii::$app->request->post('message'));
 
         if (!$merchantId || !$message) {
@@ -193,30 +194,29 @@ class MerchantQuestionController extends Controller
             ];
         }
 
-        $exists = MerchantQuestion::find()
+        // Find existing non-closed ticket for this product
+        $model = MerchantQuestion::find()
             ->where([
                 'client_id' => $user->id,
                 'merchant_id' => $merchant->id,
-                'status' => MerchantQuestion::STATUS_OPEN
+                'entity_id' => $productId ?: null,
             ])
-            ->exists();
-
-        if ($exists) {
-            return [
-                'success' => false,
-                'message' => 'Wait for merchant reply before sending new question'
-            ];
-        }
+            ->andWhere(['!=', 'status', MerchantQuestion::STATUS_CLOSED])
+            ->one();
 
         $transaction = Yii::$app->db->beginTransaction();
 
         try {
+            if (!$model) {
+                $model = new MerchantQuestion();
+                $model->client_id   = $user->id;
+                $model->merchant_id = $merchant->id;
+                $model->entity_type = $productId ? 'product' : null;
+                $model->entity_id   = $productId ?: null;
+                $model->created_at  = time();
+            }
 
-            $model = new MerchantQuestion();
-            $model->client_id   = $user->id;
-            $model->merchant_id = $merchant->id;
-            $model->status      = MerchantQuestion::STATUS_OPEN;
-            $model->created_at  = time();
+            $model->status = MerchantQuestion::STATUS_OPEN;
 
             if (!$model->save()) {
                 return ['success' => false, 'errors' => $model->errors];
@@ -233,10 +233,9 @@ class MerchantQuestionController extends Controller
             // NotificationService::notifyMerchantNewQuestion($model);
             // NotificationService::notifyModeratorsNewQuestion($model);
 
-            $this->sendDataToWarehouse($user, $merchant, $model, $message);
+            $this->sendDataToWarehouse($user, $merchant, $model, $message, $productId);
 
             $transaction->commit();
-
 
             return ['success' => true, 'question_id' => $model->id];
         } catch (\Throwable $e) {
@@ -336,7 +335,7 @@ class MerchantQuestionController extends Controller
         }
     }
 
-    private function sendDataToWarehouse(User $user, User $merchant, MerchantQuestion $ticket, string $message)
+    private function sendDataToWarehouse(User $user, User $merchant, MerchantQuestion $ticket, string $message, $productId = null)
     {
         $baseUrl   = Yii::$app->params['warehouseApiUrl'] ?? null;
         $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
@@ -348,6 +347,7 @@ class MerchantQuestionController extends Controller
             'client_phone' => $user->phone,
             'merchant_id'  => $merchant->id,
             'ticket_id' => $ticket->id,
+            'product_id'   => $productId ?: null,
             'message'      => $message,
         ];
 
