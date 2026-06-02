@@ -5,6 +5,7 @@ namespace app\modules\api\controllers;
 use app\models\merchant\MerchantQuestion;
 use app\models\merchant\MerchantQuestionMessage;
 use app\models\user\User;
+use app\services\NotificationService;
 use Yii;
 use yii\data\ActiveDataProvider;
 use yii\filters\auth\HttpBearerAuth;
@@ -335,7 +336,7 @@ class MerchantQuestionController extends Controller
         }
     }
 
-    private function sendDataToWarehouse(User $user, $merchant, MerchantQuestion $ticket, $message)
+    private function sendDataToWarehouse(User $user, User $merchant, MerchantQuestion $ticket, string $message)
     {
         $baseUrl   = Yii::$app->params['warehouseApiUrl'] ?? null;
         $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
