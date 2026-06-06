@@ -16,8 +16,8 @@ $config = [
     'components' => [
         'skladProvisioner' => [
             'class' => 'app\services\SkladProvisionService',
-            'baseUrl' => $params['skladInternalUrl'],
-            'token' => $params['skladInternalToken'],
+            'baseUrl' => $params['warehouseApiUrl'] ?? 'http://sklad_app',
+            'token' => $params['auth']['gateway']['internalToken'] ?? '',
         ],
         'exceptionNotifier' => [
             'class' => 'app\components\TelegramExceptionNotifier',
