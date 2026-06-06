@@ -347,11 +347,13 @@ class ProductController extends Controller {
         $model->status = ($model->status == 1) ? 2 : 1;
         $model->save(false);
 
+        $commentText = $model->status == 1 ? 'Ваш товар разблокирован' : 'Ваш товар заблокирован модератором';
+
         $comment = new ModerationComment();
         $comment->entity_type  = 'product';
         $comment->entity_id    = $model->id;
         $comment->action       = $model->status == 1 ? 'approve' : 'block';
-        $comment->comment      = 'Ваш товар разблокирован';
+        $comment->comment      = $commentText;
         $comment->moderator_id = $user->id;
         $comment->is_sent_to_warehouse = (bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false);
         $comment->save(false);
@@ -362,7 +364,7 @@ class ProductController extends Controller {
             'entity_id'    => $model->id,
             'action'       => $model->status == 1 ? 'approve' : 'block',
             'status_after' => $model->status == 1 ? 'approved' : 'pending',
-            'comment'      => 'Ваш товар разблокирован',
+            'comment'      => $commentText,
             'moderator_id' => $user->id,
         ]);
 
