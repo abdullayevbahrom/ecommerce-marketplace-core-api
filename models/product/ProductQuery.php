@@ -23,4 +23,17 @@ class ProductQuery extends ActiveQuery
             ],
         ]);
     }
+
+    public function publicVisible(string $productAlias = 'product'): self
+    {
+        return $this->andWhere([
+            "{$productAlias}.status" => 1,
+            "{$productAlias}.deleted_at" => null,
+        ])->marketplaceVisible($productAlias);
+    }
+
+    public function activeMarketplaceVisible(string $productAlias = 'product'): self
+    {
+        return $this->publicVisible($productAlias);
+    }
 }

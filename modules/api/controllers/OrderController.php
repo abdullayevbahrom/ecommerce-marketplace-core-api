@@ -698,7 +698,7 @@ class OrderController extends Controller
             $product = \app\models\product\Product::find()
                 ->with(['shop.stock', 'stock'])
                 ->where(['product.id' => $post['product_id']])
-                ->marketplaceVisible()
+                ->publicVisible()
                 ->one();
                 
             if (!$product) {

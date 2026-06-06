@@ -183,11 +183,11 @@ $config = [
                 'PUT  /api/brand-category/update' => 'api/brand-category/update',
                 'POST /api/brand-category/delete' => 'api/brand-category/delete',
 
-                'POST /api/merchant/question/create' => 'api/merchant-question/create',
+                'POST /api/merchant-question/create' => 'api/merchant-question/create',
                 'POST api/warehouse/ticket/reply-from-warehouse' => 'api/warehouse-ticket/reply-from-warehouse',
-                'POST api/merchant/question/<id:\d+>/close' => 'api/merchant-question/close',
-                'GET /api/merchant/question' => 'api/merchant-question',
-                'GET /api/merchant/question/<id:\d+>' => 'api/merchant-question/show',
+                'POST api/merchant-question/<id:\d+>/close' => 'api/merchant-question/close',
+                'GET /api/merchant-question' => 'api/merchant-question',
+                'GET /api/merchant-question/<id:\d+>' => 'api/merchant-question/show',
 
                 'POST api/warehouse/ticket/close-from-warehouse' => 'api/warehouse-ticket/close-from-warehouse',
 

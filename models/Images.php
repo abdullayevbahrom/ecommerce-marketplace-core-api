@@ -387,6 +387,10 @@ class Images extends \yii\db\ActiveRecord
             return self::PHOTO_DEFAULT;
         }
 
+        if (filter_var($this->photo, FILTER_VALIDATE_URL)) {
+            return $this->photo;
+        }
+
         if ((int) $this->web === 1) {
             /** @var S3Component $s3 */
             $s3 = Yii::$app->s3;
@@ -406,7 +410,21 @@ class Images extends \yii\db\ActiveRecord
 
     public function fields()
     {
-        return ['id', 'photo'];
+        return [
+            'id',
+            'object_id',
+            'type',
+            'main',
+            'sort',
+            'status',
+            'token_key',
+            'color_id' => function () {
+                return $this->hasAttribute('color_id') && $this->color_id !== null ? (int) $this->color_id : null;
+            },
+            'photo' => fn () => $this->getPhoto($this->type ?: 'product', 'original'),
+            'url' => fn () => $this->getPhoto($this->type ?: 'product', '200x200'),
+            'original_url' => fn () => $this->getPhoto($this->type ?: 'product', 'original'),
+        ];
     }
 
     public function afterDelete()

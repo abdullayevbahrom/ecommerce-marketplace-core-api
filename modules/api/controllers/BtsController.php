@@ -129,7 +129,7 @@ class BtsController extends Controller {
         $product = Product::find()
             ->with('stock')
             ->where(['product.id' => $post['product_id'], 'product.status' => 1])
-            ->marketplaceVisible()
+            ->publicVisible()
             ->one();
         if (!$product) {
             Yii::$app->response->statusCode = 422;

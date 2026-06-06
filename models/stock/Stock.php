@@ -342,6 +342,7 @@ class Stock extends \yii\db\ActiveRecord
             'address' => $this->getFullAddress(),
             'responsible_person' => $this->shop->user->getFullName(),
             'phone' => $this->shop->user->phone,
+            'for_marketplace' => (int) ($this->for_marketplace ?? 0),
         ];
     }
 

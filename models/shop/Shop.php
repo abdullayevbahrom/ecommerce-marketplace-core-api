@@ -259,6 +259,7 @@ class Shop extends \yii\db\ActiveRecord
         $stock->status = 1;
         $stock->shop_id = $this->id;
         $stock->address = $this->address_legal ?? null;
+        $stock->for_marketplace = 1;
 
         if (!$stock->save()) {
             throw new \RuntimeException('Default stock creation failed');
@@ -542,6 +543,7 @@ class Shop extends \yii\db\ActiveRecord
                 'address' => $this->stock->getFullAddress(),
                 'responsible_person' => $this->contact_user,
                 'phone' => $this->contact_phone,
+                'for_marketplace' => (int) ($this->stock->for_marketplace ?: 1),
             ]
         ];
     }

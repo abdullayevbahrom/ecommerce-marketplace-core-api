@@ -220,7 +220,7 @@ class ShopController extends Controller
         $products = Product::find()
             ->alias('product')
             ->where(['product.status' => 1])
-            ->marketplaceVisible();
+            ->publicVisible();
 
         if ($context['query'] !== '') {
             $searchFields = [

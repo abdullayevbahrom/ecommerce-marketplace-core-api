@@ -1182,9 +1182,24 @@ class Product extends \yii\db\ActiveRecord
                 ] : null;
             },
             'images' => function () {
-                return \app\models\Images::find()->where(['token_key' => $this->token_key])
-                    ->asArray()
-                    ->all();
+                return array_map(static function (\app\models\Images $image): array {
+                    return [
+                        'id' => (int) $image->id,
+                        'object_id' => $image->object_id !== null ? (int) $image->object_id : null,
+                        'type' => $image->type,
+                        'main' => $image->main !== null ? (int) $image->main : null,
+                        'sort' => $image->sort !== null ? (int) $image->sort : null,
+                        'status' => $image->status !== null ? (int) $image->status : null,
+                        'token_key' => $image->token_key,
+                        'color_id' => $image->hasAttribute('color_id') && $image->color_id !== null ? (int) $image->color_id : null,
+                        'photo' => $image->getPhoto($image->type ?: 'product', 'original'),
+                        'url' => $image->getPhoto($image->type ?: 'product', '200x200'),
+                        'original_url' => $image->getPhoto($image->type ?: 'product', 'original'),
+                    ];
+                }, \app\models\Images::find()
+                    ->where(['token_key' => $this->token_key])
+                    ->orderBy(['main' => SORT_ASC, 'sort' => SORT_ASC, 'id' => SORT_ASC])
+                    ->all());
             },
             'tag',
             'name_ru',
@@ -1544,8 +1559,7 @@ class Product extends \yii\db\ActiveRecord
     {
         return $this->hasMany(Product::class, ['token_key' => 'token_key'])
             ->andOnCondition(['!=', 'id', $this->id])
-            ->andWhere(['product.status' => 1, 'product.deleted_at' => null])
-            ->marketplaceVisible();
+            ->publicVisible();
     }
 
     // delivery
