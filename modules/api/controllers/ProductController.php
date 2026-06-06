@@ -213,7 +213,7 @@ class ProductController extends Controller
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
             'class' => HttpBearerAuth::className(),
-            'optional' => ['index', 'filters', 'index-es', 'best-products-es', 'by-category', 'by-brand', 'by-shop', 'by-filter', 'search', 'search-suggestions', 'detail', 'reviews', 'recently-viewed', 'related-products', 'by-photo', 'for-you', 'best-products'], // Removed 'request' - now requires auth
+            'optional' => ['index', 'filters', 'index-es', 'best-products-es', 'by-category', 'by-brand', 'by-shop', 'by-filter', 'search', 'search-suggestions', 'detail', 'reviews', 'recently-viewed', 'related-products', 'by-photo', 'for-you', 'best-products', 'create'], // Added 'create' for Sklad integration
         ];
 
         $auth = $behaviors['authenticator'];
@@ -301,7 +301,13 @@ class ProductController extends Controller
             $post['stock_id'] = $post['branch_id'];
         }
 
+        // Map Warehouse Product ID to Sklad Product ID
+        if (isset($post['warehouse_product_id']) && !isset($post['sklad_product_id'])) {
+            $post['sklad_product_id'] = $post['warehouse_product_id'];
+        }
+
         // Validate basic load
+        Yii::info("ActionCreate received post: " . json_encode($post), 'api');
         if ($model->load($post, '')) {
             // Fix: shop_id is required but auto-detected in saveObject. 
             // We need to set it here manually for $model->validate() to pass.
@@ -320,7 +326,7 @@ class ProductController extends Controller
             Yii::$app->request->setBodyParams($post);
 
             if ($model->validate()) {
-                $colors = $post['colors'] ?? ($post['color_id'] ? [$post['color_id']] : []);
+                $colors = $post['colors'] ?? (isset($post['color_id']) ? [$post['color_id']] : []);
                 $productTypes = $post['product_types'] ?? [];
                 $callbackUrl = $post['callback_url'] ?? null;
 
@@ -461,10 +467,57 @@ class ProductController extends Controller
 
                 // Exit to prevent Yii from trying to send response again
                 Yii::$app->end();
+            } else {
+                Yii::info("ActionCreate validation failed: " . json_encode($model->errors), 'api');
             }
+        } else {
+            Yii::info("ActionCreate load failed", 'api');
         }
 
         return $this->sendError(422, 'Validation error', $model->errors);
+    }
+
+    /**
+     * Approve Product (Simulate Moderation)
+     * GET /api/product/approve?id=...
+     */
+    protected function sendToWarehouse(array $payload)
+    {
+        if ((bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false)) {
+            return;
+        }
+
+        try {
+            $client = new \GuzzleHttp\Client(['timeout' => 5.0]);
+
+            $apiUrl = rtrim(Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com', '/') . '/api/webhooks/marketplace/product-approved';
+
+            $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
+            if (!$secretKey) {
+                return;
+            }
+
+            // We need to send warehouse_product_id if we want Laravel to find it.
+            $payloadData = [
+                'warehouse_product_id' => (int) ($payload['warehouse_product_id'] ?? $payload['id']),
+                'yii_product_id' => (int) ($payload['yii_product_id'] ?? $payload['id']),
+                'comment' => $payload['comment'] ?? '',
+                'moderator_id' => $payload['moderator_id'] ?? 1,
+            ];
+
+            $secret = '123'; // Use same secret as Sklad
+            $signature = hash_hmac('sha256', json_encode($payloadData), $secret);
+
+            $client->post($apiUrl, [
+                'json' => $payloadData,
+                'headers' => [
+                    'X-Marketplace-Signature' => $signature,
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            Yii::error('sendToWarehouse failed: ' . $e->getMessage(), 'api');
+        }
     }
 
     // GET /api/sklad/products/changed
@@ -614,12 +667,6 @@ class ProductController extends Controller
 
         // Price filtering with bounds calculation
         $this->applyPriceFilterWithBounds($query, 'price');
-
-        foreach ($query->all() as $product) {
-            if ($product->status == 2) {
-                $product->delete();
-            }
-        }
 
         $dataProvider = new ActiveDataProvider([
             'query' => $query,
