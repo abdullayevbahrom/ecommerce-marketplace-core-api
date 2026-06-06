@@ -94,12 +94,18 @@ class ProductUpsertHandler
         }
 
         if (!empty($payload['token_key']) && !empty($payload['shop_id'])) {
-            return Product::find()
+            $query = Product::find()
                 ->where([
                     'token_key' => $payload['token_key'],
                     'shop_id' => (int) $payload['shop_id'],
-                ])
-                ->one();
+                ]);
+
+            if (!empty($payload['color_id'])) {
+                $query->andWhere(['color_id' => $this->resolveColorId($payload['color_id'])]);
+            }
+
+            $matches = $query->limit(2)->all();
+            return count($matches) === 1 ? $matches[0] : null;
         }
 
         return null;
