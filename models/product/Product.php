@@ -1928,7 +1928,7 @@ class Product extends \yii\db\ActiveRecord
 
         if ($this->image) {
             $items[] = [
-                'photo' => $this->image->photo,
+                'photo' => $this->image->getPhoto('product', 'original'),
                 'main' => 1,
                 'token_key' => $this->token_key,
             ];
@@ -1936,7 +1936,7 @@ class Product extends \yii\db\ActiveRecord
 
         foreach ($this->gallery ?: [] as $image) {
             $items[] = [
-                'photo' => $image->photo,
+                'photo' => $image->getPhoto('product', 'original'),
                 'main' => 0,
                 'token_key' => $this->token_key,
             ];

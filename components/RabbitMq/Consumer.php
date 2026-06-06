@@ -38,6 +38,15 @@ class Consumer
                         return;
                     }
 
+                    // Ensure DB connection is alive
+                    try {
+                        \Yii::$app->db->createCommand('SELECT 1')->queryScalar();
+                    } catch (\Throwable $e) {
+                        \Yii::info("Reconnecting to DB in consumer: " . $e->getMessage(), __METHOD__);
+                        \Yii::$app->db->close();
+                        \Yii::$app->db->open();
+                    }
+
                     match ($validated['event_type']) {
                         'moderation.created' => (new \app\components\RabbitMq\Handlers\ModerationCreatedHandler())->handle($validated),
                         'product.asl_belgisi.updated' => (new \app\components\RabbitMq\Handlers\AslBelgisiUpdatedHandler())->handle($validated),
