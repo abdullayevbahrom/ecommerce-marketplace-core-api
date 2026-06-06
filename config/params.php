@@ -56,7 +56,6 @@ $config = [
         ],
     ],
     'skladInternalUrl' => getenv('SKLAD_INTERNAL_URL') ?: 'http://api.warehouse.example.com',
-    'skladInternalToken' => getenv('SKLAD_INTERNAL_TOKEN') ?: '',
     'adminEmail' => 'admin@example.com',
     'senderEmail' => 'noreply@example.com',
     'senderName' => 'Example.com mailer',
