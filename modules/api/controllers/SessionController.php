@@ -352,7 +352,11 @@ class SessionController extends Controller
             throw new UnauthorizedHttpException('Invalid X-Api-Token');
         }
 
-        $user = is_numeric($userId) ? User::findOne($userId) : User::findOne(['global_user_id' => $userId]);
+        $user = is_numeric($userId) ? User::findOne((int) $userId) : null;
+
+        if (!$user && User::hasColumn('global_user_id')) {
+            $user = User::findOne(['global_user_id' => (string) $userId]);
+        }
 
         if (!$user) {
             Yii::$app->response->statusCode = 404;
