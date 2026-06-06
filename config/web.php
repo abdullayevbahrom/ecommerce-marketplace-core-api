@@ -33,6 +33,11 @@ $config = [
         ],
     ],
     'components' => [
+        'skladProvisioner' => [
+            'class' => 'app\services\SkladProvisionService',
+            'baseUrl' => $params['skladInternalUrl'],
+            'token' => $params['skladInternalToken'],
+        ],
         'exceptionNotifier' => [
             'class' => 'app\components\TelegramExceptionNotifier',
             'appName' => 'shop',

@@ -832,6 +832,12 @@ class Order extends \yii\db\ActiveRecord
         $dataToSend = [
             'id' => $this->id,
             'yii_order_id' => $this->id,
+            'buyer' => [
+                'yii_user_id' => $this->user_id,
+                'global_user_id' => $this->user->global_user_id ?? null,
+                'name' => $this->user->fio ?? $this->user->username,
+                'phone' => $this->user->phone,
+            ],
             'items' => $items,
         ];
     

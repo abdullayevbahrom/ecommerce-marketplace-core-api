@@ -826,6 +826,11 @@ class MyidService
             }
 
             $transaction->commit();
+            try {
+                Yii::$app->skladProvisioner->ensurePersonalWarehouse($user, 'user');
+            } catch (\Exception $e) {
+                Yii::warning('Sklad provisioning failed for user ' . $user->id . ': ' . $e->getMessage());
+            }
 
             return [
                 'success' => true,

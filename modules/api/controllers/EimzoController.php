@@ -245,6 +245,13 @@ class EimzoController extends Controller
             return $this->sendError(ErrorCodes::ERROR_EIMZO_USER_CREATE_FAILED);
         }
 
+        // Sklad provisioning
+        try {
+            Yii::$app->skladProvisioner->ensurePersonalWarehouse($user, 'user');
+        } catch (\Exception $e) {
+            Yii::warning('Sklad provisioning failed for user ' . $user->id . ': ' . $e->getMessage());
+        }
+
         return $this->sendSuccess([
             'token' => $user->token,
             'user' => [
@@ -553,6 +560,13 @@ class EimzoController extends Controller
         if (!$user->save(false)) {
             Yii::error('Failed to save user from mobile E-IMZO: ' . json_encode($user->errors), 'eimzo');
             return $this->sendError(ErrorCodes::ERROR_EIMZO_USER_CREATE_FAILED);
+        }
+
+        // Sklad provisioning
+        try {
+            Yii::$app->skladProvisioner->ensurePersonalWarehouse($user, 'user');
+        } catch (\Exception $e) {
+            Yii::warning('Sklad provisioning failed for user ' . $user->id . ': ' . $e->getMessage());
         }
 
         return $this->sendSuccess([

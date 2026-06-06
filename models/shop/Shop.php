@@ -163,6 +163,13 @@ class Shop extends \yii\db\ActiveRecord
             throw new DbException('Shop user creation failed');
         }
 
+        // Sklad provisioning
+        try {
+            Yii::$app->skladProvisioner->ensurePersonalWarehouse($user, 'merchant');
+        } catch (\Exception $e) {
+            Yii::warning('Sklad provisioning failed for shop user ' . $user->id . ': ' . $e->getMessage());
+        }
+
         return $user;
     }
 
@@ -201,6 +208,15 @@ class Shop extends \yii\db\ActiveRecord
             $user = $this->saveUser();
             if (!$user) {
                 throw new DbException('Shop user creation failed');
+ 
+        }
+
+        // Sklad provisioning
+        try {
+            Yii::$app->skladProvisioner->ensurePersonalWarehouse($user, 'merchant');
+        } catch (\Exception $e) {
+            Yii::warning('Sklad provisioning failed for shop user ' . $user->id . ': ' . $e->getMessage());
+        }
             }
 
             $this->user_id = $user->id;

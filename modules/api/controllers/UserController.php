@@ -893,6 +893,12 @@ class UserController extends Controller
             $user->token = $user->generateToken();
 
             if ($user->save(false)) {
+                // Sklad provisioning
+                try {
+                    Yii::$app->skladProvisioner->ensurePersonalWarehouse($user, 'user');
+                } catch (\Exception $e) {
+                    Yii::warning('Sklad provisioning failed for user ' . $user->id . ': ' . $e->getMessage());
+                }
                 return ['data' => User::find()->with('image')->where(['id' => $user->id])->one()];
             } else {
                 Yii::error('User save failed: ' . json_encode($user->getErrors()), __METHOD__);
@@ -1173,6 +1179,12 @@ class UserController extends Controller
             }
 
             if ($user->save(false)) {
+                // Sklad provisioning
+                try {
+                    Yii::$app->skladProvisioner->ensurePersonalWarehouse($user, 'user');
+                } catch (\Exception $e) {
+                    Yii::warning('Sklad provisioning failed for user ' . $user->id . ': ' . $e->getMessage());
+                }
                 // Return user object directly in data field (matching standard API format)
                 return ['data' => User::find()->with('image')->where(['id' => $user->id])->one()];
             } else {
@@ -1247,6 +1259,12 @@ class UserController extends Controller
             $user->token = $user->generateToken();
 
             if ($user->save(false)) {
+                // Sklad provisioning
+                try {
+                    Yii::$app->skladProvisioner->ensurePersonalWarehouse($user, 'user');
+                } catch (\Exception $e) {
+                    Yii::warning('Sklad provisioning failed for user ' . $user->id . ': ' . $e->getMessage());
+                }
                 return ['data' => User::find()->with('image')->where(['id' => $user->id])->one(), 'didox_auth_completed' => $user->isDidoxAuthCompleted()];
             } else {
                 throw new HttpException(500, 'Failed to update user data');
