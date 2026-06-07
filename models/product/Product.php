@@ -405,6 +405,9 @@ class Product extends \yii\db\ActiveRecord
             $product->shop_id = $shop->id;
         }
 
+        $previousSuppressSyncEvents = $product->suppressSyncEvents;
+        $product->suppressSyncEvents = true;
+
         if ($product->save()) {
             $admin = User::findOne(['role' => User::ROLE_ADMIN]);
             /** @var User $user */
@@ -607,8 +610,14 @@ class Product extends \yii\db\ActiveRecord
                 $this->copyImagesFromProduct($firstProductWithImages, $product->id);
             }
 
+            $product->suppressSyncEvents = $previousSuppressSyncEvents;
+            $product->refresh();
+            $product->publishSyncEvent('product.created');
+
             return $product;
         }
+
+        $product->suppressSyncEvents = $previousSuppressSyncEvents;
 
         return false;
     }
@@ -714,6 +723,9 @@ class Product extends \yii\db\ActiveRecord
         $this->name_trans_ru = $this->transliterate($this->name_ru, true);
         $this->name_trans_en = $this->transliterate($this->name_ru);
 
+        $previousSuppressSyncEvents = $this->suppressSyncEvents;
+        $this->suppressSyncEvents = true;
+
         if ($this->save()) {
             $admin = User::findOne(['role' => User::ROLE_ADMIN]);
             /** @var User $user */
@@ -788,8 +800,14 @@ class Product extends \yii\db\ActiveRecord
                 $image->uploadPhoto($this->id, 'product', 2);
             }
 
+            $this->suppressSyncEvents = $previousSuppressSyncEvents;
+            $this->refresh();
+            $this->publishSyncEvent('product.updated');
+
             return $this;
         }
+
+        $this->suppressSyncEvents = $previousSuppressSyncEvents;
 
         return false;
     }
@@ -1926,23 +1944,27 @@ class Product extends \yii\db\ActiveRecord
     {
         $items = [];
 
-        if ($this->image) {
-            $items[] = [
-                'photo' => $this->image->getPhoto('product', 'original'),
-                'main' => 1,
-                'token_key' => $this->token_key,
-            ];
-        }
+        $images = Images::find()
+            ->where(['object_id' => $this->id, 'type' => 'product'])
+            ->orderBy(['main' => SORT_ASC, 'sort' => SORT_ASC, 'id' => SORT_ASC])
+            ->all();
 
-        foreach ($this->gallery ?: [] as $image) {
+        foreach ($images as $image) {
             $items[] = [
                 'photo' => $image->getPhoto('product', 'original'),
-                'main' => 0,
+                'main' => (int) $image->main === 1 ? 1 : 0,
                 'token_key' => $this->token_key,
             ];
         }
 
         return $items;
+    }
+
+    public function publishSyncEvent(string $eventType): void
+    {
+        if ($this->shouldPublishSyncEvent()) {
+            $this->sendEvent($eventType);
+        }
     }
 
     protected function sendEvent(string $eventType): void

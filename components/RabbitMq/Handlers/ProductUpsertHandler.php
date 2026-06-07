@@ -216,6 +216,8 @@ class ProductUpsertHandler
             $existingImage->removeImageSize();
         }
 
+        Images::deleteAll(['object_id' => $product->id, 'type' => 'product']);
+
         foreach ($images as $index => $image) {
             if (empty($image['photo'])) {
                 continue;
