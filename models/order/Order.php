@@ -446,105 +446,181 @@ class Order extends \yii\db\ActiveRecord
         $senderPhone = self::formatPhoneForBts($shop->contact_phone);
         $receiverPhone = self::formatPhoneForBts($orderInfo->phone ?: $user->phone);
 
-        if ($senderPhone === null) {
-            $errorMessage = 'BTS integration failed: sender phone is invalid. Required format: +998XXXXXXXXX';
+        $fail = function (string $message, array $context = []) use ($orderProducts) {
             foreach ($orderProducts as $orderProduct) {
-                $orderProduct->bts_status_info = $errorMessage;
+                $orderProduct->bts_id = null;
+                $orderProduct->bts_status = null;
+                $orderProduct->bts_status_info = $message;
+                $orderProduct->bts_price = null;
                 $orderProduct->save(false);
             }
-            Yii::warning([
-                'message' => 'BTS sender phone invalid',
+
+            Yii::error($context + ['message' => $message], __METHOD__);
+
+            return false;
+        };
+
+        if ($senderPhone === null) {
+            return $fail('BTS integration failed: sender phone is invalid. Required format: +998XXXXXXXXX', [
                 'shop_id' => $shop->id ?? null,
                 'stock_id' => $stock->id ?? null,
                 'raw_sender_phone' => $shop->contact_phone ?? null,
-            ], __METHOD__);
-            return false;
+            ]);
         }
 
         if ($receiverPhone === null) {
-            $errorMessage = 'BTS integration failed: receiver phone is invalid. Required format: +998XXXXXXXXX';
-            foreach ($orderProducts as $orderProduct) {
-                $orderProduct->bts_status_info = $errorMessage;
-                $orderProduct->save(false);
-            }
-            Yii::warning([
-                'message' => 'BTS receiver phone invalid',
+            return $fail('BTS integration failed: receiver phone is invalid. Required format: +998XXXXXXXXX', [
                 'user_id' => $user->id ?? null,
                 'order_id' => $this->id ?? null,
                 'raw_receiver_phone' => $orderInfo->phone ?: $user->phone,
-            ], __METHOD__);
-            return false;
+            ]);
         }
 
-        // BTS API v1 uses nested objects: sender, receiver, cargo
+        $senderCityCode = $stock->bts_city_id ?? null;
+        $receiverCityCode = $orderInfo->bts_city_id ?? $user->bts_city_id ?? null;
+
+        if (!$senderCityCode || !$receiverCityCode) {
+            return $fail('BTS integration failed: sender or receiver BTS city is empty', [
+                'stock_id' => $stock->id ?? null,
+                'sender_city_code' => $senderCityCode,
+                'receiver_city_code' => $receiverCityCode,
+            ]);
+        }
+
+        $senderAddress = trim((string) ($stock->address ?? ''));
+        $receiverAddress = trim((string) ($orderInfo->address ?: $user->address));
+
+        if ($senderAddress === '' || $receiverAddress === '') {
+            return $fail('BTS integration failed: sender or receiver address is empty', [
+                'stock_id' => $stock->id ?? null,
+                'sender_address' => $senderAddress,
+                'receiver_address' => $receiverAddress,
+            ]);
+        }
+
+        $weightKg = round((float) $totalWeight / 1000, 3);
+        $volumeM3 = round((float) $totalVolume / 1000000, 4);
+
+        $weightKg = max(0.1, $weightKg);
+        $volumeM3 = max(0.001, $volumeM3);
+
         $data = [
-            "pickup_type" => "courier", // courier=вызов курьера, self=самовывоз в офис BTS
-            "dropoff_type" => "courier", // courier=курьер доставит, branch=получатель забирает с офиса BTS
-            "sender" => [
-                "name" => $shop->name_ru,
-                "phone" => $senderPhone,
-                "address" => $stock->address,
-                "city_code" => (string)$stock->bts_city_id, // BTS city code (e.g. "0101")
+            'pickup_type' => 'courier',
+            'dropoff_type' => 'courier',
+
+            'sender' => [
+                'name' => trim((string) ($shop->name_ru ?: $shop->name ?: 'Sender')),
+                'phone' => $senderPhone,
+                'address' => $senderAddress,
+                'city_code' => (string) $senderCityCode,
             ],
-            "receiver" => [
-                "name" => trim($orderInfo->lastname . ' ' . $orderInfo->name),
-                "phone" => $receiverPhone,
-                "address" => $orderInfo->address ?? $user->address,
-                "city_code" => (string)($orderInfo->bts_city_id ?? $user->bts_city_id), // BTS city code
+
+            'receiver' => [
+                'name' => trim($orderInfo->lastname . ' ' . $orderInfo->name) ?: 'Receiver',
+                'phone' => $receiverPhone,
+                'address' => $receiverAddress,
+                'city_code' => (string) $receiverCityCode,
             ],
-            "cargo" => [
-                "weight" => max(1, $totalWeight / 1000), // Convert to kg
-                "volume" => max(1, $totalVolume / 1000000), // Convert to cubic meters
-                "piece" => count($orderProducts), // количество мест (number of products)
-                "packageId" => 4, // вид упаковки
-                "postTypeId" => 22, // тип доставки
+
+            'cargo' => [
+                'weight' => $weightKg,
+                'volume' => $volumeM3,
+                'piece' => max(1, count($orderProducts)),
+                'packageId' => 4,
+                'postTypeId' => 22,
             ],
-            "takePhoto" => 1, // 1 - требуется фото получателя
-            "is_test" => 1, // 1 - тестовый заказ, 0 - реальный заказ
+
+            'takePhoto' => 1,
+            'is_test' => 1,
         ];
 
         $bts = new BTS();
 
+        $calcResponse = $bts->calculateOrder($data);
+
+        if (empty($calcResponse['success'])) {
+            return $fail('BTS calculate failed: ' . self::getBtsErrorMessage($calcResponse), [
+                'order_id' => $this->id ?? null,
+                'request' => $data,
+                'response' => $calcResponse,
+            ]);
+        }
+
         $response = $bts->createOrder($data);
 
-        if ($response['success'] && isset($response['data']['orderId'])) {
+        if (!empty($response['success']) && isset($response['data']['orderId'])) {
             $btsData = $response['data'];
+
             $btsId = $btsData['orderId'];
-            $btsStatus = $btsData['status']['code'] ?? null;
-            $btsStatusInfo = $btsData['status']['info'] ?? null;
-            $btsPrice = $btsData['cost'] ?? null;
+            $btsStatus = $btsData['status']['code'] ?? $btsData['status']['id'] ?? null;
+            $btsStatusInfo = $btsData['status']['info'] ?? $btsData['status']['name'] ?? null;
 
-            // Distribute BTS cost among order products (evenly)
-            $pricePerProduct = $btsPrice ? $btsPrice / count($orderProducts) : 0;
+            $btsPrice = $btsData['cost']
+                ?? $calcResponse['data']['cost']
+                ?? $calcResponse['data']['price']
+                ?? 0;
 
-            // Update all order products in this group with BTS information
+            $pricePerProduct = count($orderProducts) > 0
+                ? round(((float) $btsPrice) / count($orderProducts), 2)
+                : 0;
+
             foreach ($orderProducts as $orderProduct) {
                 $orderProduct->bts_id = $btsId;
                 $orderProduct->bts_status = $btsStatus;
                 $orderProduct->bts_status_info = $btsStatusInfo;
                 $orderProduct->bts_price = $pricePerProduct;
-                $orderProduct->delivery_cost = $orderProduct->bts_price;
-                $orderProduct->price = $orderProduct->price + $orderProduct->bts_price;
+                $orderProduct->delivery_cost = $pricePerProduct;
+
+                // Diqqat: qayta chaqirilsa price yana oshib ketmasligi uchun.
+                // Agar eski bts_price bo‘lsa, avval ayirib tashlaymiz.
+                $oldBtsPrice = (float) ($orderProduct->oldAttributes['bts_price'] ?? 0);
+                $orderProduct->price = ((float) $orderProduct->price - $oldBtsPrice) + $pricePerProduct;
+
                 $orderProduct->save(false);
             }
-        } else {
-            // Log BTS error but don't fail the order creation
-            error_log("BTS order creation failed: " . ($response['error'] ?? 'Unknown error'));
-            Yii::error('BTS order creation failed: ' . ($response['error'] ?? 'Unknown error'), __METHOD__);
-            
-            $errorMessage = 'BTS integration failed: ' . ($response['error'] ?? 'Unknown error');
-            
-            // Update order products with error info
-            foreach ($orderProducts as $orderProduct) {
-                $orderProduct->bts_id = null;
-                $orderProduct->bts_status = null;
-                $orderProduct->bts_status_info = $errorMessage;
-                $orderProduct->bts_price = null;
-                $orderProduct->save(false);
+
+            return true;
+        }
+
+        return $fail('BTS order creation failed: ' . self::getBtsErrorMessage($response), [
+            'order_id' => $this->id ?? null,
+            'request' => $data,
+            'calculate_response' => $calcResponse,
+            'create_response' => $response,
+        ]);
+    }
+
+    protected static function getBtsErrorMessage(array $response): string
+    {
+        if (!empty($response['error']) && is_string($response['error'])) {
+            return $response['error'];
+        }
+
+        if (!empty($response['items']) && is_array($response['items'])) {
+            $messages = [];
+
+            foreach ($response['items'] as $item) {
+                if (!empty($item['field']) && !empty($item['message'])) {
+                    $messages[] = $item['field'] . ': ' . $item['message'];
+                } elseif (!empty($item['message'])) {
+                    $messages[] = $item['message'];
+                }
+            }
+
+            if ($messages) {
+                return implode('; ', $messages);
             }
         }
-        
-        return true;
+
+        if (!empty($response['fields']) && is_array($response['fields'])) {
+            return json_encode($response['fields'], JSON_UNESCAPED_UNICODE);
+        }
+
+        if (!empty($response['raw'])) {
+            return json_encode($response['raw'], JSON_UNESCAPED_UNICODE);
+        }
+
+        return json_encode($response, JSON_UNESCAPED_UNICODE);
     }
 
     public function fields() {

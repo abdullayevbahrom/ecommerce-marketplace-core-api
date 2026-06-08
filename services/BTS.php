@@ -2506,7 +2506,7 @@ class BTS
             return $this->formatError('cURL Error: ' . $error, 0);
         }
 
-        $decodedResponse = json_decode($response, true);
+        $decodedResponse = json_decode($response, true, JSON_UNESCAPED_UNICODE);
         
         // Handle 401 Unauthorized - clear stale tokens, re-authenticate and retry once
         if ($httpCode === 401 && $useAuth && !$isRetry) {

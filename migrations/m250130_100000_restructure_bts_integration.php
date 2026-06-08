@@ -22,7 +22,7 @@ class m250130_100000_restructure_bts_integration extends Migration
         $this->addColumn('order_product', 'bts_id', $this->string()->null()->comment('BTS tracking ID for this product group'));
         $this->addColumn('order_product', 'bts_status', $this->string()->null()->comment('BTS status for this product group'));
         $this->addColumn('order_product', 'bts_status_info', $this->text()->null()->comment('BTS status information for this product group'));
-        $this->addColumn('order_product', 'bts_price', $this->decimal(10,2)->null()->comment('BTS delivery cost for this product group'));
+        $this->addColumn('order_product', 'bts_price', $this->decimal(30,2)->null()->comment('BTS delivery cost for this product group'));
         $this->addColumn('order_product', 'address', $this->text()->null()->comment('Custom delivery address for this product (nullable)'));
         $this->addColumn('order_product', 'stock_id', $this->integer()->null()->comment('Stock ID where this product is located'));
         
