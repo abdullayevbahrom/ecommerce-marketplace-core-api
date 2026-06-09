@@ -443,6 +443,7 @@ class SessionController extends Controller
             return [
                 'id' => (int) $order->id,
                 'price' => (float) $order->price,
+                'delivery_cost' => (float) $order->delivery_cost,
                 'amount' => (float) $order->amount,
                 'status' => (int) $order->status,
                 'status_payment' => (int) $order->status_payment,
