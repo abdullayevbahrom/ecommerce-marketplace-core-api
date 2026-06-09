@@ -1230,7 +1230,7 @@ class UserController extends Controller
 
             if (!$user) {
                 Yii::$app->response->statusCode = 404;
-                return ['errors' => ['tax_id' => 'Пользователь не найден. Сначала войдите через ЭЦП.']];
+                return ['didox_auth_completed' => false, 'message' => 'Пользователь не найден. Сначала войдите через ЭЦП.'];
             }
 
             $didoxService = new DidoxService();
@@ -1245,7 +1245,7 @@ class UserController extends Controller
 
             if ($result['success'] === false || $result['token'] === null) {
                 Yii::$app->response->statusCode = \is_array($result['data']) ? 422 : 400;
-                return ['didox_auth_completed' => $result['success'], 'erorr' => $result['data']];
+                return ['didox_auth_completed' => $result['success'], 'error' => $result['data']];
             }
 
             if (!empty($incomingGlobalUserId) && User::hasColumn('global_user_id')) {
