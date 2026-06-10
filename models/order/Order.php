@@ -504,31 +504,55 @@ class Order extends \yii\db\ActiveRecord
         $weightKg = max(0.1, $weightKg);
         $volumeM3 = max(0.001, $volumeM3);
 
+        // $data = [
+        //     'pickup_type' => 'courier',
+        //     'dropoff_type' => 'courier',
+
+        //     'sender' => [
+        //         'name' => trim((string) ($shop->name_ru ?: $shop->name ?: 'Sender')),
+        //         'phone' => $senderPhone,
+        //         'address' => $senderAddress,
+        //         'city_code' => (string) $senderCityCode,
+        //     ],
+
+        //     'receiver' => [
+        //         'name' => trim($orderInfo->lastname . ' ' . $orderInfo->name) ?: 'Receiver',
+        //         'phone' => $receiverPhone,
+        //         'address' => $receiverAddress,
+        //         'city_code' => (string) $receiverCityCode,
+        //     ],
+
+        //     'cargo' => [
+        //         'weight' => $weightKg,
+        //         'volume' => $volumeM3,
+        //         'piece' => max(1, count($orderProducts)),
+        //         'packageId' => 4,
+        //         'postTypeId' => 22,
+        //     ],
+
+        //     'takePhoto' => 1,
+        //     'is_test' => 1,
+        // ];
+
         $data = [
             'pickup_type' => 'courier',
             'dropoff_type' => 'courier',
 
-            'sender' => [
-                'name' => trim((string) ($shop->name_ru ?: $shop->name ?: 'Sender')),
-                'phone' => $senderPhone,
-                'address' => $senderAddress,
-                'city_code' => (string) $senderCityCode,
-            ],
+            'senderName' => trim((string) ($shop->name_ru ?: $shop->name ?: 'Sender')),
+            'senderPhone' => $senderPhone,
+            'senderAddress' => $senderAddress,
+            'senderCityCode' => (string) $senderCityCode,
 
-            'receiver' => [
-                'name' => trim($orderInfo->lastname . ' ' . $orderInfo->name) ?: 'Receiver',
-                'phone' => $receiverPhone,
-                'address' => $receiverAddress,
-                'city_code' => (string) $receiverCityCode,
-            ],
+            'receiverName' => trim($orderInfo->lastname . ' ' . $orderInfo->name) ?: 'Receiver',
+            'receiverPhone' => $receiverPhone,
+            'receiverAddress' => $receiverAddress,
+            'receiverCityCode' => (string) $receiverCityCode,
 
-            'cargo' => [
-                'weight' => $weightKg,
-                'volume' => $volumeM3,
-                'piece' => max(1, count($orderProducts)),
-                'packageId' => 4,
-                'postTypeId' => 22,
-            ],
+            'weight' => $weightKg,
+            'volume' => $volumeM3,
+            'piece' => max(1, count($orderProducts)),
+            'packageId' => 4,
+            'postTypeId' => 22,
 
             'takePhoto' => 1,
             'is_test' => 1,
