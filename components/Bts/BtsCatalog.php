@@ -596,7 +596,7 @@ final readonly class BtsCatalog
                 ]
             ]
         ],
-        01 => [
+        '01' => [
             'code' => 01,
             'name' => [
                 'uz' => 'Tashkent shaxri',
@@ -604,7 +604,7 @@ final readonly class BtsCatalog
                 'en' => 'Tashkent city'
             ],
             'cities' => [
-                0106 => [
+                '0106' => [
                     "region_code" => "01",
                     "code" => "0106",
                     "name" => [
@@ -613,7 +613,7 @@ final readonly class BtsCatalog
                         "en" => "Olmazor district"
                     ]
                 ],
-                0105 => [
+                '0105' => [
                     "region_code" => "01",
                     "code" => "0105",
                     "name" => [
@@ -622,7 +622,7 @@ final readonly class BtsCatalog
                         "en" => "Sergeli district"
                     ]
                 ],
-                0112 => [
+                '0112' => [
                     "region_code" => "01",
                     "code" => "0112",
                     "name" => [
@@ -631,7 +631,7 @@ final readonly class BtsCatalog
                         "en" => "Yangihayot district"
                     ]
                 ],
-                0101 => [
+                '0101' => [
                     "region_code" => "01",
                     "code" => "0101",
                     "name" => [
@@ -640,7 +640,7 @@ final readonly class BtsCatalog
                         "en" => "Yakkasaroy district"
                     ]
                 ],
-                0102 => [
+                '0102' => [
                     "region_code" => "01",
                     "code" => "0102",
                     "name" => [
@@ -649,7 +649,7 @@ final readonly class BtsCatalog
                         "en" => "Bektemir district"
                     ]
                 ],
-                0103 => [
+                '0103' => [
                     "region_code" => "01",
                     "code" => "0103",
                     "name" => [
@@ -658,7 +658,7 @@ final readonly class BtsCatalog
                         "en" => "Mirobod district"
                     ]
                 ],
-                0109 => [
+                '0109' => [
                     "region_code" => "01",
                     "code" => "0109",
                     "name" => [
@@ -667,7 +667,7 @@ final readonly class BtsCatalog
                         "en" => "Chilonzor district"
                     ]
                 ],
-                0110 => [
+                '0110' => [
                     "region_code" => "01",
                     "code" => "0110",
                     "name" => [
@@ -676,7 +676,7 @@ final readonly class BtsCatalog
                         "en" => "Shayxontohur district"
                     ]
                 ],
-                0111 => [
+                '0111' => [
                     "region_code" => "01",
                     "code" => "0111",
                     "name" => [
@@ -685,7 +685,7 @@ final readonly class BtsCatalog
                         "en" => "Yunusobod district"
                     ]
                 ],
-                0108 => [
+                '0108' => [
                     "region_code" => "01",
                     "code" => "0108",
                     "name" => [
@@ -694,7 +694,7 @@ final readonly class BtsCatalog
                         "en" => "Yashnobod district"
                     ]
                 ],
-                0104 => [
+                '0104' => [
                     "region_code" => "01",
                     "code" => "0104",
                     "name" => [
@@ -703,7 +703,7 @@ final readonly class BtsCatalog
                         "en" => "M.Ulugbek district"
                     ]
                 ],
-                0107 => [
+                '0107' => [
                     "region_code" => "01",
                     "code" => "0107",
                     "name" => [
@@ -2534,8 +2534,8 @@ final readonly class BtsCatalog
                 ]
             ]
         ],
-        01 => [
-            0106 => [
+        '01' => [
+            '0106' => [
                 "region_code" => "01",
                 "code" => "0106",
                 "name" => [
@@ -2544,7 +2544,7 @@ final readonly class BtsCatalog
                     "en" => "Olmazor district"
                 ]
             ],
-            0105 => [
+            '0105' => [
                 "region_code" => "01",
                 "code" => "0105",
                 "name" => [
@@ -2553,7 +2553,7 @@ final readonly class BtsCatalog
                     "en" => "Sergeli district"
                 ]
             ],
-            0112 => [
+            '0112' => [
                 "region_code" => "01",
                 "code" => "0112",
                 "name" => [
@@ -2562,7 +2562,7 @@ final readonly class BtsCatalog
                     "en" => "Yangihayot district"
                 ]
             ],
-            0101 => [
+            '0101' => [
                 "region_code" => "01",
                 "code" => "0101",
                 "name" => [
@@ -2571,7 +2571,7 @@ final readonly class BtsCatalog
                     "en" => "Yakkasaroy district"
                 ]
             ],
-            0102 => [
+            '0102' => [
                 "region_code" => "01",
                 "code" => "0102",
                 "name" => [
@@ -2580,7 +2580,7 @@ final readonly class BtsCatalog
                     "en" => "Bektemir district"
                 ]
             ],
-            0103 => [
+            '0103' => [
                 "region_code" => "01",
                 "code" => "0103",
                 "name" => [
@@ -2589,7 +2589,7 @@ final readonly class BtsCatalog
                     "en" => "Mirobod district"
                 ]
             ],
-            0109 => [
+            '0109' => [
                 "region_code" => "01",
                 "code" => "0109",
                 "name" => [
@@ -2598,7 +2598,7 @@ final readonly class BtsCatalog
                     "en" => "Chilonzor district"
                 ]
             ],
-            0110 => [
+            '0110' => [
                 "region_code" => "01",
                 "code" => "0110",
                 "name" => [
@@ -2607,7 +2607,7 @@ final readonly class BtsCatalog
                     "en" => "Shayxontohur district"
                 ]
             ],
-            0111 => [
+            '0111' => [
                 "region_code" => "01",
                 "code" => "0111",
                 "name" => [
@@ -2616,7 +2616,7 @@ final readonly class BtsCatalog
                     "en" => "Yunusobod district"
                 ]
             ],
-            0108 => [
+            '0108' => [
                 "region_code" => "01",
                 "code" => "0108",
                 "name" => [
@@ -2625,7 +2625,7 @@ final readonly class BtsCatalog
                     "en" => "Yashnobod district"
                 ]
             ],
-            0104 => [
+            '0104' => [
                 "region_code" => "01",
                 "code" => "0104",
                 "name" => [
@@ -2634,7 +2634,7 @@ final readonly class BtsCatalog
                     "en" => "M.Ulugbek district"
                 ]
             ],
-            0107 => [
+            '0107' => [
                 "region_code" => "01",
                 "code" => "0107",
                 "name" => [
