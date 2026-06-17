@@ -190,7 +190,7 @@ class BtsComponent extends Component
         return $regions;
     }
 
-    public static function getRegionByCode(int $regionCode): ?array
+    public static function getRegionByCode(string $regionCode): ?array
     {
         $region = null;
 
@@ -207,12 +207,12 @@ class BtsComponent extends Component
         return $region;
     }
 
-    public static function existsRegionByCode(int $regionCode): bool
+    public static function existsRegionByCode(string $regionCode): bool
     {
         return \array_key_exists($regionCode, BtsCatalog::REGIONS);
     }
 
-    public static function getRegionName(int $regionCode, string $lang = 'ru'): ?string
+    public static function getRegionName(string $regionCode, string $lang = 'ru'): ?string
     {
         $regionName = null;
 
@@ -225,7 +225,7 @@ class BtsComponent extends Component
         return $regionName;
     }
 
-    public static function getCities(int $regionCode, string $lang = 'ru'): array
+    public static function getCities(string $regionCode, string $lang = 'ru'): array
     {
         $lang = self::validateLang($lang);
         $cities = [];
@@ -244,12 +244,12 @@ class BtsComponent extends Component
         return $cities;
     }
 
-    public static function existsCityByRegionCodeAndCityCode(int $regionCode, int $cityCode): bool
+    public static function existsCityByRegionCodeAndCityCode(string $regionCode, string $cityCode): bool
     {
         return \array_key_exists($regionCode, BtsCatalog::CITIES) && \array_key_exists($cityCode, BtsCatalog::CITIES[$regionCode]);
     }
 
-    public static function getCityByCode(int $regionCode, int $cityCode, string $lang = 'ru'): ?array
+    public static function getCityByCode(string $regionCode, string $cityCode, string $lang = 'ru'): ?array
     {
         $city = null;
 
@@ -265,7 +265,7 @@ class BtsComponent extends Component
         return $city;
     }
 
-    public static function getCityName(int $regionCode, int $cityCode, string $lang = 'ru'): ?string
+    public static function getCityName(string $regionCode, string $cityCode, string $lang = 'ru'): ?string
     {
         $cityName = null;
 
@@ -278,7 +278,7 @@ class BtsComponent extends Component
         return $cityName;
     }
 
-    public static function searchCities(int $regionCode, string $searchTerm, string $lang = 'ru'): array
+    public static function searchCities(string $regionCode, string $searchTerm, string $lang = 'ru'): array
     {
         $results = [];
         $searchTerm = mb_strtolower(trim($searchTerm));
@@ -335,7 +335,7 @@ class BtsComponent extends Component
         return $results;
     }
 
-    public static function getAddressInfo(int $cityCode, $lang = 'ru'): ?array
+    public static function getAddressInfo(string $cityCode, $lang = 'ru'): ?array
     {
         $lang = self::validateLang($lang);
 
