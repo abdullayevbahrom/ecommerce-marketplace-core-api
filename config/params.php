@@ -67,15 +67,15 @@ $config = [
 
     // BTS delivery service integration settings
     'bts_token' => 'sample_logistics_token', // Your current BTS token
-    'bts_username' => '8198', // Add your BTS username for token generation
-    'bts_password' => '4?Fp&e-Icz', // Add your BTS password for token generation  
+    'bts_username' => getenv('BTS_LOGIN') ?: null, // Add your BTS username for token generation
+    'bts_password' => getenv('BTS_PASSWORD') ?: null, // Add your BTS password for token generation  
     'bts_inn' => '123456789', // Add your company INN for BTS authentication
 
     'bts' => [
         'url' => getenv('BTS_URL') ?: 'https://apitest.logistics.example.com:28345',
-        'version' => getenv('BTS_URL') ?: 'v1',
-        'login' => getenv('BTS_LOGIN') ?: '8198',
-        'password' => getenv('BTS_PASSWORD') ?: '4?Fp&e-Icz',
+        'version' => getenv('BTS_VERSION') ?: 'v1',
+        'login' => getenv('BTS_LOGIN') ?: null,
+        'password' => getenv('BTS_PASSWORD') ?: null,
     ],
     // MinIO settings
     'minio' => [

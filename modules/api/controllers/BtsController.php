@@ -6,6 +6,7 @@ use yii\web\HttpException;
 use yii\rest\Controller;
 use yii\filters\auth\HttpBearerAuth;
 use yii\services\BTS;
+use app\components\Bts\BtsCatalog;
 use app\models\product\Product;
 
 class BtsController extends Controller {
@@ -282,6 +283,13 @@ class BtsController extends Controller {
             Yii::$app->response->statusCode = 500;
             return ['errors' => ['general' => ['Ошибка при получении списка регионов']]];
         }
+    }
+
+    /**
+     * GET /api/bts/regions-new
+     */
+    public function actionRegionsNew() {
+        return ['data' => BtsCatalog::REGIONS];
     }
 
     /**
