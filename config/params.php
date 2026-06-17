@@ -71,6 +71,12 @@ $config = [
     'bts_password' => '4?Fp&e-Icz', // Add your BTS password for token generation  
     'bts_inn' => '123456789', // Add your company INN for BTS authentication
 
+    'bts' => [
+        'url' => getenv('BTS_URL') ?: 'https://apitest.logistics.example.com:28345',
+        'version' => getenv('BTS_URL') ?: 'v1',
+        'login' => getenv('BTS_LOGIN') ?: '8198',
+        'password' => getenv('BTS_PASSWORD') ?: '4?Fp&e-Icz',
+    ],
     // MinIO settings
     'minio' => [
         'user' => $minioUser,

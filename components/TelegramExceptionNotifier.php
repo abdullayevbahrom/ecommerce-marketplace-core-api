@@ -5,8 +5,6 @@ namespace app\components;
 use Throwable;
 use Yii;
 use yii\base\Component;
-use yii\base\UserException;
-use yii\web\HttpException;
 use yii\web\NotFoundHttpException;
 
 class TelegramExceptionNotifier extends Component

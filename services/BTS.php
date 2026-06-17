@@ -1982,30 +1982,7 @@ class BTS
         return $result['success'];
     }
     
-    /**
-     * Get current access token (for external use)
-     * 
-     * @return string|null
-     */
-    public function getAccessToken()
-    {
-        $this->ensureAuthenticated();
-        return $this->accessToken;
-    }
-    
-    /**
-     * Check if token is expired
-     * 
-     * @return bool
-     */
-    public function isTokenExpired()
-    {
-        if (!$this->tokenExpiresAt) {
-            return true;
-        }
-        return time() >= $this->tokenExpiresAt;
-    }
-
+  
     /**
      * Get list of available regions
      * @param string $language Language code (ru, uz, en)
@@ -2114,25 +2091,6 @@ class BTS
     }
 
     /**
-     * Get city by name (case-insensitive search)
-     * @param string $cityName
-     * @param string $language Language code (ru, uz, en)
-     * @return array|null
-     */
-    public static function findCityByName($cityName, $language = 'ru')
-    {
-        $key = 'name_' . $language;
-        
-        foreach (self::CITIES as $id => $city) {
-            $name = isset($city[$key]) ? $city[$key] : $city['name_ru'];
-            if (strcasecmp($name, $cityName) === 0) {
-                return ['id' => $id] + $city;
-            }
-        }
-        return null;
-    }
-
-    /**
      * Search cities by partial name match
      * @param string $searchTerm
      * @param string $language Language code (ru, uz, en)
@@ -2212,21 +2170,6 @@ class BTS
     }
 
     /**
-     * Get BTS statuses with multi-language support
-     * @param string $language Language code (ru, uz, en)
-     * @return array
-     */
-    public static function getBtsStatuses($language = 'ru')
-    {
-        $statuses = [];
-        foreach (self::BTS_STATUSES as $id => $status) {
-            $key = 'name_' . $language;
-            $statuses[$id] = isset($status[$key]) ? $status[$key] : $status['name_ru'];
-        }
-        return $statuses;
-    }
-
-    /**
      * Get BTS status label by ID and language
      * @param int $statusId
      * @param string $language Language code (ru, uz, en)
@@ -2241,46 +2184,6 @@ class BTS
         $key = 'name_' . $language;
         $status = self::BTS_STATUSES[$statusId];
         return isset($status[$key]) ? $status[$key] : $status['name_ru'];
-    }
-
-    /**
-     * Get detailed BTS statuses with all language variants
-     * @return array
-     */
-    public static function getBtsStatusesDetailed()
-    {
-        return self::BTS_STATUSES;
-    }
-
-    /**
-     * Check if BTS status ID is valid
-     * @param int $statusId
-     * @return bool
-     */
-    public static function isValidBtsStatus($statusId)
-    {
-        return isset(self::BTS_STATUSES[$statusId]);
-    }
-
-    /**
-     * Get API Token
-     * @return array
-     */
-    public function getApiToken()
-    {
-        $data = [
-            'username' => $this->username,
-            'password' => $this->password,
-            'inn' => $this->inn
-        ];
-
-        $response = $this->makeRequest('POST', 'auth/get-token', $data, false);
-        
-        if ($response['success'] && isset($response['data']['token'])) {
-            $this->token = $response['data']['token'];
-        }
-        
-        return $response;
     }
 
     /**
@@ -2331,7 +2234,7 @@ class BTS
      */
     public function calculateOrder($data)
     {
-        return $this->makeRequest('POST', 'order-calculate', $data);
+        return $this->makeRequest('POST', 'order-calculate/index', $data);
     }
 
     /**
@@ -2419,32 +2322,6 @@ class BTS
     public function getOrderHistory($btsOrderId)
     {
         return $this->makeRequest('GET', 'order/history', ['id' => $btsOrderId]);
-    }
-
-    /**
-     * Get list of available statuses
-     * @return array
-     */
-    public function getStatusList()
-    {
-        return $this->makeRequest('GET', 'status/list');
-    }
-
-    /**
-     * Legacy method for backward compatibility
-     * @param string $link
-     * @param string|null $data
-     * @return string
-     */
-    public function request($link, $data = null)
-    {
-        if ($data === null) {
-            $response = $this->makeRequest('GET', $link);
-        } else {
-            $response = $this->makeRequest('POST', $link, json_decode($data, true));
-        }
-        
-        return json_encode($response['data']);
     }
 
     /**

@@ -73,8 +73,15 @@ $config = [
                 'X-Forwarded-Proto' => ['https'],
             ],
         ],
+        'redis_cache' => [
+            'class' => 'yii\redis\Connection',
+            'hostname' => 'redis',
+            'port' => 6379,
+            'database' => 1,
+        ],
         'cache' => [
-            'class' => 'yii\caching\FileCache',
+            'class' => 'yii\redis\Cache',
+            'redis' => 'redis_cache',
         ],
         'user' => [
             'identityClass' => 'app\models\user\User',
@@ -277,6 +284,9 @@ $config = [
         ],
         's3' => [
             'class' => 'app\components\S3Component',
+        ],
+        'bts' => [
+            'class' => 'app\components\Bts\BtsComponent',
         ],
     ],
     'params' => $params,

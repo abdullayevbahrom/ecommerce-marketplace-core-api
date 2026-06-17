@@ -504,72 +504,43 @@ class Order extends \yii\db\ActiveRecord
         $weightKg = max(0.1, $weightKg);
         $volumeM3 = max(0.001, $volumeM3);
 
-        // $data = [
-        //     'pickup_type' => 'courier',
-        //     'dropoff_type' => 'courier',
-
-        //     'sender' => [
-        //         'name' => trim((string) ($shop->name_ru ?: $shop->name ?: 'Sender')),
-        //         'phone' => $senderPhone,
-        //         'address' => $senderAddress,
-        //         'city_code' => (string) $senderCityCode,
-        //     ],
-
-        //     'receiver' => [
-        //         'name' => trim($orderInfo->lastname . ' ' . $orderInfo->name) ?: 'Receiver',
-        //         'phone' => $receiverPhone,
-        //         'address' => $receiverAddress,
-        //         'city_code' => (string) $receiverCityCode,
-        //     ],
-
-        //     'cargo' => [
-        //         'weight' => $weightKg,
-        //         'volume' => $volumeM3,
-        //         'piece' => max(1, count($orderProducts)),
-        //         'packageId' => 4,
-        //         'postTypeId' => 22,
-        //     ],
-
-        //     'takePhoto' => 1,
-        //     'is_test' => 1,
-        // ];
-
         $data = [
+            'clientId' => $user->id,
             'pickup_type' => 'courier',
             'dropoff_type' => 'courier',
 
-            'senderName' => trim((string) ($shop->name_ru ?: $shop->name ?: 'Sender')),
-            'senderPhone' => $senderPhone,
-            'senderAddress' => $senderAddress,
+            'sender' => [
+                'name' => trim((string) ($shop->name_ru ?: $shop->name ?: 'Sender')),
+                'phone' => $senderPhone,
+                'address' => $senderAddress,
+                'city_code' => (string) $senderCityCode,
+            ],
+
+            'receiver' => [
+                'name' => trim($orderInfo->lastname . ' ' . $orderInfo->name) ?: 'Receiver',
+                'phone' => $receiverPhone,
+                'address' => $receiverAddress,
+                'city_code' => (string) $receiverCityCode,
+            ],
+
+            'cargo' => [
+                'weight' => $weightKg,
+                'volume' => $volumeM3,
+                'piece' => max(1, \count($orderProducts)),
+            ],
+        ];
+
+        $calculateData = [
             'senderCityCode' => (string) $senderCityCode,
-
-            'receiverName' => trim($orderInfo->lastname . ' ' . $orderInfo->name) ?: 'Receiver',
-            'receiverPhone' => $receiverPhone,
-            'receiverAddress' => $receiverAddress,
             'receiverCityCode' => (string) $receiverCityCode,
-
+            'pickup_type' => 'courier',
+            'dropoff_type' => 'courier',
             'weight' => $weightKg,
-            'volume' => $volumeM3,
-            'piece' => max(1, count($orderProducts)),
-            'packageId' => 4,
-            'postTypeId' => 22,
-
-            'takePhoto' => 1,
-            'is_test' => 1,
         ];
 
         $bts = new BTS();
 
-        $calcResponse = $bts->calculateOrder($data);
-
-        if (empty($calcResponse['success'])) {
-            return $fail('BTS calculate failed: ' . self::getBtsErrorMessage($calcResponse), [
-                'order_id' => $this->id ?? null,
-                'request' => $data,
-                'response' => $calcResponse,
-            ]);
-        }
-
+        $btsPrice = $bts->calculateOrder($calculateData);
         $response = $bts->createOrder($data);
 
         if (!empty($response['success']) && isset($response['data']['orderId'])) {
@@ -578,11 +549,6 @@ class Order extends \yii\db\ActiveRecord
             $btsId = $btsData['orderId'];
             $btsStatus = $btsData['status']['code'] ?? $btsData['status']['id'] ?? null;
             $btsStatusInfo = $btsData['status']['info'] ?? $btsData['status']['name'] ?? null;
-
-            $btsPrice = $btsData['cost']
-                ?? $calcResponse['data']['cost']
-                ?? $calcResponse['data']['price']
-                ?? 0;
 
             $pricePerProduct = count($orderProducts) > 0
                 ? round(((float) $btsPrice) / count($orderProducts), 2)
@@ -609,7 +575,6 @@ class Order extends \yii\db\ActiveRecord
         return $fail('BTS order creation failed: ' . self::getBtsErrorMessage($response), [
             'order_id' => $this->id ?? null,
             'request' => $data,
-            'calculate_response' => $calcResponse,
             'create_response' => $response,
         ]);
     }

@@ -40,17 +40,16 @@ class BtsController extends Controller {
         if (Yii::$app->request->headers->has('OPTIONS')) {
             throw new HttpException(200, 'OK');
         }
-
-        // Language detection and setup
-        Yii::$app->session->set('language', 'ru');
+        
         $langs = ['ru', 'en', 'uz'];
-
         $headers = Yii::$app->request->headers;
         if($headers->has('Content-Language')) {
             $lang = $headers->get('Content-Language');
-            if(in_array($lang, $langs)) {
+            if(\in_array($lang, $langs)) {
                 Yii::$app->session->set('language', $lang);
             }
+        } else {
+            Yii::$app->session->set('language', 'ru');
         }
 
         return parent::beforeAction($action);
@@ -59,15 +58,15 @@ class BtsController extends Controller {
     public function behaviors() {
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
-            'class' => HttpBearerAuth::className(),
-            'optional' => ['*'], // All actions are optional (no authentication required)
+            'class' => HttpBearerAuth::class,
+            'optional' => ['*'],
         ];
 
         $auth = $behaviors['authenticator'];
         unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
-            'class' => \yii\filters\Cors::className(),
+            'class' => \yii\filters\Cors::class,
             'cors' => [
                 'Access-Control-Allow-Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
