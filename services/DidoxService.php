@@ -843,6 +843,41 @@ class DidoxService
         }
     }
 
+    public function getAccount(string $userKey)
+    {
+        try {
+            $headers = [
+                "Content-Type: application/json",
+                "Partner-Authorization: {$this->partnerToken}",
+                "user-key: {$userKey}"
+            ];
+
+            $response = $this->makeRequestWithHeaders('GET', '/v1/account', [], $headers);
+
+            if ($response['isOk']) {
+                return [
+                    'phone' => $response['data']['mobile'],
+                    'email' => $response['data']['email'],
+                ];
+            }
+
+            return [
+                'success' => $response['isOk'],
+                'data' => $response['data'],
+                'httpCode' => $response['httpCode'],
+                'debug' => $response['debug'] ?? null,
+                'error' => !$response['isOk'] ? ($response['data']['message'] ?? $response['data']['error'] ?? 'Unknown error') : null
+            ];
+
+        } catch (\Exception $e) {
+            Yii::error('DIDOX get document error: ' . $e->getMessage(), __METHOD__);
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
     /**
      * Register user with Didox following the official documentation
      * @param array $userData - User registration data
@@ -2624,7 +2659,7 @@ class DidoxService
      * @param array $headers
      * @return array
      */
-    private function makeRequestWithHeaders($method, $url, $data = [], $headers = [])
+    private function makeRequestWithHeaders(string $method, string $url, array $data = [], array $headers = [])
     {
         $ch = curl_init();
         

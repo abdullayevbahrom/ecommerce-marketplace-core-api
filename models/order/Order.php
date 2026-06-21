@@ -256,39 +256,34 @@ class Order extends \yii\db\ActiveRecord
             }
     
             $user = User::findOne($this->user_id);
-            $user->last_address = $this->address;
+            // $user->last_address = $this->address;
             
-            // Auto-fill user profile for individual users (fiz) on first order when they receive it themselves
-            if ($user->type === 'fiz' && $this->receiver == 1) {
-                $profileIncomplete = empty($user->name) || empty($user->lastname) || empty($user->phone) || empty($user->email);
-                
-                if ($profileIncomplete) {
-                    // Update user profile with order data if fields are empty
-                    if (empty($user->name) && !empty($this->name)) {
-                        $user->name = $this->name;
-                    }
-                    if (empty($user->lastname) && !empty($this->lastname)) {
-                        $user->lastname = $this->lastname;
-                    }
-                    if (empty($user->phone) && !empty($this->phone)) {
-                        $user->phone = $this->phone;
-                    }
-                    if (empty($user->email) && !empty($this->email)) {
-                        $user->email = $this->email;
-                    }
-                    if (empty($user->address) && !empty($this->address)) {
-                        $user->address = $this->address;
-                    }
-                    if(empty($user->bts_region_id) && !empty($this->bts_region_id)) {
-                        $user->bts_region_id = $this->bts_region_id;
-                    }
-                    if(empty($user->bts_city_id) && !empty($this->bts_city_id)) {
-                        $user->bts_city_id = $this->bts_city_id;
-                    }
-                }
-            }
+            // // Auto-fill user profile for individual users (fiz) on first order when they receive it themselves
+            // if ($user->type === 'fiz' && $this->receiver == 1) {
+            //     if (empty($user->name) && !empty($this->name)) {
+            //         $user->name = $this->name;
+            //     }
+            //     if (empty($user->lastname) && !empty($this->lastname)) {
+            //         $user->lastname = $this->lastname;
+            //     }
+            //     if (empty($user->phone) && !empty($this->phone)) {
+            //         $user->phone = $this->phone;
+            //     }
+            //     if (empty($user->email) && !empty($this->email)) {
+            //         $user->email = $this->email;
+            //     }
+            //     if (empty($user->address) && !empty($this->address)) {
+            //         $user->address = $this->address;
+            //     }
+            //     if(empty($user->bts_region_id) && !empty($this->bts_region_id)) {
+            //         $user->bts_region_id = $this->bts_region_id;
+            //     }
+            //     if(empty($user->bts_city_id) && !empty($this->bts_city_id)) {
+            //         $user->bts_city_id = $this->bts_city_id;
+            //     }
+            // }
             
-            $user->save(false);
+            // $user->save(false);
     
             error_log("heelooo !!! 123 ->>");
     

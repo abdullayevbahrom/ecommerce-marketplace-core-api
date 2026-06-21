@@ -1248,6 +1248,8 @@ class UserController extends Controller
                 return ['didox_auth_completed' => $result['success'], 'error' => $result['data']];
             }
 
+            $didoxAcount = $didoxService->getAccount($result['token']);
+
             if (!empty($incomingGlobalUserId) && User::hasColumn('global_user_id')) {
                 $user->setAttribute('global_user_id', $incomingGlobalUserId);
             }
@@ -1265,7 +1267,11 @@ class UserController extends Controller
                 } catch (\Exception $e) {
                     Yii::warning('Sklad provisioning failed for user ' . $user->id . ': ' . $e->getMessage());
                 }
-                return ['data' => User::find()->with('image')->where(['id' => $user->id])->one(), 'didox_auth_completed' => $user->isDidoxAuthCompleted()];
+                return [
+                    'data' => User::find()->with('image')->where(['id' => $user->id])->one(), 
+                    'didox_auth_completed' => $user->isDidoxAuthCompleted(),
+                    'didox_profile' => $didoxAcount
+                ];
             } else {
                 throw new HttpException(500, 'Failed to update user data');
             }
