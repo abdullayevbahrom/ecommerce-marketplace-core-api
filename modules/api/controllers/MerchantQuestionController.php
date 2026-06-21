@@ -4,8 +4,8 @@ namespace app\modules\api\controllers;
 
 use app\models\merchant\MerchantQuestion;
 use app\models\merchant\MerchantQuestionMessage;
+use app\models\product\Product;
 use app\models\user\User;
-use app\services\NotificationService;
 use Yii;
 use yii\data\ActiveDataProvider;
 use yii\filters\auth\HttpBearerAuth;
@@ -137,7 +137,7 @@ class MerchantQuestionController extends Controller
                     $q->select(['id', 'phone', 'name']);
                 },
             ])
-            ->where(['id' => (int)$id])
+            ->where(['id' => (int) $id])
             ->one();
 
         if (!$question) {
@@ -145,11 +145,11 @@ class MerchantQuestionController extends Controller
         }
 
         if (!in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR], true)) {
-            if ($user->role === User::ROLE_SHOP && (int)$question->merchant_id !== (int)$user->id) {
+            if ($user->role === User::ROLE_SHOP && (int) $question->merchant_id !== (int) $user->id) {
                 throw new HttpException(403, 'Access denied');
             }
 
-            if ($user->role === User::ROLE_USER && (int)$question->client_id !== (int)$user->id) {
+            if ($user->role === User::ROLE_USER && (int) $question->client_id !== (int) $user->id) {
                 throw new HttpException(403, 'Access denied');
             }
 
@@ -175,8 +175,8 @@ class MerchantQuestionController extends Controller
         }
 
         $merchantId = (int) Yii::$app->request->post('merchant_id');
-        $productId  = (int) Yii::$app->request->post('product_id');
-        $message    = trim(Yii::$app->request->post('message'));
+        $productId = (int) Yii::$app->request->post('product_id');
+        $message = trim(Yii::$app->request->post('message'));
 
         if (!$merchantId || !$message) {
             return [
@@ -185,6 +185,7 @@ class MerchantQuestionController extends Controller
             ];
         }
 
+        $uploadedFiles = \yii\web\UploadedFile::getInstancesByName('files');
         $merchant = User::find()->where(['id' => $merchantId, 'role' => User::ROLE_SHOP])->one();
 
         if (!$merchant) {
@@ -194,7 +195,10 @@ class MerchantQuestionController extends Controller
             ];
         }
 
-        // Find existing non-closed ticket for this product
+        if ($productId && !Product::find()->where(['id' => $productId])->exists()) {
+            return ['success' => false, 'message' => 'Product not found'];
+        }
+
         $model = MerchantQuestion::find()
             ->where([
                 'client_id' => $user->id,
@@ -204,45 +208,66 @@ class MerchantQuestionController extends Controller
             ->andWhere(['!=', 'status', MerchantQuestion::STATUS_CLOSED])
             ->one();
 
+        if ($model) {
+            $lastMessage = MerchantQuestionMessage::find()
+                ->where(['question_id' => $model->id])
+                ->orderBy(['id' => SORT_DESC])
+                ->one();
+
+            if ($lastMessage && $lastMessage->sender_role === MerchantQuestionMessage::ROLE_CLIENT && $lastMessage->sender_id == $user->id) {
+                return [
+                    'success' => false,
+                    'message' => 'You have already replied to this question. Please wait'
+                ];
+            }
+        } else {
+            $model = new MerchantQuestion();
+            $model->client_id = $user->id;
+            $model->merchant_id = $merchant->id;
+            $model->entity_type = $productId ? 'product' : null;
+            $model->entity_id = $productId ?: null;
+            $model->created_at = time();
+        }
+
+        $model->status = MerchantQuestion::STATUS_OPEN;
+
         $transaction = Yii::$app->db->beginTransaction();
 
         try {
-            if (!$model) {
-                $model = new MerchantQuestion();
-                $model->client_id   = $user->id;
-                $model->merchant_id = $merchant->id;
-                $model->entity_type = $productId ? 'product' : null;
-                $model->entity_id   = $productId ?: null;
-                $model->created_at  = time();
-            }
-
-            $model->status = MerchantQuestion::STATUS_OPEN;
-
             if (!$model->save()) {
+                $transaction->rollBack();
                 return ['success' => false, 'errors' => $model->errors];
             }
 
             $msg = new MerchantQuestionMessage();
             $msg->question_id = $model->id;
             $msg->sender_role = MerchantQuestionMessage::ROLE_CLIENT;
-            $msg->sender_id   = $user->id;
-            $msg->message     = $message;
-            $msg->created_at  = time();
-            $msg->save(false);
+            $msg->sender_id = $user->id;
+            $msg->message = $message;
+            $msg->created_at = time();
+            $msg->rawFiles = $uploadedFiles;
 
-            // NotificationService::notifyMerchantNewQuestion($model);
-            // NotificationService::notifyModeratorsNewQuestion($model);
-
-            $this->sendDataToWarehouse($user, $merchant, $model, $message, $productId);
+            if (!$msg->save()) {
+                $transaction->rollBack();
+                return ['success' => false, 'errors' => $msg->errors];
+            }
 
             $transaction->commit();
 
+            try {
+                $this->sendDataToWarehouse($user, $merchant, $model, $msg, $productId);
+            } catch (\Throwable $e) {
+                Yii::error("Warehouse error: " . $e->getMessage(), 'warehouse_log');
+            }
+
             return ['success' => true, 'question_id' => $model->id];
         } catch (\Throwable $e) {
-            $transaction->rollBack();
+            if ($transaction->isActive) {
+                $transaction->rollBack();
+            }
             Yii::error($e->getMessage(), 'create_question_for_merchant');
 
-            return ['success' => false, 'message' => $e->getMessage()];
+            return ['success' => false, 'message' => 'Internal Server Error'];
         }
     }
 
@@ -301,14 +326,14 @@ class MerchantQuestionController extends Controller
 
     private function syncCloseToWarehouse(User $user, MerchantQuestion $question)
     {
-        $baseUrl   = Yii::$app->params['warehouseApiUrl'];
+        $baseUrl = Yii::$app->params['warehouseApiUrl'];
         $secretKey = Yii::$app->params['apiSecretKey'];
 
         $payload = [
             'id' => $user->id,
             'ticket_id' => $question->id,
-            'closed_by'     => 'client',
-            'closed_at'     => time(),
+            'closed_by' => 'client',
+            'closed_at' => time(),
         ];
 
         $token = md5($user->id . $secretKey);
@@ -335,20 +360,21 @@ class MerchantQuestionController extends Controller
         }
     }
 
-    private function sendDataToWarehouse(User $user, User $merchant, MerchantQuestion $ticket, string $message, $productId = null)
+    private function sendDataToWarehouse(User $user, User $merchant, MerchantQuestion $ticket, MerchantQuestionMessage $mqm, $productId = null)
     {
-        $baseUrl   = Yii::$app->params['warehouseApiUrl'] ?? null;
+        $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? null;
         $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
 
         $payload = [
-            'id'    => $merchant->shop_id,
+            'id' => $merchant->shop_id,
             'client_id' => $user->id,
-            'client_name'  => trim($user->name . ' ' . $user->lastname),
+            'client_name' => trim($user->name . ' ' . $user->lastname),
             'client_phone' => $user->phone,
-            'merchant_id'  => $merchant->id,
+            'merchant_id' => $merchant->id,
             'ticket_id' => $ticket->id,
-            'product_id'   => $productId ?: null,
-            'message'      => $message,
+            'product_id' => $productId ?: null,
+            'message' => $mqm->message,
+            'files' => $mqm->files,
         ];
 
         $token = md5($merchant->shop_id . $secretKey);
