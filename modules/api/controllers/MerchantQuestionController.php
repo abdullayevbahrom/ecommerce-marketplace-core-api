@@ -133,6 +133,9 @@ class MerchantQuestionController extends Controller
         $question = MerchantQuestion::find()
             ->with([
                 'messages',
+                'product' => function ($q) {
+                    $q->select(['id', 'name_ru']);
+                },
                 'client' => function ($q) {
                     $q->select(['id', 'phone', 'name']);
                 },
