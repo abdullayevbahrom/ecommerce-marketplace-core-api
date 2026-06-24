@@ -2,9 +2,11 @@
 
 namespace app\models\merchant;
 
+use app\models\product\Product;
 use yii\db\ActiveRecord;
 use app\models\user\User;
 use Yii;
+use yii\db\ActiveQuery;
 
 /**
  * @property int $id
@@ -19,9 +21,10 @@ use Yii;
  */
 class MerchantQuestion extends ActiveRecord
 {
-    const STATUS_OPEN     = 0;
-    const STATUS_ANSWERED = 1;
-    const STATUS_CLOSED   = 2;
+    public const STATUS_OPEN = 0;
+    public const STATUS_ANSWERED = 1;
+    public const STATUS_CLOSED = 2;
+    public const ENTITY_TYPE_PRODUCT = 'product';
 
     public static function tableName()
     {
@@ -57,6 +60,14 @@ class MerchantQuestion extends ActiveRecord
         return [
             'id',
             'status',
+            'entity_type',
+            'entity_id',
+            'product_name' => function () {
+                if ($this->entity_type === self::ENTITY_TYPE_PRODUCT && $this->product) {
+                    return $this->product->name_ru;
+                }
+                return null;
+            },
             'created_at' => function () {
                 return Yii::$app->formatter->asDatetime($this->created_at, 'php:Y-m-d H:i:s');
             },
@@ -76,28 +87,32 @@ class MerchantQuestion extends ActiveRecord
         ];
     }
 
-
-    /* ================= RELATIONS ================= */
-
-    public function getClient()
-    {
-        return $this->hasOne(User::class, ['id' => 'client_id']);
-    }
-
-    public function getMerchant()
-    {
-        return $this->hasOne(User::class, ['id' => 'merchant_id']);
-    }
-
     public function getIsOpen(): bool
     {
         return $this->status === self::STATUS_OPEN;
     }
 
-    public function getMessages()
+    /* ================= RELATIONS ================= */
+
+    public function getClient(): ActiveQuery
+    {
+        return $this->hasOne(User::class, ['id' => 'client_id']);
+    }
+
+    public function getMerchant(): ActiveQuery
+    {
+        return $this->hasOne(User::class, ['id' => 'merchant_id']);
+    }
+
+    public function getMessages(): ActiveQuery
     {
         return $this->hasMany(MerchantQuestionMessage::class, ['question_id' => 'id'])
             ->orderBy(['created_at' => SORT_ASC]);
     }
 
+    public function getProduct(): ActiveQuery
+    {
+        return $this->hasOne(Product::class, ['id' => 'entity_id'])
+            ->where(['entity_type' => self::ENTITY_TYPE_PRODUCT]);
+    }
 }

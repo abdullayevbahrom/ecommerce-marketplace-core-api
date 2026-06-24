@@ -81,6 +81,9 @@ class MerchantQuestionController extends Controller
         $query = MerchantQuestion::find()
             ->with([
                 'messages',
+                'product' => function ($q) {
+                    $q->select(['id', 'name_ru']);
+                },
                 'client' => function ($q) {
                     $q->select(['id', 'phone', 'name']);
                 },
@@ -102,7 +105,7 @@ class MerchantQuestionController extends Controller
             'query' => $query,
             'pagination' => [
                 'pageSize' => Yii::$app->request->get('per_page', 15),
-                'page' => max(0, Yii::$app->request->get('page', 1) - 1),
+                'validatePage' => false,
             ],
         ]);
 
@@ -204,6 +207,7 @@ class MerchantQuestionController extends Controller
                 'client_id' => $user->id,
                 'merchant_id' => $merchant->id,
                 'entity_id' => $productId ?: null,
+                'entity_type' => MerchantQuestion::ENTITY_TYPE_PRODUCT
             ])
             ->andWhere(['!=', 'status', MerchantQuestion::STATUS_CLOSED])
             ->one();
@@ -224,7 +228,7 @@ class MerchantQuestionController extends Controller
             $model = new MerchantQuestion();
             $model->client_id = $user->id;
             $model->merchant_id = $merchant->id;
-            $model->entity_type = $productId ? 'product' : null;
+            $model->entity_type = $productId ? MerchantQuestion::ENTITY_TYPE_PRODUCT : null;
             $model->entity_id = $productId ?: null;
             $model->created_at = time();
         }
