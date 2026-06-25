@@ -15,7 +15,6 @@ use app\models\user\card\UserCard;
 use app\models\user\address\UserAddress;
 use app\models\Images;
 use app\models\Category;
-use app\models\session\WebSession;
 use app\services\Sms\Sms;
 use yii\caching\FileCache;
 use app\services\DidoxService;
@@ -245,7 +244,6 @@ class UserController extends Controller
             );
         }
 
-        $webSession = WebSession::createSession($user);
 
         $user = User::find()->with('image')->where(['id' => $user->id])->one();
         $userData = $user->toArray();
@@ -253,7 +251,6 @@ class UserController extends Controller
         $userData['bts_city_id'] = $user->bts_city_id;
         $userData['bts_region_name'] = \yii\services\BTS::getRegionName($user->bts_region_id, $post['language'] ?? 'ru');
         $userData['bts_city_name'] = \yii\services\BTS::getCityName($user->bts_city_id, $post['language'] ?? 'ru');
-        $userData['web_session_token'] = $webSession->access_token;
 
         return $this->sendSuccess($userData);
     }
@@ -345,64 +342,6 @@ class UserController extends Controller
 
         return ['data' => ['phone' => $phone]];
     }
-
-    // public function actionSignUp()
-    // {
-    //     $post = Yii::$app->request->post();
-    //     $phone = $post['phone'] ? preg_replace('/[^\d]/', '', trim($post['phone'])) : null;
-
-    //     $model = User::findOne(['phone' => $phone]);
-    //     if (!$model) {
-    //         $model = new User;
-    //         $model->password = 1;
-    //         $model->role = User::ROLE_USER;
-    //     }
-
-    //     $model->scenario = User::USER_SIGNUP;
-    //     $model->setAttributes($post);
-    //     $model->phone = $phone;
-
-    //     if (!$model->validate()) {
-    //         Yii::$app->response->statusCode = 422;
-    //         return ['errors' => $model->errors];
-    //     }
-
-    //     $model->status = 0;
-
-    //     if ($model->save(false)) {
-    //         $code = $model->saveCode();
-    //         return ['data' => ['token' => $code->token]];
-    //     } else {
-    //         Yii::$app->response->statusCode = 422;
-    //         return ['errors' => $model->errors];
-    //     }
-
-    //     return false;
-    // }
-
-    // public function actionSignIn()
-    // {
-    //     $post = Yii::$app->request->post();
-    //     $phone = $post['phone'] ? preg_replace('/[^\d]/', '', trim($post['phone'])) : null;
-    //     $user = new User;
-    //     $user->scenario = User::USER_SIGNIN;
-    //     $user->setAttributes($post);
-
-    //     if (!$user->validate()) {
-    //         Yii::$app->response->statusCode = 422;
-    //         return ['errors' => $user->errors];
-    //     }
-
-    //     $model = User::findOne(['phone' => $phone]);
-
-    //     if ($model->save(false)) {
-    //         $code = $model->saveCode();
-    //         return ['data' => ['token' => $code->token]];
-    //     } else {
-    //         Yii::$app->response->statusCode = 422;
-    //         return ['errors' => $model->errors];
-    //     }
-    // }
 
     public function actionLogOut()
     {
@@ -1409,47 +1348,4 @@ class UserController extends Controller
         return $response;
     }
     // end E-IMZO integration
-
-    /**
-     * Get BTS regions list
-     * GET /api/user/bts-regions
-     */
-    public function actionBtsRegions()
-    {
-        $language = Yii::$app->request->get('language') ?? 'ru';
-        $regions = \yii\services\BTS::getRegions($language);
-
-        return [
-            'data' => [
-                'regions' => $regions
-            ]
-        ];
-    }
-
-    /**
-     * Get BTS cities by region
-     * GET /api/user/bts-cities?region_id=5
-     */
-    public function actionBtsCities($region_id = null)
-    {
-        if (!$region_id) {
-            Yii::$app->response->statusCode = 422;
-            return ['errors' => ['region_id' => 'Region ID is required']];
-        }
-
-        $language = Yii::$app->request->get('language') ?? 'ru';
-        $cities = \yii\services\BTS::getCities($region_id, $language);
-        $cityList = [];
-
-        foreach ($cities as $id => $city) {
-            $cityList[$id] = $city['name'];
-        }
-
-        return [
-            'data' => [
-                'cities' => $cityList,
-                'region_id' => (int) $region_id
-            ]
-        ];
-    }
 }
