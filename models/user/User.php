@@ -104,7 +104,7 @@ class User extends ActiveRecord implements IdentityInterface
     public const STATUS_INACTIVE = 0;
     public $authKey;
     public $moderator_access = [];
-    public bool $remember;
+    public bool $remember = false;
     public $address = [];
 
     public static function tableName()
