@@ -249,8 +249,8 @@ class UserController extends Controller
         $userData = $user->toArray();
         $userData['bts_region_id'] = $user->bts_region_id;
         $userData['bts_city_id'] = $user->bts_city_id;
-        $userData['bts_region_name'] = \yii\services\BTS::getRegionName($user->bts_region_id, $post['language'] ?? 'ru');
-        $userData['bts_city_name'] = \yii\services\BTS::getCityName($user->bts_city_id, $post['language'] ?? 'ru');
+        $userData['bts_region_name'] = $user->bts_region_id ? Yii::$app->bts->getRegionName($user->bts_region_id, $post['language'] ?? 'ru') : null;
+        $userData['bts_city_name'] = $user->bts_city_id ? Yii::$app->bts->getCityName($user->bts_region_id, $user->bts_city_id, $post['language'] ?? 'ru') : null;
 
         return $this->sendSuccess($userData);
     }
@@ -377,26 +377,11 @@ class UserController extends Controller
     public function actionProfile()
     {
         $user = User::find()->with('image', 'addresses')->where(['id' => Yii::$app->user->identity->id])->one();
-
-        // Get base user data
         $userData = $user->toArray();
-
-        // Ensure BTS ID fields are included
         $userData['bts_region_id'] = $user->bts_region_id;
         $userData['bts_city_id'] = $user->bts_city_id;
-
-        // Add BTS region and city names for convenience
-        if ($user->bts_region_id) {
-            $userData['bts_region_name'] = \yii\services\BTS::getRegionName($user->bts_region_id, 'ru');
-        } else {
-            $userData['bts_region_name'] = null;
-        }
-
-        if ($user->bts_city_id) {
-            $userData['bts_city_name'] = \yii\services\BTS::getCityName($user->bts_city_id, 'ru');
-        } else {
-            $userData['bts_city_name'] = null;
-        }
+        $userData['bts_region_name'] = $user->bts_region_id ? Yii::$app->bts->getRegionName($user->bts_region_id, $post['language'] ?? 'ru') : null;
+        $userData['bts_city_name'] = $user->bts_city_id ? Yii::$app->bts->getCityName($user->bts_region_id, $user->bts_city_id, $post['language'] ?? 'ru') : null;
 
         return ['data' => $userData];
     }
@@ -446,26 +431,11 @@ class UserController extends Controller
             }
 
             $user = User::find()->with('image', 'addresses')->where(['id' => Yii::$app->user->identity->id])->one();
-
-            // Get base user data
             $userData = $user->toArray();
-
-            // Ensure BTS ID fields are included
             $userData['bts_region_id'] = $user->bts_region_id;
             $userData['bts_city_id'] = $user->bts_city_id;
-
-            // Add BTS region and city names for convenience
-            if ($user->bts_region_id) {
-                $userData['bts_region_name'] = \yii\services\BTS::getRegionName($user->bts_region_id, $language);
-            } else {
-                $userData['bts_region_name'] = null;
-            }
-
-            if ($user->bts_city_id) {
-                $userData['bts_city_name'] = \yii\services\BTS::getCityName($user->bts_city_id, $language);
-            } else {
-                $userData['bts_city_name'] = null;
-            }
+            $userData['bts_region_name'] = $user->bts_region_id ? Yii::$app->bts->getRegionName($user->bts_region_id, $post['language'] ?? 'ru') : null;
+            $userData['bts_city_name'] = $user->bts_city_id ? Yii::$app->bts->getCityName($user->bts_region_id, $user->bts_city_id, $post['language'] ?? 'ru') : null;
 
             return $this->sendSuccess($userData);
         } else {

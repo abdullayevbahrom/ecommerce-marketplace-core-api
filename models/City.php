@@ -3,6 +3,7 @@
 namespace app\models;
 
 use Yii;
+use yii\db\ActiveQuery;
 
 /**
  * This is the model class for table "cities".
@@ -22,32 +23,26 @@ use Yii;
  */
 class City extends \yii\db\ActiveRecord
 {
-    /**
-     * {@inheritdoc}
-     */
+    public const STATUS_ACTIVE = 1;
+    public const STATUS_INACTIVE = 0;
+    
     public static function tableName()
     {
         return 'cities';
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function rules()
     {
         return [
             [['bts_id', 'region_id', 'bts_region_id', 'name_ru', 'name_uz', 'name_en'], 'required'],
-            [['bts_id', 'region_id', 'bts_region_id', 'status'], 'integer'],
+            [['region_id', 'status'], 'integer'],
             [['created_at', 'updated_at'], 'safe'],
-            [['name_ru', 'name_uz', 'name_en'], 'string', 'max' => 255],
+            [['bts_id', 'bts_region_id', 'name_ru', 'name_uz', 'name_en'], 'string', 'max' => 255],
             [['bts_id'], 'unique'],
-            [['region_id'], 'exist', 'skipOnError' => true, 'targetClass' => Region::className(), 'targetAttribute' => ['region_id' => 'id']],
+            [['region_id'], 'exist', 'skipOnError' => true, 'targetClass' => Region::class, 'targetAttribute' => ['region_id' => 'id']],
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function attributeLabels()
     {
         return [
@@ -64,81 +59,41 @@ class City extends \yii\db\ActiveRecord
         ];
     }
 
-    /**
-     * Gets query for [[Region]].
-     *
-     * @return \yii\db\ActiveQuery
-     */
-    public function getRegion()
+    public function getRegion(): ActiveQuery
     {
-        return $this->hasOne(Region::className(), ['id' => 'region_id']);
+        return $this->hasOne(Region::class, ['id' => 'region_id']);
     }
 
-    /**
-     * Get city name by language
-     * @param string $language
-     * @return string
-     */
     public function getName($language = 'ru')
     {
-        switch ($language) {
-            case 'uz':
-                return $this->name_uz;
-            case 'en':
-                return $this->name_en;
-            default:
-                return $this->name_ru;
-        }
+        return match ($language) {
+            'uz' => $this->name_uz,
+            'en' => $this->name_en,
+            default => $this->name_ru,
+        };
     }
 
-    /**
-     * Get active cities
-     * @return \yii\db\ActiveQuery
-     */
-    public static function getActive()
+    public static function getActive(): ActiveQuery
     {
         return static::find()->where(['status' => 1]);
     }
 
-    /**
-     * Find city by BTS ID
-     * @param int $btsId
-     * @return static|null
-     */
-    public static function findByBtsId($btsId)
+    public static function findByBtsId(string $btsId): ?static
     {
         return static::findOne(['bts_id' => $btsId]);
     }
 
-    /**
-     * Get cities by region
-     * @param int $regionId
-     * @param string $language
-     * @return \yii\db\ActiveQuery
-     */
-    public static function getByRegion($regionId, $language = 'ru')
+    public static function getByRegion(int $regionId): ActiveQuery
     {
         return static::getActive()->where(['region_id' => $regionId]);
     }
 
-    /**
-     * Get cities by BTS region ID
-     * @param int $btsRegionId
-     * @return \yii\db\ActiveQuery
-     */
-    public static function getByBtsRegion($btsRegionId)
+    public static function getByBtsRegion(string $btsRegionId): ActiveQuery
     {
         return static::getActive()->where(['bts_region_id' => $btsRegionId]);
     }
 
-    /**
-     * Search cities by name
-     * @param string $searchTerm
-     * @param string $language
-     * @param int|null $regionId
-     * @return \yii\db\ActiveQuery
-     */
-    public static function search($searchTerm, $language = 'ru', $regionId = null)
+    public static function search(string $searchTerm, string $language = 'ru', ?int $regionId = null): ActiveQuery
     {
         $query = static::getActive();
         

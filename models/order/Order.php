@@ -2,6 +2,7 @@
 
 namespace app\models\order;
 
+use app\components\Bts\BtsComponent;
 use Yii;
 use app\models\didox\DidoxDocument;
 use app\models\user\User;
@@ -17,7 +18,6 @@ use app\models\logist\Logist;
 use app\models\shop\Shop;
 use app\models\stock\Stock;
 use app\services\DidoxOrderService;
-use yii\services\BTS;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Intervention\Image\ImageManager;
@@ -136,7 +136,7 @@ class Order extends \yii\db\ActiveRecord
     {
         return $this->hasOne(\app\models\Promocode::class, ['id' => 'promocode_id']);
     }
-    
+
     // Note: OrderReview relationship commented out as the model doesn't exist
     // Reviews are tracked via status_review field instead
     /*
@@ -146,7 +146,8 @@ class Order extends \yii\db\ActiveRecord
     }
     */
 
-    public function saveObject($cart) {
+    public function saveObject($cart)
+    {
         // Validate minimum order quantities before creating order
         foreach ($cart as $cartItem) {
             $product = $cartItem->product;
@@ -155,13 +156,13 @@ class Order extends \yii\db\ActiveRecord
                 return false;
             }
         }
-    
+
         /** @var User $user */
         $user = Yii::$app->user->identity;
         $this->user_id = $user->id;
         $this->status = 0;
         $walletPaymentId = Yii::$app->params['walletPaymentId'] ?? null;
-        $this->status_payment = ($walletPaymentId && (int)$this->payment_id === (int)$walletPaymentId) ? 0 : 1;
+        $this->status_payment = ($walletPaymentId && (int) $this->payment_id === (int) $walletPaymentId) ? 0 : 1;
         $this->status_delivery = 0;
         $this->status_review = 0;
         $this->bts_city_id = $user->bts_city_id;
@@ -174,12 +175,12 @@ class Order extends \yii\db\ActiveRecord
 
         $shop_id = null;
         $delivery_id = null;
-    
+
         if ($this->save()) {
             $price = 0;
             $amount = 0;
             $warehouseOrderItems = []; // Initialize the warehouse items array
-    
+
             foreach ($cart as $product) {
                 if (!$product->product) {
                     // Cart item references a deleted product — remove it and skip
@@ -188,7 +189,7 @@ class Order extends \yii\db\ActiveRecord
                 }
                 $order_product = new OrderProduct;
                 $shop_id = $product->product->shop_id;
-    
+
                 $order_product->user_id = $this->user_id;
                 $order_product->order_id = $this->id;
                 $order_product->shop_id = $product->product->shop_id;
@@ -200,35 +201,35 @@ class Order extends \yii\db\ActiveRecord
                     $resolvedStockId = $product->product->shop->stock->id;
                 }
                 $order_product->stock_id = $resolvedStockId;
-    
+
                 // Calculate price based on quantity and wholesale tiers
                 $unit_price = $product->product->getPriceByQuantity($product->amount);
                 $order_product->product_price = $unit_price * $product->amount;
                 $order_product->price = $order_product->product_price;
-    
+
                 // ToDo::change if add new delivery method
                 $order_product->delivery_id = $product->delivery_id ?? 1;
                 $order_product->status = 1;
-    
+
                 $delivery_id = $order_product->delivery_id;
-    
+
                 $price += $order_product->price;
                 $amount += $order_product->amount;
-    
+
                 if ($order_product->save()) {
-                    
+
                     // Add item to warehouse order items array
                     $warehouseOrderItems[] = [
                         'yii_product_id' => $order_product->product_id,
                         'quantity' => $order_product->amount,
                         'price' => $unit_price, // Unit price, not total price
                     ];
-                    
+
                     $shop_product = Product::findOne($order_product->product_id);
                     if ($shop_product) {
                         $shop_product->amount = max(0, (float) $shop_product->amount - (float) $order_product->amount);
                         $shop_product->save(false);
-    
+
                         if ($product->cartFilter) {
                             $keys = ['order_product_id', 'product_filter_id'];
                             $vals = [];
@@ -238,13 +239,13 @@ class Order extends \yii\db\ActiveRecord
                                     'product_filter_id' => $value->product_filter_id
                                 ];
                             }
-    
+
                             Yii::$app->db->createCommand()->batchInsert('order_product_filter', $keys, $vals)->execute();
                         }
                     }
                 }
             }
-            
+
             // Send order to warehouse with populated items array
             try {
                 if (!empty($warehouseOrderItems)) {
@@ -254,10 +255,10 @@ class Order extends \yii\db\ActiveRecord
                 $this->addError('warehouse', $e->getMessage());
                 return false;
             }
-    
+
             $user = User::findOne($this->user_id);
             // $user->last_address = $this->address;
-            
+
             // // Auto-fill user profile for individual users (fiz) on first order when they receive it themselves
             // if ($user->type === 'fiz' && $this->receiver == 1) {
             //     if (empty($user->name) && !empty($this->name)) {
@@ -282,23 +283,23 @@ class Order extends \yii\db\ActiveRecord
             //         $user->bts_city_id = $this->bts_city_id;
             //     }
             // }
-            
+
             // $user->save(false);
-    
+
             error_log("heelooo !!! 123 ->>");
-    
+
             // ToDo::change if add new delivery method
             if ($delivery_id) {
                 error_log("UserCart::deleteAll(234234");
                 /** @var User $user */
                 $user = Yii::$app->user->identity;
-                UserCart::deleteAll(['user_id'=>$user->id]);
+                UserCart::deleteAll(['user_id' => $user->id]);
                 $order = self::findOne($this->id);
                 $deliveryPrice = $this->createOrderProductsAndBtsIntegration($user, $order);
-                
+
                 // Calculate total product price
                 $productsTotal = $price;
-                
+
                 // Apply Promocode discount (already validated in controller before saveObject)
                 $discount = 0;
                 if ($order->promocode_id) {
@@ -314,13 +315,13 @@ class Order extends \yii\db\ActiveRecord
                 $order->amount = $amount;
                 $order->shop_id = $shop_id;
                 $order->delivery_id = $delivery_id;
-    
+
                 error_log("UserCart::deleteAll(234234");
                 // Create order products based on stocks and calculate BTS delivery for each group
-                
+
                 // Save the final order state
                 $saved = $order->save(false);
-                
+
                 // Automatically create Didox documents (Invoice and Contract)
                 if ($saved) {
                     try {
@@ -329,11 +330,11 @@ class Order extends \yii\db\ActiveRecord
                         Yii::error("Didox auto-creation failed: " . $e->getMessage(), 'didox');
                     }
                 }
-                
+
                 return $saved;
             }
         }
-        
+
         return false;
     }
 
@@ -345,13 +346,13 @@ class Order extends \yii\db\ActiveRecord
     public function createOrderProductsAndBtsIntegration($user, $orderInfo)
     {
         error_log("createOrderProductsAndBtsIntegration");
-        
+
         // Get order products grouped by stock_id (cart has already been cleared)
         $orderProducts = OrderProduct::find()
             ->with(['product.stock', 'product.shop.stock'])
             ->where(['order_id' => $this->id])
             ->all();
-            
+
         // Group order products by stock_id
         $stockGroups = [];
         foreach ($orderProducts as $orderProduct) {
@@ -378,37 +379,37 @@ class Order extends \yii\db\ActiveRecord
             }
             $stockGroups[$groupKey]['items'][] = $orderProduct;
         }
-        
+
         $totalDeliveryCost = 0;
-        
+
         // Process each stock group
         foreach ($stockGroups as $groupData) {
             $stock = $groupData['stock'];
             $groupItems = $groupData['items'];
-            
+
             // Calculate total weight and volume for this group using existing order products
             $totalWeight = 0;
             $totalVolume = 0;
             $groupProducts = [];
-            
+
             foreach ($groupItems as $orderProduct) {
                 $product = $orderProduct->product;
-                
+
                 // Use existing order product (already saved)
                 $groupProducts[] = $orderProduct;
-                
+
                 // Calculate weight and volume
                 $totalWeight += ($product->weight ?? 1) * $orderProduct->amount;
                 $totalVolume += (($product->length ?? 10) * ($product->width ?? 10) * ($product->height ?? 10)) * $orderProduct->amount;
             }
-            
+
             error_log("errorlwe3141312");
-            
+
             // Create BTS order for this stock group (if stock has BTS info)
             if ($stock && $stock->bts_city_id && !empty($groupProducts)) {
                 error_log("!END??!@#!");
                 $this->createBtsOrderForStockGroup($stock, $groupProducts, $user, $orderInfo, $totalWeight, $totalVolume);
-                
+
                 // Sum up delivery costs
                 foreach ($groupProducts as $orderProduct) {
                     $totalDeliveryCost += $orderProduct->bts_price ?? 0;
@@ -424,7 +425,7 @@ class Order extends \yii\db\ActiveRecord
 
         return $totalDeliveryCost;
     }
-    
+
     /**
      * Create BTS order for a specific stock group
      * @param Stock $stock
@@ -533,7 +534,8 @@ class Order extends \yii\db\ActiveRecord
             'weight' => $weightKg,
         ];
 
-        $bts = new BTS();
+        /** @var BtsComponent $bts */
+        $bts = Yii::$app->bts;
 
         $btsPrice = $bts->calculateOrder($calculateData);
         $response = $bts->createOrder($data);
@@ -607,7 +609,8 @@ class Order extends \yii\db\ActiveRecord
         return json_encode($response, JSON_UNESCAPED_UNICODE);
     }
 
-    public function fields() {
+    public function fields()
+    {
         $controller = Yii::$app->controller->id;
         $action = Yii::$app->controller->action->id;
 
@@ -633,7 +636,7 @@ class Order extends \yii\db\ActiveRecord
             'date',
             'orderReceipt'
         ];
-    
+
         $exception = ['send', 'detail', 'index'];
 
         if (($controller == 'order') && in_array($action, $exception)) {
@@ -699,8 +702,9 @@ class Order extends \yii\db\ActiveRecord
         return $this->hasOne(Shop::class, ['id' => 'shop_id']);
     }
 
-    public function getOrderReceipt() {
-        return $this->hasOne(OrderReceipt::class, ['order_id'=>'id']);
+    public function getOrderReceipt()
+    {
+        return $this->hasOne(OrderReceipt::class, ['order_id' => 'id']);
     }
 
     public function getDidoxDocuments()
@@ -716,7 +720,7 @@ class Order extends \yii\db\ActiveRecord
      */
     public function getResolvedDeliveryCost(): float
     {
-        $stored = (float)($this->delivery_cost ?? 0);
+        $stored = (float) ($this->delivery_cost ?? 0);
         if ($stored > 0) {
             return $stored;
         }
@@ -729,11 +733,11 @@ class Order extends \yii\db\ActiveRecord
         $deliveryFromProducts = 0.0;
         $productsTotal = 0.0;
         foreach ($products as $product) {
-            $productsTotal += (float)($product->product_price ?? 0);
+            $productsTotal += (float) ($product->product_price ?? 0);
 
-            $itemDelivery = (float)($product->delivery_cost ?? 0);
+            $itemDelivery = (float) ($product->delivery_cost ?? 0);
             if ($itemDelivery <= 0) {
-                $itemDelivery = (float)($product->bts_price ?? 0);
+                $itemDelivery = (float) ($product->bts_price ?? 0);
             }
             if ($itemDelivery > 0) {
                 $deliveryFromProducts += $itemDelivery;
@@ -744,8 +748,8 @@ class Order extends \yii\db\ActiveRecord
             return $deliveryFromProducts;
         }
 
-        $orderTotal = (float)($this->price ?? 0);
-        $discount = (float)($this->discount_amount ?? 0);
+        $orderTotal = (float) ($this->price ?? 0);
+        $discount = (float) ($this->discount_amount ?? 0);
         $derived = $orderTotal - $productsTotal + $discount;
 
         return $derived > 0 ? $derived : 0.0;
@@ -760,7 +764,8 @@ class Order extends \yii\db\ActiveRecord
         $updated = false;
         foreach ($this->orderProducts as $orderProduct) {
             if ($orderProduct->bts_id) {
-                $bts = new BTS();
+                /** @var BtsComponent $bts */
+                $bts = Yii::$app->bts;
                 $response = $bts->getOrderStatus($orderProduct->bts_id);
 
                 if ($response['success'] && isset($response['data']['status'])) {
@@ -784,11 +789,10 @@ class Order extends \yii\db\ActiveRecord
         $trackingData = [];
         foreach ($this->orderProducts as $orderProduct) {
             if ($orderProduct->bts_id) {
-                $bts = new BTS();
+                /** @var BtsComponent $bts */
+                $bts = Yii::$app->bts;
                 $response = $bts->getOrderTracking($orderProduct->bts_id);
-                if ($response['success']) {
-                    $trackingData[$orderProduct->bts_id] = $response['data'];
-                }
+                $trackingData[$orderProduct->bts_id] = $response;
             }
         }
         return $trackingData;
@@ -803,11 +807,10 @@ class Order extends \yii\db\ActiveRecord
         $orderInfo = [];
         foreach ($this->orderProducts as $orderProduct) {
             if ($orderProduct->bts_id) {
-                $bts = new BTS();
+                /** @var BtsComponent $bts */
+                $bts = Yii::$app->bts;
                 $response = $bts->getOrderInfo($orderProduct->bts_id);
-                if ($response['success']) {
-                    $orderInfo[$orderProduct->bts_id] = $response['data'];
-                }
+                $orderInfo[$orderProduct->bts_id] = $response;
             }
         }
         return $orderInfo;
@@ -837,7 +840,7 @@ class Order extends \yii\db\ActiveRecord
         $statuses = [];
         foreach ($this->orderProducts as $orderProduct) {
             if ($orderProduct->bts_id) {
-                $label = BTS::getBtsStatusLabel($orderProduct->bts_status, $language);
+                $label = Yii::$app->bts->getBtsStatusLabel($orderProduct->bts_status, $language);
                 if ($label) {
                     $statuses[] = $label;
                 } else {
@@ -862,7 +865,7 @@ class Order extends \yii\db\ActiveRecord
                     'bts_id' => $orderProduct->bts_id,
                     'status_id' => $orderProduct->bts_status,
                     'status_info' => $orderProduct->bts_status_info,
-                    'status_label' => BTS::getBtsStatusLabel($orderProduct->bts_status, $language),
+                    'status_label' => Yii::$app->bts->getBtsStatusLabel($orderProduct->bts_status, $language),
                     'order_product_id' => $orderProduct->id,
                     'stock_name' => $orderProduct->stock ? $orderProduct->stock->name_ru : null
                 ];
@@ -870,25 +873,25 @@ class Order extends \yii\db\ActiveRecord
         }
         return $statuses;
     }
-    
+
     private function sendOrderToWarehouse($items)
     {
         // Skip warehouse sync in development/local environment
         // Can be overridden via params: Yii::$app->params['warehouseSyncEnabled'] = true/false
-        $warehouseSyncDisabled = isset(Yii::$app->params['warehouseSyncEnabled']) 
-            ? Yii::$app->params['warehouseSyncEnabled'] 
+        $warehouseSyncDisabled = isset(Yii::$app->params['warehouseSyncEnabled'])
+            ? Yii::$app->params['warehouseSyncEnabled']
             : true; // Default: enabled
 
         if (!$warehouseSyncDisabled) {
             Yii::info("Warehouse sync skipped (development mode) for Order #{$this->id}", 'warehouse_sync');
             return;
         }
-        
+
         $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com';
         $apiUrl = $baseUrl . '/api/sales/create-from-ecommerce';
-    
+
         $client = new Client(['timeout' => 10.0]);
-    
+
         $dataToSend = [
             'id' => $this->id,
             'yii_order_id' => $this->id,
@@ -900,9 +903,9 @@ class Order extends \yii\db\ActiveRecord
             ],
             'items' => $items,
         ];
-    
+
         $token = md5($this->id . Yii::$app->params['apiSecretKey']);
-    
+
         try {
             $response = $client->post($apiUrl, [
                 'json' => $dataToSend,
@@ -911,21 +914,21 @@ class Order extends \yii\db\ActiveRecord
                     'Content-Type' => 'application/json',
                 ],
             ]);
-        
+
             $body = json_decode($response->getBody()->getContents(), true);
-        
+
             if ($response->getStatusCode() !== 201 || empty($body['success'])) {
                 $errorMessage = $body['message'] ?? 'Неизвестная ошибка склада';
                 throw new \Exception('Ошибка склада: ' . $errorMessage);
             }
-        
+
         } catch (RequestException $e) {
             if ($e->hasResponse()) {
                 $resp = $e->getResponse();
                 $status = $resp->getStatusCode();
                 $content = (string) $resp->getBody();
                 $data = json_decode($content, true);
-        
+
                 if (json_last_error() === JSON_ERROR_NONE && isset($data['message'])) {
                     Yii::error(
                         "Склад вернул ошибку ($status): " . $data['message'],
@@ -937,7 +940,7 @@ class Order extends \yii\db\ActiveRecord
                     throw new \Exception('Ошибка склада: некорректный ответ.');
                 }
             }
-        
+
             Yii::error(
                 'Не удалось связаться со складом. Guzzle: ' . $e->getMessage(),
                 'warehouse_sync'

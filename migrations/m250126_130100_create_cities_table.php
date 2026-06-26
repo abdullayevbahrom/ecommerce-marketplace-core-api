@@ -8,9 +8,9 @@ class m250126_130100_create_cities_table extends Migration
     {
         $this->createTable('{{%cities}}', [
             'id' => $this->primaryKey(),
-            'bts_id' => $this->integer()->notNull()->unique()->comment('BTS system city ID'),
             'region_id' => $this->integer()->notNull()->comment('Reference to regions table'),
-            'bts_region_id' => $this->integer()->notNull()->comment('BTS system region ID'),
+            'bts_id' => $this->string(255)->notNull()->unique()->comment('BTS system city ID'),
+            'bts_region_id' => $this->string(255)->notNull()->comment('BTS system region ID'),
             'name_ru' => $this->string(255)->notNull()->comment('Russian name'),
             'name_uz' => $this->string(255)->notNull()->comment('Uzbek name'),
             'name_en' => $this->string(255)->notNull()->comment('English name'),

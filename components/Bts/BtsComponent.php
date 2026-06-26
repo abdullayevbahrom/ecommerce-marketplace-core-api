@@ -190,6 +190,11 @@ class BtsComponent extends Component
         return $regions;
     }
 
+    public static function fetchRegions(): array
+    {
+        return BtsCatalog::REGIONS;
+    }
+
     public static function getRegionByCode(string $regionCode): ?array
     {
         $region = null;
@@ -225,23 +230,13 @@ class BtsComponent extends Component
         return $regionName;
     }
 
-    public static function getCities(string $regionCode, string $lang = 'ru'): array
+    public static function getCities(string $regionCode): array
     {
-        $lang = self::validateLang($lang);
-        $cities = [];
-
         if (! self::existsRegionByCode($regionCode)) {
-            return $cities;
+            return [];
         }
 
-        foreach (BtsCatalog::CITIES[$regionCode] as $id => $city) {
-            $cities[$id] = [
-                'region_id' => $city['region_code'],
-                'name' => $city['name'][$lang]
-            ];
-        }
-
-        return $cities;
+        return BtsCatalog::CITIES[$regionCode];
     }
 
     public static function existsCityByRegionCodeAndCityCode(string $regionCode, string $cityCode): bool
@@ -295,19 +290,12 @@ class BtsComponent extends Component
         foreach (BtsCatalog::CITIES[$regionCode] as $cityId => $city) {
             $name = $city['name'][$lang];
             $nameLower = mb_strtolower($name);
-            $cityData = [
-                'region_id' => $city['region_code'] ?? $regionCode,
-                'name_uz' => $city['name']['uz'] ?? $name,
-                'name_ru' => $city['name']['ru'] ?? $name,
-                'name_en' => $city['name']['en'] ?? $name,
-            ];
 
             if (mb_strpos($nameLower, $searchTerm) !== false) {
                 $results[$cityId] = [
-                    'id' => $cityId,
                     'distance' => 0,
                     'matched_name' => $name
-                ] + $cityData;
+                ] + $city;
 
                 continue;
             }
@@ -317,10 +305,9 @@ class BtsComponent extends Component
 
             if ($distance <= $maxAllowedDistance) {
                 $results[$cityId] = [
-                    'id' => $cityId,
                     'distance' => $distance,
                     'matched_name' => $name
-                ] + $cityData;
+                ] + $city;
             }
         }
 
@@ -378,16 +365,93 @@ class BtsComponent extends Component
         return BtsCatalog::STATUSES;
     }
 
-    public static function getStatusLabel(int $statusId, string $lang = 'ru'): ?string
+    public static function getStatusColorClass(string $status): ?string
     {
-        if (empty(BtsCatalog::STATUSES[$statusId])) {
+        if (empty(BtsCatalog::STATUSES[$status])) {
+            return 'label-default';
+        }
+
+        return BtsCatalog::STATUSES[$status]['color_class'];
+    }
+
+    public static function getStatusLabel(string $status, string $lang = 'ru'): ?string
+    {
+        if (empty(BtsCatalog::STATUSES[$status])) {
             return null;
         }
 
         $lang = self::validateLang($lang);
-        $status = BtsCatalog::STATUSES[$statusId];
+        $status = BtsCatalog::STATUSES[$status];
 
         return $status['name'][$lang];
+    }
+
+    public function validateOrderData(array $data): array
+    {
+        $errors = [];
+
+        if (!isset($data['pickup_type']) || !\in_array($data['pickup_type'], ['courier', 'self', 'branch'])) {
+            $errors['pickup_type'] = "pickup_type is required (courier, self, or branch)";
+        }
+        if (!isset($data['dropoff_type']) || !\in_array($data['dropoff_type'], ['courier', 'self', 'branch'])) {
+            $errors['dropoff_type'] = "dropoff_type is required (courier, self, or branch)";
+        }
+
+        if (!isset($data['sender']) || !\is_array($data['sender'])) {
+            $errors['sender'] = "sender object is required";
+        } else {
+            foreach (['name', 'phone', 'address', 'city_code'] as $field) {
+                if (empty($data['sender'][$field])) {
+                    $errors["sender.{$field}"] = "sender.{$field} is required";
+                }
+            }
+        }
+
+        if (!isset($data['receiver']) || !\is_array($data['receiver'])) {
+            $errors['receiver'] = "receiver object is required";
+        } else {
+            foreach (['name', 'phone', 'address', 'city_code'] as $field) {
+                if (empty($data['receiver'][$field])) {
+                    $errors["receiver.{$field}"] = "receiver.{$field} is required";
+                }
+            }
+        }
+
+        if (!isset($data['cargo']) || !\is_array($data['cargo'])) {
+            $errors['cargo'] = "cargo object is required";
+        } else {
+            if (empty($data['cargo']['weight'])) {
+                $errors['cargo.weight'] = "cargo.weight is required";
+            }
+            if (empty($data['cargo']['piece'])) {
+                $errors['cargo.piece'] = "cargo.piece is required";
+            }
+        }
+
+        return $errors;
+    }
+
+    public function validateCalculateData(array $data): array
+    {
+        $errors = [];
+
+        if (!isset($data['pickup_type']) || !\in_array($data['pickup_type'], ['courier', 'self', 'branch'])) {
+            $errors['pickup_type'] = "pickup_type is required (courier, self, or branch)";
+        }
+        if (!isset($data['dropoff_type']) || !\in_array($data['dropoff_type'], ['courier', 'self', 'branch'])) {
+            $errors['dropoff_type'] = "dropoff_type is required (courier, self, or branch)";
+        }
+        if (!isset($data['weight']) || empty($data['weight'])) {
+            $errors['weight'] = "weight is required";
+        }
+        if (!isset($data['senderCityCode']) || empty($data['senderCityCode'])) {
+            $errors['senderCityCode'] = "senderCityCode is required";
+        }
+        if (!isset($data['receiverCityCode']) || empty($data['receiverCityCode'])) {
+            $errors['receiverCityCode'] = "receiverCityCode is required";
+        }
+
+        return $errors;
     }
 
     private function makeRequest(string $method, string $endpoint, array $data = [])

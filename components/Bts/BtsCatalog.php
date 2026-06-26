@@ -8,7 +8,7 @@ final readonly class BtsCatalog
 {
     public const array REGIONS = [
         60 => [
-            'code' => 60,
+            'code' => '60',
             'name' => [
                 'uz' => 'Andijon viloyati',
                 'ru' => 'Андижанская область',
@@ -162,7 +162,7 @@ final readonly class BtsCatalog
             ]
         ],
         50 => [
-            'code' => 50,
+            'code' => '50',
             'name' => [
                 'uz' => 'Namangan viloyati',
                 'ru' => 'Наманганская область',
@@ -280,7 +280,7 @@ final readonly class BtsCatalog
             ]
         ],
         90 => [
-            'code' => 90,
+            'code' => '90',
             'name' => [
                 'uz' => 'Xorazm viloyati',
                 'ru' => 'Хорезмская область',
@@ -407,7 +407,7 @@ final readonly class BtsCatalog
             ]
         ],
         10 => [
-            'code' => 10,
+            'code' => '10',
             'name' => [
                 'uz' => 'Toshkent viloyati',
                 'ru' => 'Ташкентская область',
@@ -597,7 +597,7 @@ final readonly class BtsCatalog
             ]
         ],
         '01' => [
-            'code' => 01,
+            'code' => '01',
             'name' => [
                 'uz' => 'Tashkent shaxri',
                 'ru' => 'город Ташкент',
@@ -715,7 +715,7 @@ final readonly class BtsCatalog
             ]
         ],
         80 => [
-            'code' => 80,
+            'code' => '80',
             'name' => [
                 'uz' => 'Buxoro viloyati',
                 'ru' => 'Бухарская область',
@@ -842,7 +842,7 @@ final readonly class BtsCatalog
             ]
         ],
         30 => [
-            'code' => 30,
+            'code' => '30',
             'name' => [
                 'uz' => 'Samarqand viloyati',
                 'ru' => 'Самаркандская область',
@@ -996,7 +996,7 @@ final readonly class BtsCatalog
             ]
         ],
         25 => [
-            'code' => 25,
+            'code' => '25',
             'name' => [
                 'uz' => 'Jizzax viloyati',
                 'ru' => 'Джизакская область',
@@ -1123,7 +1123,7 @@ final readonly class BtsCatalog
             ]
         ],
         85 => [
-            'code' => 85,
+            'code' => '85',
             'name' => [
                 'uz' => 'Navoiy viloyati',
                 'ru' => 'Навоийская область',
@@ -1223,7 +1223,7 @@ final readonly class BtsCatalog
             ]
         ],
         95 => [
-            'code' => 95,
+            'code' => '95',
             'name' => [
                 'uz' => 'Qoraqalpog\'iston',
                 'ru' => 'Каракалпакстан',
@@ -1386,7 +1386,7 @@ final readonly class BtsCatalog
             ]
         ],
         20 => [
-            'code' => 20,
+            'code' => '20',
             'name' => [
                 'uz' => 'Sirdaryo viloyati',
                 'ru' => 'Сырдарьинская область',
@@ -1495,7 +1495,7 @@ final readonly class BtsCatalog
             ]
         ],
         75 => [
-            'code' => 75,
+            'code' => '75',
             'name' => [
                 'uz' => 'Surxondaryo viloyati',
                 'ru' => 'Сурхандарьинская область',
@@ -1640,7 +1640,7 @@ final readonly class BtsCatalog
             ]
         ],
         70 => [
-            'code' => 70,
+            'code' => '70',
             'name' => [
                 'uz' => 'Qashqadaryo viloyati',
                 'ru' => 'Кашкадарьинская область',
@@ -1794,7 +1794,7 @@ final readonly class BtsCatalog
             ]
         ],
         40 => [
-            'code' => 40,
+            'code' => '40',
             'name' => [
                 'uz' => 'Farg\'ona viloyati',
                 'ru' => 'Ферганская область',
@@ -4163,6 +4163,7 @@ final readonly class BtsCatalog
     public const array STATUSES = [
         100 => [
             "code" => 100,
+            "color_class" => 'label-info',
             "name" => [
                 "uz" => "Yuboruvchida",
                 "ru" => "У отправителя",
@@ -4177,6 +4178,7 @@ final readonly class BtsCatalog
         ],
         200 => [
             "code" => 200,
+            "color_class" => 'label-warning',
             "name" => [
                 "uz" => "Kuryer qabul qildi",
                 "ru" => "Курьер принял",
@@ -4191,6 +4193,7 @@ final readonly class BtsCatalog
         ],
         300 => [
             "code" => 300,
+            "color_class" => 'label-warning',
             "name" => [
                 "uz" => "Joʻnatish ofisi",
                 "ru" => "В офисе отправления",
@@ -4205,6 +4208,7 @@ final readonly class BtsCatalog
         ],
         400 => [
             "code" => 400,
+            "color_class" => 'label-warning',
             "name" => [
                 "uz" => "Ichki tashish",
                 "ru" => "Во внутренней перевозке",
@@ -4219,6 +4223,7 @@ final readonly class BtsCatalog
         ],
         500 => [
             "code" => 500,
+            "color_class" => 'label-warning',
             "name" => [
                 "uz" => "Saralash markazida",
                 "ru" => "В РЦ",
@@ -4233,6 +4238,7 @@ final readonly class BtsCatalog
         ],
         600 => [
             "code" => 600,
+            "color_class" => 'label-warning',
             "name" => [
                 "uz" => "Xaltada",
                 "ru" => "В мешке",
@@ -4247,6 +4253,7 @@ final readonly class BtsCatalog
         ],
         700 => [
             "code" => 700,
+            "color_class" => 'label-primary',
             "name" => [
                 "uz" => "Tashishda",
                 "ru" => "В перевозке",
@@ -4261,6 +4268,7 @@ final readonly class BtsCatalog
         ],
         800 => [
             "code" => 800,
+            "color_class" => 'label-warning',
             "name" => [
                 "uz" => "Yetkazish ofisi",
                 "ru" => "В офисе доставки",
@@ -4275,6 +4283,7 @@ final readonly class BtsCatalog
         ],
         1100 => [
             "code" => 1100,
+            "color_class" => 'label-warning',
             "name" => [
                 "uz" => "Kuryer yetkazmoqda",
                 "ru" => "Курьер доставляет",
@@ -4289,6 +4298,7 @@ final readonly class BtsCatalog
         ],
         1200 => [
             "code" => 1200,
+            "color_class" => 'label-success',
             "name" => [
                 "uz" => "Yetkazildi",
                 "ru" => "Доставлен",
@@ -4303,6 +4313,7 @@ final readonly class BtsCatalog
         ],
         1300 => [
             "code" => 1300,
+            "color_class" => 'label-danger',
             "name" => [
                 "uz" => "Oʻchirildi",
                 "ru" => "Удалён",
@@ -4317,6 +4328,7 @@ final readonly class BtsCatalog
         ],
         1400 => [
             "code" => 1400,
+            "color_class" => 'label-danger',
             "name" => [
                 "uz" => "Muddati tugadi",
                 "ru" => "Срок истек",

@@ -3,20 +3,20 @@ namespace app\modules\admin\controllers;
 
 use Yii;
 use yii\web\Controller;
-use yii\web\UploadedFile;
 use yii\web\HttpException;
 
 use app\models\user\User;
 use app\models\order\Order;
 use app\models\order\OrderSearch;
 use app\models\order\product\OrderProduct;
-use app\models\order\product\OrderProductSearch;
-use yii\services\BTS;
+use app\components\Bts\BtsComponent;
 
-class OrderController extends Controller{
-	public $user;
-    
-    public function beforeAction($action) {
+class OrderController extends Controller
+{
+    public ?User $user;
+
+    public function beforeAction($action)
+    {
         // Enable CSRF validation for BTS actions for security
         if (in_array($action->id, ['update-bts-status', 'get-bts-tracking'])) {
             $this->enableCsrfValidation = true;
@@ -26,7 +26,7 @@ class OrderController extends Controller{
         if (Yii::$app->user->isGuest) {
             return $this->redirect(['/admin/default']);
         }
-        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
+        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id' => Yii::$app->user->identity->id])->one();
 
         if (!$this->user) {
             Yii::$app->user->logout(false);
@@ -52,8 +52,8 @@ class OrderController extends Controller{
         return parent::beforeAction($action);
     }
 
-    public function actionIndex() {
-
+    public function actionIndex()
+    {
         $searchModel = new OrderSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
         $dataProvider->query->with('user', 'payment', 'delivery');
@@ -65,23 +65,24 @@ class OrderController extends Controller{
         ]);
     }
 
-    public function actionView($id) {
-        $model = Order::find()->with('user', 'orderProducts')->where(['id'=>$id])->one();
+    public function actionView(int $id)
+    {
+        $model = Order::find()->with('user', 'orderProducts')->where(['id' => $id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
 
         $products = OrderProduct::find()->with([
-            'product', 
-            'product.image', 
-            'orderProductFilter', 
-            'orderProductFilter.productFilter', 
+            'product',
+            'product.image',
+            'orderProductFilter',
+            'orderProductFilter.productFilter',
             'orderProductFilter.productFilter.filter',
             'productReview', // Single review from order user
             'productReviews', // All reviews for the product
             'productReviews.user', // Users who wrote reviews
             'delivery' // Add delivery relationship
-        ])->where(['order_id'=>$model->id])->all();
+        ])->where(['order_id' => $model->id])->all();
 
         // Get connected DIDOX documents
         $didoxDocuments = \app\models\didox\DidoxDocument::find()
@@ -119,10 +120,10 @@ class OrderController extends Controller{
 
         // Use the service to create documents
         $result = \app\services\DidoxOrderService::createDocuments($model);
-        
+
         if ($result['success'] && empty($result['messages'])) {
             // If success is true but no messages, it might be weird, but let's handle it
-             Yii::$app->session->setFlash('success', 'Didox documents process completed successfully.');
+            Yii::$app->session->setFlash('success', 'Didox documents process completed successfully.');
         } elseif ($result['success']) {
             $message = implode('<br>', $result['messages']);
             Yii::$app->session->setFlash('success', $message);
@@ -130,7 +131,7 @@ class OrderController extends Controller{
             $message = !empty($result['messages']) ? implode('<br>', $result['messages']) : 'Failed to create Didox documents.';
             Yii::$app->session->setFlash('error', $message);
         }
-        
+
         return $this->redirect(['view', 'id' => $id]);
     }
 
@@ -147,7 +148,7 @@ class OrderController extends Controller{
         }
 
         $result = \app\services\DidoxOrderService::createInvoice($model);
-        
+
         if ($result['success']) {
             $message = implode('<br>', $result['messages']);
             Yii::$app->session->setFlash('success', $message ?: 'Invoice created successfully.');
@@ -155,7 +156,7 @@ class OrderController extends Controller{
             $message = !empty($result['messages']) ? implode('<br>', $result['messages']) : 'Failed to create invoice.';
             Yii::$app->session->setFlash('error', $message);
         }
-        
+
         return $this->redirect(['view', 'id' => $id]);
     }
 
@@ -172,7 +173,7 @@ class OrderController extends Controller{
         }
 
         $result = \app\services\DidoxOrderService::createArbitrary($model);
-        
+
         if ($result['success']) {
             $message = implode('<br>', $result['messages']);
             Yii::$app->session->setFlash('success', $message ?: 'Arbitrary contract created successfully.');
@@ -180,7 +181,7 @@ class OrderController extends Controller{
             $message = !empty($result['messages']) ? implode('<br>', $result['messages']) : 'Failed to create arbitrary contract.';
             Yii::$app->session->setFlash('error', $message);
         }
-        
+
         return $this->redirect(['view', 'id' => $id]);
     }
 
@@ -189,21 +190,22 @@ class OrderController extends Controller{
      * @param int $id Order ID
      * @return array JSON response
      */
-    public function actionGetOrderData($id) {
+    public function actionGetOrderData($id)
+    {
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
-        
+
         $order = Order::find()
             ->with(['user', 'user.addresses', 'orderProducts', 'orderProducts.product', 'orderProducts.product.ikpu', 'delivery'])
             ->where(['id' => $id])
             ->one();
-            
+
         if (!$order) {
             return [
                 'success' => false,
                 'error' => 'Заказ не найден'
             ];
         }
-        
+
         // Check if order is already connected to DIDOX document
         $existingConnection = \app\models\didox\DidoxDocument::isOrderConnectedToDidox($id);
         if ($existingConnection) {
@@ -212,7 +214,7 @@ class OrderController extends Controller{
                 'error' => "Заказ уже связан с документом \"{$existingConnection['name']}\" ({$existingConnection['document_type_label']})"
             ];
         }
-        
+
         return [
             'success' => true,
             'data' => [
@@ -234,7 +236,7 @@ class OrderController extends Controller{
                     'email' => $order->user->email,
                     'inn' => $order->user->inn,
                     'last_address' => $order->user->last_address,
-                    'addresses' => $order->user->addresses ? array_map(function($addr) {
+                    'addresses' => $order->user->addresses ? array_map(function ($addr) {
                         return ['address' => $addr->address];
                     }, $order->user->addresses) : []
                 ] : null,
@@ -243,10 +245,10 @@ class OrderController extends Controller{
                     'name' => $order->delivery->name_ru,
                     'price' => $order->delivery->price
                 ] : null,
-                'products' => array_map(function($orderProduct) {
+                'products' => array_map(function ($orderProduct) {
                     $product = $orderProduct->product;
                     $unitPrice = $orderProduct->amount > 0 ? $orderProduct->product_price / $orderProduct->amount : 0;
-                    
+
                     return [
                         'id' => $orderProduct->id,
                         'product_id' => $orderProduct->product_id,
@@ -274,12 +276,13 @@ class OrderController extends Controller{
         ];
     }
 
-    public function actionRemove($id) {
-        $model = Order::find()->with('user', 'orderProducts')->where(['id'=>$id])->one();
+    public function actionRemove(int $id)
+    {
+        $model = Order::find()->with('user', 'orderProducts')->where(['id' => $id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
-        
+
         if ($this->user && ($this->user->role != User::ROLE_USER) && $model && $model->delete()) {
             Yii::$app->session->setFlash('order_removed', 'Deleted');
         }
@@ -287,7 +290,8 @@ class OrderController extends Controller{
         return $this->redirect(['/admin/order']);
     }
 
-    public function actionAccept($id, $status) {
+    public function actionAccept(int $id, int $status)
+    {
         $model = Order::findOne($id);
 
         if (!$model) {
@@ -348,25 +352,25 @@ class OrderController extends Controller{
 
         $updated = false;
         $results = [];
-        $bts = new BTS();
+        /** @var BtsComponent $bts */
+        $bts = Yii::$app->bts;
 
         foreach ($order->orderProducts as $orderProduct) {
             if ($orderProduct->bts_id) {
-                $response = $bts->trackOrder($orderProduct->bts_id);
-                error_log("responsebts: " . json_encode($response));
-                if ($response['success'] && isset($response['data'])) {
-                    $trackingData = $response['data'];
+                $trackingData = $bts->getOrderStatus($orderProduct->bts_id);
+                error_log("responsebts: " . json_encode($trackingData));
+                if (isset($trackingData['orderId'])) {
                     $oldStatus = $orderProduct->bts_status;
                     $oldStatusInfo = $orderProduct->bts_status_info;
-                    
+
                     // Update status from tracking data - API returns direct structure
-                    if (isset($trackingData['status']['id'])) {
-                        $orderProduct->bts_status = $trackingData['status']['id'];
+                    if (isset($trackingData['status']['code'])) {
+                        $orderProduct->bts_status = $trackingData['status']['code'];
                     }
                     if (isset($trackingData['status']['name'])) {
                         $orderProduct->bts_status_info = $trackingData['status']['name'];
                     }
-                    
+
                     if ($orderProduct->save(false)) {
                         $updated = true;
                         $results[] = [
@@ -375,7 +379,7 @@ class OrderController extends Controller{
                             'new_status' => $orderProduct->bts_status,
                             'old_status_info' => $oldStatusInfo,
                             'new_status_info' => $orderProduct->bts_status_info,
-                            'status_label' => BTS::getBtsStatusLabel($orderProduct->bts_status, 'ru')
+                            'status_label' => $bts->getBtsStatusLabel($orderProduct->bts_status, 'ru')
                         ];
                     }
                 } else {
@@ -429,53 +433,63 @@ class OrderController extends Controller{
         }
 
         $trackingData = [];
-        $bts = new BTS();
+        /** @var BtsComponent $bts */
+        $bts = Yii::$app->bts;
 
         foreach ($order->orderProducts as $orderProduct) {
             if ($orderProduct->bts_id) {
                 // Get order history instead of just tracking
-                $historyResponse = $bts->getOrderHistory($orderProduct->bts_id);
-                
-                if ($historyResponse['success']) {
-                    $historyData = $historyResponse['data'];
-                    
-                    // Process history entries
-                    $processedHistory = [];
-                    if (is_array($historyData)) {
-                        foreach ($historyData as $entry) {
-                            $processedHistory[] = [
-                                'message' => $entry['message'] ?? '',
-                                'timestamp' => $entry['timestamp'] ?? null,
-                                'formatted_date' => isset($entry['timestamp']) ? date('d.m.Y H:i:s', $entry['timestamp']) : '',
-                                'status_id' => $entry['status_id'] ?? null,
-                                'status_label' => BTS::getBtsStatusLabel($entry['status_id'] ?? null, 'ru'),
-                                'location' => $entry['location'] ?? '',
-                                'tracking_link' => $entry['trackingLink'] ?? null
-                            ];
-                        }
-                        
-                        // Sort by timestamp descending (newest first)
-                        usort($processedHistory, function($a, $b) {
-                            return ($b['timestamp'] ?? 0) - ($a['timestamp'] ?? 0);
-                        });
-                    }
-                    
-                    $trackingData[] = [
-                        'order_product_id' => $orderProduct->id,
-                        'bts_id' => $orderProduct->bts_id,
-                        'current_status' => $orderProduct->bts_status,
-                        'current_status_info' => $orderProduct->bts_status_info,
-                        'current_status_label' => BTS::getBtsStatusLabel($orderProduct->bts_status, 'ru'),
-                        'history' => $processedHistory,
-                        'raw_history_data' => $historyData
-                    ];
-                } else {
-                    $trackingData[] = [
-                        'order_product_id' => $orderProduct->id,
-                        'bts_id' => $orderProduct->bts_id,
-                        'error' => $historyResponse['error'] ?? 'Ошибка при получении истории заказа'
-                    ];
-                }
+                $historyResponse = $bts->getOrderStatus($orderProduct->bts_id);
+                $trackingData[] = [
+                    'order_product_id' => $orderProduct->id,
+                    'bts_id' => $orderProduct->bts_id,
+                    'current_status' => $orderProduct->bts_status,
+                    'current_status_info' => $orderProduct->bts_status_info,
+                    'current_status_label' => $bts->getBtsStatusLabel($orderProduct->bts_status, 'ru'),
+                    'history' => $historyResponse,
+                    'raw_history_data' => $historyResponse
+                ];
+
+                // if ($historyResponse['success']) {
+                //     $historyData = $historyResponse['data'];
+
+                //     // Process history entries
+                //     $processedHistory = [];
+                //     if (is_array($historyData)) {
+                //         foreach ($historyData as $entry) {
+                //             $processedHistory[] = [
+                //                 'message' => $entry['message'] ?? '',
+                //                 'timestamp' => $entry['timestamp'] ?? null,
+                //                 'formatted_date' => isset($entry['timestamp']) ? date('d.m.Y H:i:s', $entry['timestamp']) : '',
+                //                 'status_id' => $entry['status_id'] ?? null,
+                //                 'status_label' => $bts->getBtsStatusLabel($entry['status_id'] ?? null, 'ru'),
+                //                 'location' => $entry['location'] ?? '',
+                //                 'tracking_link' => $entry['trackingLink'] ?? null
+                //             ];
+                //         }
+
+                //         // Sort by timestamp descending (newest first)
+                //         usort($processedHistory, function ($a, $b) {
+                //             return ($b['timestamp'] ?? 0) - ($a['timestamp'] ?? 0);
+                //         });
+                //     }
+
+                //     $trackingData[] = [
+                //         'order_product_id' => $orderProduct->id,
+                //         'bts_id' => $orderProduct->bts_id,
+                //         'current_status' => $orderProduct->bts_status,
+                //         'current_status_info' => $orderProduct->bts_status_info,
+                //         'current_status_label' => $bts->getBtsStatusLabel($orderProduct->bts_status, 'ru'),
+                //         'history' => $processedHistory,
+                //         'raw_history_data' => $historyData
+                //     ];
+                // } else {
+                //     $trackingData[] = [
+                //         'order_product_id' => $orderProduct->id,
+                //         'bts_id' => $orderProduct->bts_id,
+                //         'error' => $historyResponse['error'] ?? 'Ошибка при получении истории заказа'
+                //     ];
+                // }
             }
         }
 

@@ -2,11 +2,11 @@
 
 namespace app\models\user\cart;
 
+use app\components\Bts\BtsComponent;
 use Yii;
 use app\models\product\Product;
 use app\models\user\User;
 use app\models\delivery\Delivery;
-use yii\services\BTS;
 
 /**
  * This is the model class for table "user_cart".
@@ -38,17 +38,17 @@ class UserCart extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['product_id'], 'required', 'message'=>'Fill in the field'],
+            [['product_id'], 'required', 'message' => 'Fill in the field'],
             ['product_id', 'checkProduct'],
             ['product_id', 'checkUserBtsLocation'],
             [['user_id', 'product_id', 'delivery_id'], 'integer'],
-            [['amount', 'price'], 'number', 'min'=>1],
+            [['amount', 'price'], 'number', 'min' => 1],
             [['delivery_cost'], 'number'],
             ['amount', 'checkAmount'],
             ['amount', 'checkMinOrder'],
             [['date', 'filter_value_id'], 'safe'],
-            [['product_id'], 'exist', 'skipOnError' => true, 'targetClass' => Product::className(), 'targetAttribute' => ['product_id' => 'id']],
-            [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::className(), 'targetAttribute' => ['user_id' => 'id']],
+            [['product_id'], 'exist', 'skipOnError' => true, 'targetClass' => Product::class, 'targetAttribute' => ['product_id' => 'id']],
+            [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::class, 'targetAttribute' => ['user_id' => 'id']],
         ];
     }
 
@@ -68,7 +68,8 @@ class UserCart extends \yii\db\ActiveRecord
     }
 
     // check product
-    public function checkProduct($attribute, $params) {
+    public function checkProduct($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             $product = Product::findOne($this->product_id);
             if (!$product) {
@@ -82,7 +83,8 @@ class UserCart extends \yii\db\ActiveRecord
     /**
      * Check if user has BTS city set for delivery calculation
      */
-    public function checkUserBtsLocation($attribute, $params) {
+    public function checkUserBtsLocation($attribute, $params)
+    {
         if (!$this->hasErrors() && Yii::$app->user->identity) {
             $user = Yii::$app->user->identity;
             if (empty($user->bts_city_id)) {
@@ -94,7 +96,8 @@ class UserCart extends \yii\db\ActiveRecord
     }
 
     // check amount
-    public function checkAmount($attribute, $params) {
+    public function checkAmount($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             $product = Product::findOne($this->product_id);
             if ($product && ($product->amount < $this->amount)) {
@@ -106,7 +109,8 @@ class UserCart extends \yii\db\ActiveRecord
     }
 
     // check minimum order quantity
-    public function checkMinOrder($attribute, $params) {
+    public function checkMinOrder($attribute, $params)
+    {
         if (!$this->hasErrors()) {
             $product = Product::findOne($this->product_id);
             if ($product && $product->min_order && ($this->amount < $product->min_order)) {
@@ -117,28 +121,29 @@ class UserCart extends \yii\db\ActiveRecord
         return false;
     }
 
-    public function saveObject() {
+    public function saveObject()
+    {
         $product = Product::find()->with(['stock', 'shop.stock'])->where(['id' => $this->product_id])->one();
         $user = Yii::$app->user->identity;
 
-        $user_cart = UserCart::findOne(['user_id'=>$user->getId(), 'product_id'=>$this->product_id]);
+        $user_cart = UserCart::findOne(['user_id' => $user->getId(), 'product_id' => $this->product_id]);
         if ($user_cart) {
             $user_cart->amount += $this->amount;
-            
+
             // Check minimum order quantity for updated amount
             if ($product->min_order && ($user_cart->amount < $product->min_order)) {
                 $this->addError('amount', 'Minimum order quantity for this product is ' . $product->min_order);
                 return false;
             }
-            
+
             // Calculate price based on quantity and wholesale tiers
             $unit_price = $product->getPriceByQuantity($user_cart->amount);
             $user_cart->price = ($user_cart->amount * $unit_price);
             $user_cart->delivery_id = $this->delivery_id;
-            
+
             // Calculate BTS delivery cost
             $user_cart->delivery_cost = $this->calculateBtsDeliveryCost($product, $user, $user_cart->amount);
-            
+
             $user_cart->save();
 
             return $user_cart;
@@ -152,10 +157,10 @@ class UserCart extends \yii\db\ActiveRecord
         $unit_price = $product->getPriceByQuantity($this->amount);
         $this->price = ($this->amount * $unit_price);
         $this->user_id = $user->getId();
-        
+
         // Calculate BTS delivery cost
         $this->delivery_cost = $this->calculateBtsDeliveryCost($product, $user, $this->amount);
-        
+
         if ($this->save()) {
             if ($this->filter_value_id) {
                 $keys = ['user_cart_id', 'product_filter_id'];
@@ -182,7 +187,8 @@ class UserCart extends \yii\db\ActiveRecord
      * @param int $amount
      * @return float
      */
-    public function calculateBtsDeliveryCost($product, $user, $amount = 1) {
+    public function calculateBtsDeliveryCost($product, $user, $amount = 1)
+    {
         // Check if user has BTS city set
         if (empty($user->bts_city_id)) {
             Yii::warning('User BTS city not set for delivery calculation', __METHOD__);
@@ -211,18 +217,17 @@ class UserCart extends \yii\db\ActiveRecord
             $unitWidth = $product->width ?: 10;
             $unitHeight = $product->height ?: 10;
 
-            $volumeX = max(10, (int)$unitLength);
-            $volumeY = max(10, (int)$unitWidth);
-            $volumeZ = max(10, (int)($unitHeight * $amount));
+            $volumeX = max(10, (int) $unitLength);
+            $volumeY = max(10, (int) $unitWidth);
+            $volumeZ = max(10, (int) ($unitHeight * $amount));
 
             // Prepare calculation data using new API format
             $calculatorData = [
-                'senderCityCode' => (string)$senderCityCode,
-                'receiverCityCode' => (string)$user->bts_city_id,
+                'senderCityCode' => (string) $senderCityCode,
+                'receiverCityCode' => (string) $user->bts_city_id,
                 'pickup_type' => 'branch',
                 'dropoff_type' => 'courier',
-                'is_multiple_cost' => 0,
-                'weight' => (float)max(1.0, $totalWeight),
+                'weight' => (float) max(1.0, $totalWeight),
                 'volume' => [
                     'x' => $volumeX,
                     'y' => $volumeY,
@@ -230,31 +235,11 @@ class UserCart extends \yii\db\ActiveRecord
                 ]
             ];
 
-            // Calculate delivery cost using BTS service (new order-calculate endpoint)
-            $bts = new BTS();
-            $response = $bts->calculateOrder($calculatorData);
+            /** @var BtsComponent $bts */
+            $bts = Yii::$app->bts;
+            $btsPrice = $bts->calculateOrder($calculatorData);
 
-            if ($response && isset($response['success']) && $response['success'] && isset($response['data'])) {
-                // Extract price: prefer branch_to_courier, fallback to any available price
-                if (isset($response['data']['branch_to_courier']['price'])) {
-                    return (float)$response['data']['branch_to_courier']['price'];
-                }
-                if (isset($response['data']['all_cost'])) {
-                    return (float)$response['data']['all_cost'];
-                }
-                if (isset($response['data']['price'])) {
-                    return (float)$response['data']['price'];
-                }
-                // Try any available delivery option
-                foreach (['branch_to_branch', 'branch_to_courier', 'courier_to_branch', 'courier_to_courier'] as $key) {
-                    if (isset($response['data'][$key]['available']) && $response['data'][$key]['available'] && isset($response['data'][$key]['price'])) {
-                        return (float)$response['data'][$key]['price'];
-                    }
-                }
-            }
-
-            Yii::warning('BTS delivery calculation returned no price. Response: ' . json_encode($response), __METHOD__);
-            return 0.0;
+            return $btsPrice;
 
         } catch (\Exception $e) {
             Yii::error('BTS delivery calculation error: ' . $e->getMessage(), __METHOD__);
@@ -267,7 +252,8 @@ class UserCart extends \yii\db\ActiveRecord
      * @param Product $product
      * @return string|null
      */
-    protected function getProductStockCityId($productWithStock) {
+    protected function getProductStockCityId($productWithStock)
+    {
         if (!$productWithStock) {
             return null;
         }
@@ -276,7 +262,7 @@ class UserCart extends \yii\db\ActiveRecord
         if ($productWithStock->stock && $productWithStock->stock->bts_city_id) {
             return $productWithStock->stock->bts_city_id;
         }
-        
+
         if ($productWithStock->shop && $productWithStock->shop->stock && $productWithStock->shop->stock->bts_city_id) {
             return $productWithStock->shop->stock->bts_city_id;
         }
@@ -289,7 +275,8 @@ class UserCart extends \yii\db\ActiveRecord
      * @param Product $product
      * @return float
      */
-    protected function calculateTotalWeight($product, $amount) {
+    protected function calculateTotalWeight($product, $amount)
+    {
         // Product weight is stored in grams in the admin/shop UI.
         $unitWeightKg = $this->normalizeProductWeightToKg($product->weight ?? null);
 
@@ -298,7 +285,7 @@ class UserCart extends \yii\db\ActiveRecord
 
     protected function normalizeProductWeightToKg($rawWeight): float
     {
-        $weightInGrams = (float)$rawWeight;
+        $weightInGrams = (float) $rawWeight;
         if ($weightInGrams <= 0) {
             return 1.0;
         }
@@ -306,7 +293,8 @@ class UserCart extends \yii\db\ActiveRecord
         return $weightInGrams / 1000;
     }
 
-    public function getProductFilter() {
+    public function getProductFilter()
+    {
         $data = [];
 
         if ($this->cartFilter) {
@@ -320,15 +308,19 @@ class UserCart extends \yii\db\ActiveRecord
         return $data;
     }
 
-    public function fields() {
+    public function fields()
+    {
         return [
             'cart_amount' => 'amount',
             'delivery',
-            'amount_left'=>function(){return $this->product->amount - $this->amount;},
+            'amount_left' => function () {
+                return $this->product->amount - $this->amount; },
             'price',
-            'unit_price'=>function(){return $this->product->getPriceByQuantity($this->amount);},
+            'unit_price' => function () {
+                return $this->product->getPriceByQuantity($this->amount); },
             'delivery_cost',
-            'total_with_delivery'=>function(){return $this->price + ($this->delivery_cost ?: 0);},
+            'total_with_delivery' => function () {
+                return $this->price + ($this->delivery_cost ?: 0); },
             'product',
             'productFilter'
         ];
@@ -341,7 +333,7 @@ class UserCart extends \yii\db\ActiveRecord
      */
     public function getProduct()
     {
-        return $this->hasOne(Product::className(), ['id' => 'product_id']);
+        return $this->hasOne(Product::class, ['id' => 'product_id']);
     }
 
     /**
@@ -351,17 +343,17 @@ class UserCart extends \yii\db\ActiveRecord
      */
     public function getUser()
     {
-        return $this->hasOne(User::className(), ['id' => 'user_id']);
+        return $this->hasOne(User::class, ['id' => 'user_id']);
     }
 
     public function getCartFilter()
     {
-        return $this->hasMany(UserCartFilter::className(), ['user_cart_id' => 'id']);
+        return $this->hasMany(UserCartFilter::class, ['user_cart_id' => 'id']);
     }
 
     // delivery
     public function getDelivery()
     {
-        return $this->hasOne(Delivery::className(), ['id' => 'delivery_id']);
+        return $this->hasOne(Delivery::class, ['id' => 'delivery_id']);
     }
 }

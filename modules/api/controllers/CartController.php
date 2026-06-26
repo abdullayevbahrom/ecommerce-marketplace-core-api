@@ -1,7 +1,7 @@
 <?php
 namespace app\modules\api\controllers;
 
-
+use app\components\Bts\BtsComponent;
 use Yii;
 use yii\web\Response;
 use yii\rest\Controller;
@@ -827,10 +827,9 @@ class CartController extends Controller {
             $calculatorData = [
                 'senderCityCode' => (string)$stock->bts_city_id,
                 'receiverCityCode' => (string)$receiverCityId,
-                'pickup_type' => 'branch', // Warehouse drops off or is a branch
-                'dropoff_type' => 'courier', // Deliver to user door
-                'is_multiple_cost' => 0,
-                'weight' => max(1.0, $totalWeight), // Minimum 1kg
+                'pickup_type' => 'courier',
+                'dropoff_type' => 'courier',
+                'weight' => max(1.0, $totalWeight),
                 'volume' => [
                     'x' => $volumeX,
                     'y' => $volumeY,
@@ -840,68 +839,34 @@ class CartController extends Controller {
 
             // Calculate delivery cost using BTS service
             try {
-                $bts = new \yii\services\BTS();
-                $response = $bts->calculateOrder($calculatorData);
+                /** @var BtsComponent $bts */
+                $bts = Yii::$app->bts;
+                $deliveryCost = $bts->calculateOrder($calculatorData);
+                $totalDeliveryCost += $deliveryCost;
 
-                if ($response && isset($response['success']) && $response['success'] && isset($response['data'])) {
-                    // Extract price based on pickup_type and dropoff_type (branch_to_courier by default)
-                    $priceKey = 'branch_to_courier';
-                    $deliveryCost = 0;
-                    
-                    if (isset($response['data'][$priceKey]['price'])) {
-                        $deliveryCost = (float)$response['data'][$priceKey]['price'];
-                    } elseif (isset($response['data']['all_cost'])) {
-                        $deliveryCost = (float)$response['data']['all_cost'];
-                    } elseif (isset($response['data']['price'])) {
-                        // Fallback for single price response
-                        $deliveryCost = (float)$response['data']['price'];
-                    } else {
-                        // Try to get any available price
-                        foreach (['branch_to_branch', 'branch_to_courier', 'courier_to_branch', 'courier_to_courier'] as $key) {
-                            if (isset($response['data'][$key]['available']) && $response['data'][$key]['available'] && isset($response['data'][$key]['price'])) {
-                                $deliveryCost = (float)$response['data'][$key]['price'];
-                                break;
-                            }
-                        }
-                    }
-                    $totalDeliveryCost += $deliveryCost;
-                    
-                    $calculations[] = [
-                        'stock_id' => $stockId,
-                        'stock_name' => $stock->name_ru,
-                        'sender_city_id' => $stock->bts_city_id,
-                        'receiver_city_id' => $receiverCityId,
-                        'delivery_cost' => $deliveryCost,
-                        'calculation_data' => $calculatorData,
-                        'bts_response' => $response['data'],
-                        'products' => $this->formatCartItemsForCalculation($items),
-                        'totals' => array_merge(
-                            $this->calculateGroupTotals($items),
-                            [
-                                'weight' => $totalWeight,
-                                'volume_cm3' => $totalVolumeCm3,
-                                'packed_dimensions' => [
-                                    'x' => $volumeX,
-                                    'y' => $volumeY,
-                                    'z' => $volumeZ
-                                ],
-                                'product_cost' => $groupProductCost
-                            ]
-                        )
-                    ];
-                } else {
-                    $calculations[] = [
-                        'stock_id' => $stockId,
-                        'stock_name' => $stock->name_ru,
-                        'sender_city_id' => $stock->bts_city_id,
-                        'receiver_city_id' => $receiverCityId,
-                        'delivery_cost' => 0,
-                        'error' => 'BTS calculation failed',
-                        'bts_response' => $response,
-                        'products' => $this->formatCartItemsForCalculation($items),
-                        'totals' => $this->calculateGroupTotals($items)
-                    ];
-                }
+                $calculations[] = [
+                    'stock_id' => $stockId,
+                    'stock_name' => $stock->name_ru,
+                    'sender_city_id' => $stock->bts_city_id,
+                    'receiver_city_id' => $receiverCityId,
+                    'delivery_cost' => $deliveryCost,
+                    'calculation_data' => $calculatorData,
+                    'bts_response' => $deliveryCost,
+                    'products' => $this->formatCartItemsForCalculation($items),
+                    'totals' => array_merge(
+                        $this->calculateGroupTotals($items),
+                        [
+                            'weight' => $totalWeight,
+                            'volume_cm3' => $totalVolumeCm3,
+                            'packed_dimensions' => [
+                                'x' => $volumeX,
+                                'y' => $volumeY,
+                                'z' => $volumeZ
+                            ],
+                            'product_cost' => $groupProductCost
+                        ]
+                    )
+                ];
             } catch (\Exception $e) {
                 $calculations[] = [
                     'stock_id' => $stockId,
@@ -932,8 +897,8 @@ class CartController extends Controller {
                     'total_delivery_cost' => $totalDeliveryCost,
                     'grand_total' => $totalProductCost + $totalDeliveryCost,
                     'currency' => 'UZS',
-                    'stock_groups_count' => count($stockGroups),
-                    'total_items' => count($cartItems)
+                    'stock_groups_count' => \count($stockGroups),
+                    'total_items' => \count($cartItems)
                 ],
                 'user_info' => [
                     'bts_city_id' => $receiverCityId,

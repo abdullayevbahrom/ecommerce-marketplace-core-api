@@ -6,6 +6,8 @@ use Yii;
 use app\models\order\Order;
 use app\models\product\Product;
 use app\models\delivery\Delivery;
+use \app\models\stock\Stock;
+use yii\db\ActiveQuery;
 
 /**
  * This is the model class for table "order_product".
@@ -26,21 +28,15 @@ use app\models\delivery\Delivery;
  *
  * @property Order $order
  * @property Product $product
- * @property \app\models\stock\Stock $stock
+ * @property Stock $stock
  */
 class OrderProduct extends \yii\db\ActiveRecord
 {
-    /**
-     * {@inheritdoc}
-     */
     public static function tableName()
     {
         return 'order_product';
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function rules()
     {
         return [
@@ -48,15 +44,12 @@ class OrderProduct extends \yii\db\ActiveRecord
             [['amount', 'price', 'product_price', 'delivery_cost', 'bts_price'], 'number'],
             [['date'], 'safe'],
             [['bts_id', 'bts_status', 'bts_status_info', 'address'], 'string'],
-            [['order_id'], 'exist', 'skipOnError' => true, 'targetClass' => Order::className(), 'targetAttribute' => ['order_id' => 'id']],
-            [['product_id'], 'exist', 'skipOnError' => true, 'targetClass' => Product::className(), 'targetAttribute' => ['product_id' => 'id']],
-            [['stock_id'], 'exist', 'skipOnError' => true, 'targetClass' => \app\models\stock\Stock::className(), 'targetAttribute' => ['stock_id' => 'id']],
+            [['order_id'], 'exist', 'skipOnError' => true, 'targetClass' => Order::class, 'targetAttribute' => ['order_id' => 'id']],
+            [['product_id'], 'exist', 'skipOnError' => true, 'targetClass' => Product::class, 'targetAttribute' => ['product_id' => 'id']],
+            [['stock_id'], 'exist', 'skipOnError' => true, 'targetClass' => Stock::class, 'targetAttribute' => ['stock_id' => 'id']],
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function attributeLabels()
     {
         return [
@@ -77,136 +70,104 @@ class OrderProduct extends \yii\db\ActiveRecord
         ];
     }
 
-    public function fields() {
+    public function fields()
+    {
         return [
-            'id', 
-            'delivery', 
-            'price', 
+            'id',
+            'delivery',
+            'price',
             'product_price',
-            'unit_price' => function() { return $this->getUnitPrice(); },
-            'total_cost' => function() { return $this->getTotalCost(); },
-            'delivery_cost', 
-            'amount', 
-            'status', 
-            'product', 
-            'refund', 
-            'stock', 
-            'bts_id', 
-            'bts_status', 
-            'bts_status_info', 
-            'bts_price', 
+            'unit_price' => function () {
+                return $this->getUnitPrice(); },
+            'total_cost' => function () {
+                return $this->getTotalCost(); },
+            'delivery_cost',
+            'amount',
+            'status',
+            'product',
+            'refund',
+            'stock',
+            'bts_id',
+            'bts_status',
+            'bts_status_info',
+            'bts_price',
             'address'
         ];
     }
 
-    /**
-     * Gets query for [[Order]].
-     *
-     * @return \yii\db\ActiveQuery
-     */
-    public function getOrder()
+    public function getOrder(): ActiveQuery
     {
-        return $this->hasOne(Order::className(), ['id' => 'order_id']);
+        return $this->hasOne(Order::class, ['id' => 'order_id']);
     }
 
-    /**
-     * Gets query for [[Product]].
-     *
-     * @return \yii\db\ActiveQuery
-     */
-    public function getProduct()
+    public function getProduct(): ActiveQuery
     {
-        return $this->hasOne(Product::className(), ['id' => 'product_id']);
+        return $this->hasOne(Product::class, ['id' => 'product_id']);
     }
 
-    public function getOrderProductFilter()
+    public function getOrderProductFilter(): ActiveQuery
     {
-        return $this->hasMany(OrderProductFilter::className(), ['order_product_id' => 'id']);
+        return $this->hasMany(OrderProductFilter::class, ['order_product_id' => 'id']);
     }
 
-    public function getRefund()
+    public function getRefund(): ActiveQuery
     {
-        return $this->hasOne(OrderProductRefund::className(), ['order_product_id' => 'id']);
+        return $this->hasOne(OrderProductRefund::class, ['order_product_id' => 'id']);
     }
 
-    public function getDelivery()
+    public function getDelivery(): ActiveQuery
     {
-        return $this->hasOne(Delivery::className(), ['id' => 'delivery_id']);
+        return $this->hasOne(Delivery::class, ['id' => 'delivery_id']);
     }
 
-    public function getProductReview()
+    public function getProductReview(): ActiveQuery
     {
-        return $this->hasOne(\app\models\product\review\ProductReview::className(), ['product_id' => 'product_id'])
-                    ->andOnCondition(['user_id' => $this->order->user_id]);
+        return $this->hasOne(\app\models\product\review\ProductReview::class, ['product_id' => 'product_id'])
+            ->andOnCondition(['user_id' => $this->order->user_id]);
     }
 
-    public function getProductReviews()
+    public function getProductReviews(): ActiveQuery
     {
-        return $this->hasMany(\app\models\product\review\ProductReview::className(), ['product_id' => 'product_id'])
-                    ->with('user');
+        return $this->hasMany(\app\models\product\review\ProductReview::class, ['product_id' => 'product_id'])
+            ->with('user');
     }
 
-    public function hasReview()
+    public function hasReview(): bool
     {
         return $this->productReview !== null;
     }
 
-    public function hasReviews()
+    public function hasReviews(): bool
     {
-        return count($this->productReviews) > 0;
+        return \count($this->productReviews) > 0;
     }
 
-    /**
-     * Gets query for [[Stock]].
-     *
-     * @return \yii\db\ActiveQuery
-     */
-    public function getStock()
+    public function getStock(): ActiveQuery
     {
-        return $this->hasOne(\app\models\stock\Stock::className(), ['id' => 'stock_id']);
+        return $this->hasOne(Stock::class, ['id' => 'stock_id']);
     }
 
-    /**
-     * Check if this order product has BTS integration
-     * @return bool
-     */
-    public function hasBtsIntegration()
+    public function hasBtsIntegration(): bool
     {
         return !empty($this->bts_id);
     }
 
-    /**
-     * Get BTS status label
-     * @return string
-     */
-    public function getBtsStatusLabel()
+    public function getBtsStatusLabel(): string
     {
         return $this->bts_status_info ?? 'Unknown status';
     }
 
-    /**
-     * Get delivery address - custom address or order address
-     * @return string
-     */
-    public function getDeliveryAddress()
+    public function getDeliveryAddress(): string
     {
         return $this->address ?? $this->order->address;
     }
 
-    /**
-     * Get total cost including delivery
-     * @return float
-     */
-    public function getTotalCost()
+    public function getTotalCost(): float
     {
         return ($this->price ?: 0);
     }
 
-    /**
-     * Get unit price (for backwards compatibility and display)
-     * @return float
-     */
-    public function getUnitPrice()
+    public function getUnitPrice(): float
     {
         return $this->amount > 0 ? ($this->product_price ?: 0) / $this->amount : ($this->price ?: 0);
     }

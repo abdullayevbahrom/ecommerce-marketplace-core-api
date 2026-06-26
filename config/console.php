@@ -89,6 +89,9 @@ $config = [
         's3' => [
             'class' => 'app\components\S3Component',
         ],
+        'bts' => [
+            'class' => 'app\components\Bts\BtsComponent',
+        ],
     ],
     'params' => $params,
 

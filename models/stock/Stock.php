@@ -12,8 +12,7 @@ use app\models\shop\Shop;
 use app\models\Images;
 use app\models\Region;
 use app\models\City;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\RequestException;
+use \yii\db\ActiveQuery;
 
 /**
  * This is the model class for table "stock".
@@ -43,21 +42,16 @@ class Stock extends \yii\db\ActiveRecord
 
     public bool $suppressSyncEvents = false;
     public $imageFiles = [];
-    /**
-     * {@inheritdoc}
-     */
+
     public static function tableName()
     {
         return 'stock';
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function rules()
     {
         return [
-            [['name_ru'], 'required', 'message' => 'Заполните поле'],
+            [['name_ru', 'bts_region_id', 'bts_city_id'], 'required', 'message' => 'Заполните поле'],
             [['shop_id', 'status', 'sort', 'for_marketplace'], 'integer'],
             [['bts_region_id', 'bts_city_id'], 'string', 'max' => 10],
             [['description_ru', 'description_en', 'description_uz', 'address'], 'string'],
@@ -66,14 +60,10 @@ class Stock extends \yii\db\ActiveRecord
             [['shop_id'], 'exist', 'skipOnError' => true, 'targetClass' => Shop::class, 'targetAttribute' => ['shop_id' => 'id']],
             [['bts_region_id'], 'validateBtsRegion'],
             [['bts_city_id'], 'validateBtsCity'],
-            [['bts_city_id'], 'validateBtsLocation'],
             // [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg']
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function attributeLabels()
     {
         return [
@@ -144,9 +134,6 @@ class Stock extends \yii\db\ActiveRecord
         $headers = Yii::$app->request->headers;
         $language = $headers->has('Content-Language') ? $headers->get('Content-Language') : 'ru';
 
-        $controller = Yii::$app->controller->id;
-        $action = Yii::$app->controller->action->id;
-
         $data = [
             'id',
             'name' => function () use ($language) {
@@ -179,19 +166,24 @@ class Stock extends \yii\db\ActiveRecord
         return $data;
     }
 
-    /**
-     * Gets query for [[Shop]].
-     *
-     * @return \yii\db\ActiveQuery
-     */
-    public function getShop()
+    public function getShop(): ActiveQuery
     {
         return $this->hasOne(Shop::class, ['id' => 'shop_id']);
     }
 
-    public function getProducts()
+    public function getProducts(): ActiveQuery
     {
         return $this->hasMany(Product::class, ['stock_id' => 'id']);
+    }
+
+    public function getBtsRegion(): ActiveQuery
+    {
+        return $this->hasOne(Region::class, ['id' => 'bts_region_id']);
+    }
+
+    public function getBtsCity(): ActiveQuery
+    {
+        return $this->hasOne(City::class, ['id' => 'bts_city_id']);
     }
 
     public function isAvailableForMarketplace(): bool
@@ -199,125 +191,66 @@ class Stock extends \yii\db\ActiveRecord
         return (int) $this->for_marketplace === 1;
     }
 
-    // location relationships using BTS constants
-    public function getBtsRegion()
+    public function getRegionName($language = 'ru'): ?string
     {
-        if ($this->bts_region_id) {
-            $regions = \yii\services\BTS::getRegionsDetailed();
-            return isset($regions[$this->bts_region_id]) ? $regions[$this->bts_region_id] : null;
+        if ($this->bts_region_id && $this->btsRegion) {
+            return $this->btsRegion->getName($language);
         }
         return null;
     }
 
-    public function getBtsCity()
+    public function getCityName($language = 'ru'): ?string
     {
-        if ($this->bts_city_id) {
-            $cities = \yii\services\BTS::getCitiesDetailed();
-            return isset($cities[$this->bts_city_id]) ? $cities[$this->bts_city_id] : null;
+        if ($this->bts_city_id && $this->btsCity) {
+            return $this->btsCity->getName($language);
         }
         return null;
     }
 
-    /**
-     * Get region name
-     * @param string $language
-     * @return string|null
-     */
-    public function getRegionName($language = 'ru')
-    {
-        if ($this->bts_region_id) {
-            return \yii\services\BTS::getRegionName($this->bts_region_id, $language);
-        }
-        return null;
-    }
-
-    /**
-     * Get city name
-     * @param string $language
-     * @return string|null
-     */
-    public function getCityName($language = 'ru')
-    {
-        if ($this->bts_city_id) {
-            return \yii\services\BTS::getCityName($this->bts_city_id, $language);
-        }
-        return null;
-    }
-
-    /**
-     * Get full address with region and city
-     * @param string $language
-     * @return string
-     */
-    public function getFullAddress($language = 'ru')
+    public function getFullAddress($language = 'ru'): ?string
     {
         $parts = [];
 
-        if ($regionName = $this->getRegionName($language)) {
-            $parts[] = $regionName;
+        if ($this->getRegionName($language)) {
+            $parts[] = $this->getRegionName($language);
         }
 
-        if ($cityName = $this->getCityName($language)) {
-            $parts[] = $cityName;
+        if ($this->getCityName($language)) {
+            $parts[] = $this->getCityName($language);
         }
 
         if ($this->address) {
             $parts[] = $this->address;
         }
 
+        if (empty($parts)) {
+            return null;
+        }
+
         return implode(', ', $parts);
     }
 
-    /**
-     * Validate BTS region ID
-     * @return bool
-     */
-    public function validateBtsRegion()
+    public function validateBtsRegion(): bool
     {
-        if ($this->bts_region_id) {
-            $regions = \yii\services\BTS::getRegions();
-            if (!isset($regions[$this->bts_region_id])) {
-                $this->addError('bts_region_id', 'Invalid BTS region ID.');
-                return false;
-            }
+        if ($this->bts_region_id && Yii::$app->bts->existsRegionByCode($this->bts_region_id)) {
+            return true;
         }
-        return true;
+        $this->addError('bts_region_id', 'Invalid BTS region ID.');
+
+        return false;
     }
 
-    /**
-     * Validate BTS city ID
-     * @return bool
-     */
-    public function validateBtsCity()
+    public function validateBtsCity(): bool
     {
-        if ($this->bts_city_id) {
-            $cities = \yii\services\BTS::getCitiesDetailed();
-            if (!isset($cities[$this->bts_city_id])) {
-                $this->addError('bts_city_id', 'Invalid BTS city ID.');
-                return false;
-            }
+        if ($this->bts_city_id && Yii::$app->bts->existsCityByRegionCodeAndCityCode($this->bts_region_id, $this->bts_city_id)) {
+            return true;
         }
-        return true;
+        $this->addError('bts_city_id', 'Invalid BTS city ID.');
+
+        return false;
     }
 
-    /**
-     * Validate BTS region and city relationship
-     * @return bool
-     */
-    public function validateBtsLocation()
-    {
-        if ($this->bts_region_id && $this->bts_city_id) {
-            $cities = \yii\services\BTS::getCitiesDetailed();
-            if (isset($cities[$this->bts_city_id]) && $cities[$this->bts_city_id]['region_id'] != $this->bts_region_id) {
-                $this->addError('bts_city_id', 'Selected city does not belong to the selected region.');
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // images
-    public function getImage()
+    public function getImage(): ActiveQuery
     {
         return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'stock', 'main' => 1]);
     }
@@ -346,7 +279,7 @@ class Stock extends \yii\db\ActiveRecord
         ];
     }
 
-    public function afterSave($insert, $changedAttributes)
+    public function afterSave($insert, $changedAttributes): void
     {
         parent::afterSave($insert, $changedAttributes);
 
@@ -377,7 +310,7 @@ class Stock extends \yii\db\ActiveRecord
         );
     }
 
-    public function afterDelete()
+    public function afterDelete(): void
     {
         parent::afterDelete();
 

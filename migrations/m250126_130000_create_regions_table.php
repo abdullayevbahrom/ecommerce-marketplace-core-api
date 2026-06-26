@@ -14,7 +14,7 @@ class m250126_130000_create_regions_table extends Migration
     {
         $this->createTable('{{%regions}}', [
             'id' => $this->primaryKey(),
-            'bts_id' => $this->integer()->notNull()->unique()->comment('BTS system region ID'),
+            'bts_id' => $this->string(255)->notNull()->unique()->comment('BTS system region ID'),
             'name_ru' => $this->string(255)->notNull()->comment('Russian name'),
             'name_uz' => $this->string(255)->notNull()->comment('Uzbek name'),
             'name_en' => $this->string(255)->notNull()->comment('English name'),

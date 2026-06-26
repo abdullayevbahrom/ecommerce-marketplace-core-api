@@ -1,23 +1,19 @@
 <?php
 use yii\helpers\Html;
-use yii\bootstrap4\ActiveForm;
-use yii\helpers\ArrayHelper;
 use mihaildev\ckeditor\CKEditor;
-use app\models\filter\Filter;
-use app\widgets\admin_language_tab\AdminLanguageTab;
-use yii\services\BTS;
+use Yii;
+use yii\helpers\ArrayHelper;
 
 /** @var yii\web\View $this */
 /** @var app\models\stock\Stock $model */
 /** @var yii\bootstrap4\ActiveForm $form */
 
 // Get current cities if model has region selected
+$regions = Yii::$app->bts->getRegions('ru');
 $currentCities = [];
 if ($model->bts_region_id) {
-    $cities = BTS::getCities($model->bts_region_id, 'ru');
-    foreach ($cities as $id => $city) {
-        $currentCities[$id] = $city['name'];
-    }
+    $cities = Yii::$app->bts->getCities($model->bts_region_id);
+    $currentCities = ArrayHelper::map($cities, 'code', 'name.ru');
 }
 ?>
 
@@ -52,7 +48,7 @@ if ($model->bts_region_id) {
     <div class="box-body">
         <div class="row">
             <div class="col-sm-4">
-                <?=$form->field($model, 'description_ru')->widget(CKEditor::className(), [
+                <?=$form->field($model, 'description_ru')->widget(CKEditor::class, [
                     'editorOptions' => [
                         'preset' => 'full',
                         'inline' => false,
@@ -60,7 +56,7 @@ if ($model->bts_region_id) {
                 ])->label('Description (Russian):');?>
             </div>
             <div class="col-sm-4">
-                <?=$form->field($model, 'description_en')->widget(CKEditor::className(), [
+                <?=$form->field($model, 'description_en')->widget(CKEditor::class, [
                     'editorOptions' => [
                         'preset' => 'full',
                         'inline' => false,
@@ -68,7 +64,7 @@ if ($model->bts_region_id) {
                 ])->label('Description (English):');?>
             </div>
             <div class="col-sm-4">
-                <?=$form->field($model, 'description_uz')->widget(CKEditor::className(), [
+                <?=$form->field($model, 'description_uz')->widget(CKEditor::class, [
                     'editorOptions' => [
                         'preset' => 'full',
                         'inline' => false,
@@ -105,7 +101,7 @@ if ($model->bts_region_id) {
         <div class="row">
             <div class="col-sm-4">
                 <?=$form->field($model, 'bts_region_id')->dropDownList(
-                    BTS::getRegions('ru'),
+                    $regions,
                     [
                         'prompt' => 'Выберите регион',
                         'id' => 'stock-region',
@@ -154,11 +150,11 @@ if ($model->bts_region_id) {
 </div>
 
 <script>
-$(document).ready(function() {
+$(document).ready(async function() {
     // Initialize region-city functionality
     initializeRegionCityDropdowns();
     
-    function initializeRegionCityDropdowns() {
+    async function initializeRegionCityDropdowns() {
         var $regionSelect = $('#stock-region');
         var $citySelect = $('#stock-city');
         var currentCityId = $regionSelect.data('current-city');
@@ -170,37 +166,44 @@ $(document).ready(function() {
         });
         
         // Load cities for selected region
-        function loadCitiesByRegion(regionId, selectedCityId) {
+        async function loadCitiesByRegion(regionId, selectedCityId) {
             if (regionId) {
                 // Show loading
                 $citySelect.html('<option value="">Загрузка...</option>').prop('disabled', true);
                 
-                $.ajax({
-                    url: '/admin/ajax/get-cities-by-region',
-                    type: 'GET',
-                    data: { regionId: regionId },
-                    dataType: 'json',
-                    success: function(data) {
-                        // Clear and populate cities
-                        $citySelect.html('<option value="">Выберите город</option>');
-                        
-                        if (data && data.length > 0) {
-                            $.each(data, function(index, city) {
-                                var selected = (selectedCityId && city.bts_id == selectedCityId) ? 'selected' : '';
-                                $citySelect.append('<option value="' + city.bts_id + '" ' + selected + '>' + city.name_ru + '</option>');
-                            });
-                        } else {
-                            $citySelect.append('<option value="">Нет городов в данном регионе</option>');
+                let params = new URLSearchParams({ region_id: regionId }).toString();
+                try {
+                    const response = await fetch('/admin/bts/cities?' + params, {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
                         }
-                        
-                        $citySelect.prop('disabled', false);
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error loading cities:', error);
-                        $citySelect.html('<option value="">Ошибка загрузки городов</option>').prop('disabled', false);
-                        alert('Ошибка при загрузке городов. Пожалуйста, попробуйте еще раз.');
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Tarmoq xatosi yuz berdi');
                     }
-                });
+
+                    const data = await response.json();
+                    
+                    citySelect.html('<option value="">Выберите город</option>');
+                    
+                    if (data.success && data.cities) {
+                        Object.values(data.cities).forEach(function(city) {
+                            if (city && city.name) {
+                                let code = city.code;
+                                let title = city.name.ru;
+                                citySelect.append('<option value="' + code + '">' + title + '</option>');
+                            }
+                        });
+                    }
+                    
+                } catch (error) {
+                    console.error('Xatolik:', error);
+                    citySelect.html('<option value="">Ошибка загрузки</option>');
+                } finally {
+                    citySelect.prop('disabled', false);
+                }
             } else {
                 $citySelect.html('<option value="">Выберите город</option>').prop('disabled', false);
             }

@@ -5,6 +5,7 @@ namespace app\models;
 use app\components\RabbitMq\MessageFactory;
 use app\components\RabbitMq\OutboxService;
 use Yii;
+use yii\db\ActiveQuery;
 
 /**
  * This is the model class for table "regions".
@@ -22,10 +23,10 @@ use Yii;
  */
 class Region extends \yii\db\ActiveRecord
 {
+    public const STATUS_ACTIVE = 1;
+    public const STATUS_INACTIVE = 0;
     public bool $suppressSyncEvents = false;
-    /**
-     * {@inheritdoc}
-     */
+
     public static function tableName()
     {
         return 'regions';
@@ -95,23 +96,17 @@ class Region extends \yii\db\ActiveRecord
         );
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function rules()
     {
         return [
             [['bts_id', 'name_ru', 'name_uz', 'name_en'], 'required'],
-            [['bts_id', 'status'], 'integer'],
+            [['status'], 'integer'],
             [['created_at', 'updated_at'], 'safe'],
-            [['name_ru', 'name_uz', 'name_en'], 'string', 'max' => 255],
+            [['bts_id', 'name_ru', 'name_uz', 'name_en'], 'string', 'max' => 255],
             [['bts_id'], 'unique'],
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function attributeLabels()
     {
         return [
@@ -126,48 +121,26 @@ class Region extends \yii\db\ActiveRecord
         ];
     }
 
-    /**
-     * Gets query for [[Cities]].
-     *
-     * @return \yii\db\ActiveQuery
-     */
-    public function getCities()
+    public function getCities(): ActiveQuery
     {
-        return $this->hasMany(City::className(), ['region_id' => 'id']);
+        return $this->hasMany(City::class, ['region_id' => 'id']);
     }
 
-    /**
-     * Get region name by language
-     * @param string $language
-     * @return string
-     */
     public function getName($language = 'ru')
     {
-        switch ($language) {
-            case 'uz':
-                return $this->name_uz;
-            case 'en':
-                return $this->name_en;
-            default:
-                return $this->name_ru;
-        }
+        return match ($language) {
+            'uz' => $this->name_uz,
+            'en' => $this->name_en,
+            default => $this->name_ru,
+        };
     }
 
-    /**
-     * Get active regions
-     * @return \yii\db\ActiveQuery
-     */
-    public static function getActive()
+    public static function getActive(): ActiveQuery
     {
         return static::find()->where(['status' => 1]);
     }
 
-    /**
-     * Find region by BTS ID
-     * @param int $btsId
-     * @return static|null
-     */
-    public static function findByBtsId($btsId)
+    public static function findByBtsId(string $btsId): ?static
     {
         return static::findOne(['bts_id' => $btsId]);
     }
@@ -178,7 +151,7 @@ class Region extends \yii\db\ActiveRecord
             'id',
             'bts_id',
             'name_ru',
-            'name_uz', 
+            'name_uz',
             'name_en',
             'status'
         ];

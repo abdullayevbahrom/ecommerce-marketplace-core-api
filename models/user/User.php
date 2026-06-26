@@ -16,7 +16,6 @@ use yii\services\Sms;
 use yii\services\SmsService;
 use app\services\SMSCService;
 use app\models\Images;
-use app\models\order\OrderReview;
 use app\models\shop\Shop;
 use app\models\moderator\ModeratorAccess;
 use app\models\user\address\UserAddress;
@@ -57,36 +56,27 @@ class User extends ActiveRecord implements IdentityInterface
         '40' => '15',
     ];
 
-    // user
-    const USER_SIGNUP = 'signup';
-    const USER_SIGNIN = 'signin';
-    const USER_UPDATE = 'update';
+    public const USER_SIGNUP = 'signup';
+    public const USER_SIGNIN = 'signin';
+    public const USER_UPDATE = 'update';
+    public const SIGNIN_ADMIN = 'signin_admin';
+    public const UPDATE_ADMIN = 'update_admin';
+    public const SIGNUP_ADMIN_USER = 'singup_admin_user';
+    public const UPDATE_ADMIN_USER = 'update_admin_user';
+    public const ADMIN_CHANGE_PASSWORD = 'admin_change_password';
+    public const SIGNUP_MODERATOR = 'signup_moderator';
+    public const UPDATE_MODERATOR = 'update_moderator';
+    public const RECOVER_PASSWORD = 'recover_password';
+    public const USER_SHOP_SIGNIN = 'user_shop_signin';
+    public const ROLE_ADMIN = 1;
+    public const ROLE_MODERATOR = 2;
+    public const ROLE_USER = 3;
+    public const ROLE_SHOP = 4;
+    public const ROLE_LOGIST = 5;
+    public const ROLE_OPERATOR = 6;
+    public const ROLE_MANAGER = 7;
 
-    // admin
-    const SIGNIN_ADMIN = 'signin_admin';
-    const UPDATE_ADMIN = 'update_admin';
-
-    const SIGNUP_ADMIN_USER = 'singup_admin_user';
-    const UPDATE_ADMIN_USER = 'update_admin_user';
-    const ADMIN_CHANGE_PASSWORD = 'admin_change_password';
-
-    // moderator
-    const SIGNUP_MODERATOR = 'signup_moderator';
-    const UPDATE_MODERATOR = 'update_moderator';
-
-    const RECOVER_PASSWORD = 'recover_password';
-
-    const USER_SHOP_SIGNIN = 'user_shop_signin';
-
-    const ROLE_ADMIN = 1;
-    const ROLE_MODERATOR = 2;
-    const ROLE_USER = 3;
-    const ROLE_SHOP = 4;
-    const ROLE_LOGIST = 5;
-    const ROLE_OPERATOR = 6;
-    const ROLE_MANAGER = 7;
-
-    const ROLE_LABELS = [
+    public const ROLE_LABELS = [
         self::ROLE_ADMIN => 'Администратор',
         self::ROLE_MODERATOR => 'Модератор',
         self::ROLE_USER => 'Клиент',
@@ -96,7 +86,7 @@ class User extends ActiveRecord implements IdentityInterface
         self::ROLE_MANAGER => 'Менеджер',
     ];
 
-    const ROLE_COLORS = [
+    public const ROLE_COLORS = [
         self::ROLE_ADMIN => 'bg-red',
         self::ROLE_MODERATOR => 'bg-purple',
         self::ROLE_USER => 'bg-aqua',
@@ -106,21 +96,15 @@ class User extends ActiveRecord implements IdentityInterface
         self::ROLE_MANAGER => 'bg-teal',
     ];
 
-    const PHOTO_PATH = 'uploads/user/';
-    const PHOTO_DEFAULT = 'https://files.example.com/uploads/user.png';
-
-    const SOURCE_YII = 'yii';
-    const SOURCE_SKLAD = 'sklad';
-
-    const STATUS_ACTIVE = 1;
-    const STATUS_INACTIVE = 0;
-
+    public const PHOTO_PATH = 'uploads/user/';
+    public const PHOTO_DEFAULT = 'https://files.example.com/uploads/user.png';
+    public const SOURCE_YII = 'yii';
+    public const SOURCE_SKLAD = 'sklad';
+    public const STATUS_ACTIVE = 1;
+    public const STATUS_INACTIVE = 0;
     public $authKey;
-    public $imageFiles = [];
     public $moderator_access = [];
-
-    public $remember;
-    public $password_repeat;
+    public bool $remember;
     public $address = [];
 
     public static function tableName()
@@ -258,13 +242,7 @@ class User extends ActiveRecord implements IdentityInterface
         ];
     }
 
-    public function getOrderReviews()
-    {
-        return $this->hasMany(OrderReview::class, ['user_id' => 'id']);
-    }
-
-    // validate check password
-    public function checkPassword($attribute, $params)
+    public function checkPassword(string $attribute, $params)
     {
         if (!$this->hasErrors()) {
             if ($this->login) {
@@ -286,8 +264,7 @@ class User extends ActiveRecord implements IdentityInterface
         return false;
     }
 
-    // check exist login
-    public function checkLogin($attribute, $params)
+    public function checkLogin(string $attribute, $params)
     {
         if (!$this->hasErrors()) {
             $user = $this->findByUsername($this->login);
@@ -299,8 +276,7 @@ class User extends ActiveRecord implements IdentityInterface
         return false;
     }
 
-    // check exist email
-    public function checkEmail($attribute, $params)
+    public function checkEmail(string $attribute, $params)
     {
         if (!$this->hasErrors()) {
             if ($this->email) {
@@ -314,8 +290,7 @@ class User extends ActiveRecord implements IdentityInterface
         return false;
     }
 
-    // check exist phone
-    public function checkPhone($attribute, $params)
+    public function checkPhone(string $attribute, $params)
     {
         if (!$this->hasErrors()) {
             $normalizedPhone = preg_replace('/\D/', '', (string) $this->phone);
@@ -334,7 +309,7 @@ class User extends ActiveRecord implements IdentityInterface
         return false;
     }
 
-    public function checkPhoneAdmin($attribute, $params)
+    public function checkPhoneAdmin(string $attribute, $params)
     {
         if (!$this->hasErrors()) {
             $normalizedPhone = preg_replace('/\D/', '', (string) $this->phone);
@@ -353,7 +328,7 @@ class User extends ActiveRecord implements IdentityInterface
         return false;
     }
 
-    public function checkEmailAdmin($attribute, $params)
+    public function checkEmailAdmin(string $attribute, $params)
     {
         if (!$this->hasErrors()) {
             if ($this->email) {
@@ -367,7 +342,7 @@ class User extends ActiveRecord implements IdentityInterface
         return false;
     }
 
-    public function checkPhoneModerator($attribute, $params)
+    public function checkPhoneModerator(string $attribute, $params)
     {
         if (!$this->hasErrors()) {
             $normalizedPhone = preg_replace('/\D/', '', (string) $this->phone);
@@ -386,7 +361,7 @@ class User extends ActiveRecord implements IdentityInterface
         return false;
     }
 
-    public function checkPhoneCode($attribute, $params)
+    public function checkPhoneCode(string $attribute, $params)
     {
         if (!$this->hasErrors()) {
             $user = SmsCode::findOne(['sms_code' => $this->phone_code]);
@@ -399,12 +374,7 @@ class User extends ActiveRecord implements IdentityInterface
         return false;
     }
 
-    /**
-     * Validate BTS city and region relationship
-     * Ensures that if both bts_region_id and bts_city_id are set,
-     * the city belongs to the specified region
-     */
-    public function validateCityRegion($attribute, $params)
+    public function validateCityRegion(string $attribute, $params)
     {
         if ($this->hasErrors()) {
             return false;
@@ -413,66 +383,13 @@ class User extends ActiveRecord implements IdentityInterface
         $regionId = trim((string) $this->bts_region_id);
         $cityId = trim((string) $this->bts_city_id);
 
-        if ($regionId === '' || $cityId === '') {
-            return false;
+        if (!empty($regionId) && !empty($cityId) && Yii::$app->bts->existsCityByRegionCodeAndCityCode($regionId, $cityId)) {
+            return true;
         }
 
-        $regionCode = $this->normalizeRegionCode($regionId);
-        $legacyRegionId = $this->normalizeLegacyRegionId($regionId);
-
-        // New BTS format: region code "50", city code "5005".
-        if ($regionCode !== null && preg_match('/^\d{4,}$/', $cityId)) {
-            if (!str_starts_with($cityId, $regionCode)) {
-                return $this->addError($attribute, 'Выбранный город не принадлежит указанному региону');
-            }
-
-            return false;
-        }
-
-        // Legacy internal IDs: region "3", city "93".
-        if ($legacyRegionId !== null && preg_match('/^\d+$/', $cityId)) {
-            $cityData = \yii\services\BTS::getCitiesDetailed($legacyRegionId);
-
-            if (!isset($cityData[$cityId])) {
-                return $this->addError($attribute, 'Выбранный город не принадлежит указанному региону');
-            }
-        }
+        $this->addError($attribute, 'Выбранный город не принадлежит указанному региону');
 
         return false;
-    }
-
-    private function normalizeRegionCode(string $regionId): ?string
-    {
-        if ($regionId === '') {
-            return null;
-        }
-
-        if (preg_match('/^\d{2}$/', $regionId)) {
-            return $regionId;
-        }
-
-        if ($regionId === '1') {
-            return '01';
-        }
-
-        return self::LEGACY_REGION_ID_TO_CODE[$regionId] ?? null;
-    }
-
-    private function normalizeLegacyRegionId(string $regionId): ?string
-    {
-        if ($regionId === '') {
-            return null;
-        }
-
-        if (preg_match('/^\d{2}$/', $regionId)) {
-            return self::REGION_CODE_TO_LEGACY_ID[$regionId] ?? null;
-        }
-
-        if (preg_match('/^\d+$/', $regionId)) {
-            return $regionId;
-        }
-
-        return null;
     }
 
     public static function findIdentity($id)
@@ -778,13 +695,12 @@ class User extends ActiveRecord implements IdentityInterface
         return $this->authKey === $authKey;
     }
 
-    //helpers
-    public function setPassword($password)
+    public function setPassword(string $password)
     {
         $this->password = Yii::$app->security->generatePasswordHash($password);
     }
 
-    public function generatePassword($password)
+    public function generatePassword(string $password)
     {
         return Yii::$app->security->generatePasswordHash($password);
     }
@@ -805,7 +721,7 @@ class User extends ActiveRecord implements IdentityInterface
         return $this->save(false) ? true : false;
     }
 
-    public function validatePassword($password)
+    public function validatePassword(string $password)
     {
         try {
             return Yii::$app->security->validatePassword($password, $this->password);
@@ -814,7 +730,7 @@ class User extends ActiveRecord implements IdentityInterface
         }
     }
 
-    public function checkOldPassword($attribute, $params)
+    public function checkOldPassword(string $attribute, $params)
     {
         if (!$this->hasErrors()) {
             if (!$this->validatePassword($this->current_password)) {
@@ -841,14 +757,11 @@ class User extends ActiveRecord implements IdentityInterface
 
     public function generateCode($phone = false)
     {
-        if (isset($phone) && $phone == '+71112223344') {
-            return 123456;
-        }
         return 123456;
         // return mt_rand(100000, 999999);
     }
 
-    public function saveObject($type = self::ROLE_USER)
+    public function saveObject(int $type = self::ROLE_USER)
     {
         $this->ip = $_SERVER['REMOTE_ADDR'];
         // Only set role for new users; preserve existing role on update
@@ -1020,7 +933,7 @@ class User extends ActiveRecord implements IdentityInterface
         return '<small class="label ' . $this->getRoleColor() . '">' . $this->getRoleLabel() . '</small>';
     }
 
-    public function getPhoto($size = 'original')
+    public function getPhoto(string $size = 'original')
     {
         return $this->image?->getPhoto('user', $size) ?? self::PHOTO_DEFAULT;
     }
@@ -1078,7 +991,6 @@ class User extends ActiveRecord implements IdentityInterface
         return $accesses;
     }
 
-    // relations
     public function getImage()
     {
         return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'user', 'main' => 1]);

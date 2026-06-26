@@ -319,27 +319,6 @@ class UserController extends Controller {
         ]);
     }
 
-    /**
-     * Get cities by region ID for AJAX requests
-     */
-    public function actionGetCities($region_id) {
-        if (Yii::$app->request->isAjax) {
-            $cities = \yii\services\BTS::getCities($region_id, 'ru');
-            $cityList = [];
-            
-            foreach ($cities as $id => $city) {
-                $cityList[$id] = $city['name'];
-            }
-            
-            return $this->asJson([
-                'success' => true,
-                'cities' => $cityList
-            ]);
-        }
-        
-        throw new \yii\web\NotFoundHttpException();
-    }
-
     public function actionView($id) {
         $model = User::find()->with('image', 'addresses')->where(['id'=>$id])->andWhere(['!=', 'status', 0])->one();
 

@@ -180,20 +180,20 @@ class ProductUpsertHandler
 
             foreach ($values as $value) {
                 if (!is_numeric($value)) {
-                    Yii::warning('Skipping non-numeric product type value from sync', [
+                    Yii::warning('Skipping non-numeric product type value from sync', json_encode([
                         'type_id' => $typeId,
                         'value' => $value,
                         'product_id' => $product->id,
-                    ]);
+                    ], JSON_UNESCAPED_UNICODE));
                     continue;
                 }
 
                 $typeValue = ProductTypeValue::findOne((int) $value);
                 if (!$typeValue) {
-                    Yii::warning('Product type value not found during sync', [
+                    Yii::warning('Product type value not found during sync', json_encode([
                         'value_id' => $value,
                         'product_id' => $product->id,
-                    ]);
+                    ], JSON_UNESCAPED_UNICODE));
                     continue;
                 }
 
