@@ -113,6 +113,8 @@ class MerchantQuestion extends ActiveRecord
     public function getProduct(): ActiveQuery
     {
         return $this->hasOne(Product::class, ['id' => 'entity_id'])
-            ->where(['entity_type' => self::ENTITY_TYPE_PRODUCT]);
+            ->andOnCondition([
+                MerchantQuestion::tableName() . '.entity_type' => self::ENTITY_TYPE_PRODUCT
+            ]);
     }
 }
