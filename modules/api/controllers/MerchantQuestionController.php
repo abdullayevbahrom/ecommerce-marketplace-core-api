@@ -184,7 +184,7 @@ class MerchantQuestionController extends Controller
         $productId = (int) Yii::$app->request->post('product_id');
         $message = trim(Yii::$app->request->post('message'));
 
-        if (!$merchantId || !$message || $productId) {
+        if (!$merchantId || !$message) {
             return [
                 'success' => false,
                 'message' => 'merchant_id and message are required'

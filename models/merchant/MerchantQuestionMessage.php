@@ -101,11 +101,15 @@ class MerchantQuestionMessage extends ActiveRecord
         /** @var \app\components\S3Component $s3 */
         $s3 = Yii::$app->s3;
         $newFiles = [];
-        $allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'webp'];
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'webp', 'heif'];
         $maxFileSize = 10 * 1024 * 1024;
         foreach ($this->rawFiles as $file) {
+            if (!$file || $file->error !== UPLOAD_ERR_OK) {
+                Yii::warning("Upload error: " . ($file->error ?? 'unknown'), 'upload_error');
+                continue;
+            }
             $ext = strtolower($file->extension);
-            if (!\in_array($ext, $allowedExtensions)) {
+            if (!\in_array($ext, $allowedExtensions, true)) {
                 Yii::warning("Blocked unsafe file extension: .{$ext}", 'security_upload');
                 continue;
             }
@@ -113,8 +117,7 @@ class MerchantQuestionMessage extends ActiveRecord
                 Yii::warning("File size exceeds limit (10MB): {$file->name} ({$file->size} bytes)", 'upload_limit');
                 continue;
             }
-            $rnd = mt_rand(0, 1000000);
-            $filename = time() . '-' . $rnd . '.' . $ext;
+            $filename = time() . '-' . mt_rand(0, 1000000) . '.' . $ext;
 
             $tmp = Yii::getAlias('@runtime') . '/merchant_question_messages_' . uniqid() . '_' . $filename;
             
@@ -126,7 +129,7 @@ class MerchantQuestionMessage extends ActiveRecord
                 $contentType = @mime_content_type($tmp) ?: 'application/octet-stream';
                 $key = self::PHOTO_PATH . $this->question_id . '/' . $filename;
                 $s3->putFile($key, $tmp, $contentType);
-                $files[] = $s3->url($key);
+                $newFiles[] = $s3->url($key);
             } catch (\Throwable $e) {
                 Yii::error("S3 Upload error: " . $e->getMessage(), 's3_upload');
             } finally {
