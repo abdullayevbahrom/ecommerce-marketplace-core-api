@@ -43,10 +43,10 @@ class MerchantQuestionController extends Controller
             ],
         ];
 
-        // $behaviors['authenticator'] = [
-        //     'class' => HttpBearerAuth::class,
-        //     'except' => ['options'],
-        // ];
+        $behaviors['authenticator'] = [
+            'class' => HttpBearerAuth::class,
+            'except' => ['options'],
+        ];
 
         $behaviors['verbs'] = [
             'class' => VerbFilter::class,
