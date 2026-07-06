@@ -11,8 +11,10 @@ use yii\data\ActiveDataProvider;
 use yii\filters\auth\HttpBearerAuth;
 use yii\filters\Cors;
 use yii\filters\VerbFilter;
+use yii\helpers\Json;
 use yii\rest\Controller;
 use yii\web\HttpException;
+use yii\web\UploadedFile;
 use yii\web\Response;
 
 class MerchantQuestionController extends Controller
@@ -41,10 +43,10 @@ class MerchantQuestionController extends Controller
             ],
         ];
 
-        $behaviors['authenticator'] = [
-            'class' => HttpBearerAuth::class,
-            'except' => ['options'],
-        ];
+        // $behaviors['authenticator'] = [
+        //     'class' => HttpBearerAuth::class,
+        //     'except' => ['options'],
+        // ];
 
         $behaviors['verbs'] = [
             'class' => VerbFilter::class,
@@ -77,6 +79,8 @@ class MerchantQuestionController extends Controller
         if (!$user) {
             throw new HttpException(401, 'Unauthorized');
         }
+        $userRole = $user->role;
+        $userId = $user->id;
 
         $query = MerchantQuestion::find()
             ->with([
@@ -92,11 +96,11 @@ class MerchantQuestionController extends Controller
                 },
             ])->orderBy(['created_at' => SORT_DESC]);
 
-        if (in_array($user->role, [User::ROLE_ADMIN, User::ROLE_MODERATOR])) {
-        } elseif ($user->role === User::ROLE_SHOP) {
-            $query->andWhere(['merchant_id' => $user->id]);
-        } elseif ($user->role === User::ROLE_USER) {
-            $query->andWhere(['client_id' => $user->id]);
+        if (\in_array($userRole, [User::ROLE_ADMIN, User::ROLE_MODERATOR])) {
+        } elseif ($userRole === User::ROLE_SHOP) {
+            $query->andWhere(['merchant_id' => $userId]);
+        } elseif ($userRole === User::ROLE_USER) {
+            $query->andWhere(['client_id' => $userId]);
         } else {
             throw new HttpException(403, 'Access denied');
         }
@@ -183,6 +187,7 @@ class MerchantQuestionController extends Controller
         $merchantId = (int) Yii::$app->request->post('merchant_id');
         $productId = (int) Yii::$app->request->post('product_id');
         $message = trim(Yii::$app->request->post('message'));
+        $userId = $user->id;
 
         if (!$merchantId || !$message) {
             return [
@@ -191,7 +196,7 @@ class MerchantQuestionController extends Controller
             ];
         }
 
-        $uploadedFiles = \yii\web\UploadedFile::getInstancesByName('files');
+        $uploadedFiles = UploadedFile::getInstancesByName('files');
         $merchant = User::find()->where(['id' => $merchantId, 'role' => User::ROLE_SHOP])->one();
 
         if (!$merchant) {
@@ -207,7 +212,7 @@ class MerchantQuestionController extends Controller
 
         $model = MerchantQuestion::find()
             ->where([
-                'client_id' => $user->id,
+                'client_id' => $userId,
                 'merchant_id' => $merchant->id,
                 'entity_id' => $productId ?: null,
                 'entity_type' => MerchantQuestion::ENTITY_TYPE_PRODUCT
@@ -221,7 +226,7 @@ class MerchantQuestionController extends Controller
                 ->orderBy(['id' => SORT_DESC])
                 ->one();
 
-            if ($lastMessage && $lastMessage->sender_role === MerchantQuestionMessage::ROLE_CLIENT && $lastMessage->sender_id == $user->id) {
+            if ($lastMessage && $lastMessage->sender_role === MerchantQuestionMessage::ROLE_CLIENT && $lastMessage->sender_id == $userId) {
                 return [
                     'success' => false,
                     'message' => 'You have already replied to this question. Please wait'
@@ -229,7 +234,7 @@ class MerchantQuestionController extends Controller
             }
         } else {
             $model = new MerchantQuestion();
-            $model->client_id = $user->id;
+            $model->client_id = $userId;
             $model->merchant_id = $merchant->id;
             $model->entity_type = $productId ? MerchantQuestion::ENTITY_TYPE_PRODUCT : null;
             $model->entity_id = $productId ?: null;
@@ -249,10 +254,12 @@ class MerchantQuestionController extends Controller
             $msg = new MerchantQuestionMessage();
             $msg->question_id = $model->id;
             $msg->sender_role = MerchantQuestionMessage::ROLE_CLIENT;
-            $msg->sender_id = $user->id;
+            $msg->sender_id = $userId;
             $msg->message = $message;
             $msg->created_at = time();
-            $msg->rawFiles = $uploadedFiles;
+
+            $files = $this->uploadPhotos($uploadedFiles, $model->id);
+            $msg->files = !empty($files) ? Json::encode($files) : null;
 
             if (!$msg->save()) {
                 $transaction->rollBack();
@@ -411,5 +418,121 @@ class MerchantQuestionController extends Controller
                 'message' => 'Failed to send ticket to warehouse',
             ];
         }
+    }
+
+    /**
+     * @param UploadedFile[] $uploadedFiles
+     * @return array
+     */
+    private function uploadPhotos(array $uploadedFiles, int $questionId): array
+    {
+        if (empty($uploadedFiles)) {
+            return [];
+        }
+
+        /** @var \app\components\S3Component $s3 */
+        $s3 = Yii::$app->s3;
+
+        $uploadedUrls = [];
+
+        $allowedExtensions = [
+            'jpg',
+            'jpeg',
+            'png',
+            'pdf',
+            'webp',
+            'heif',
+            'heic',
+        ];
+
+        $maxFileSize = 10 * 1024 * 1024; // 10 MB
+
+        foreach ($uploadedFiles as $file) {
+
+            if (!$file instanceof UploadedFile) {
+                continue;
+            }
+
+            if ($file->error !== UPLOAD_ERR_OK) {
+                Yii::warning([
+                    'message' => 'Upload error',
+                    'error' => $file->error,
+                    'file' => $file->name,
+                ], 'merchant_question_upload');
+
+                continue;
+            }
+
+            $extension = strtolower($file->extension);
+
+            if (!\in_array($extension, $allowedExtensions, true)) {
+                Yii::warning([
+                    'message' => 'Invalid extension',
+                    'extension' => $extension,
+                    'file' => $file->name,
+                ], 'merchant_question_upload');
+
+                continue;
+            }
+
+            if ($file->size > $maxFileSize) {
+                Yii::warning([
+                    'message' => 'File too large',
+                    'size' => $file->size,
+                    'file' => $file->name,
+                ], 'merchant_question_upload');
+
+                continue;
+            }
+
+            $fileName = \sprintf(
+                '%s-%s.%s',
+                time(),
+                Yii::$app->security->generateRandomString(10),
+                $extension
+            );
+
+            $tmpFile = Yii::getAlias('@runtime') . '/' . uniqid('merchant_', true) . '.' . $extension;
+
+            if (!$file->saveAs($tmpFile)) {
+                Yii::warning([
+                    'message' => 'saveAs failed',
+                    'file' => $file->name,
+                ], 'merchant_question_upload');
+
+                continue;
+            }
+
+            try {
+
+                $key = MerchantQuestionMessage::PHOTO_PATH . $questionId . '/' . $fileName;
+
+                $contentType = mime_content_type($tmpFile) ?: 'application/octet-stream';
+
+                $s3->putFile(
+                    $key,
+                    $tmpFile,
+                    $contentType
+                );
+
+                $uploadedUrls[] = $s3->url($key);
+
+            } catch (\Throwable $e) {
+
+                Yii::error([
+                    'message' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ], 'merchant_question_upload');
+
+            } finally {
+
+                if (file_exists($tmpFile)) {
+                    @unlink($tmpFile);
+                }
+
+            }
+        }
+
+        return $uploadedUrls;
     }
 }

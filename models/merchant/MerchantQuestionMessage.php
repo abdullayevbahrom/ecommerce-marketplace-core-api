@@ -14,9 +14,6 @@ class MerchantQuestionMessage extends ActiveRecord
     public const ROLE_MODERATOR = 'moderator';
     public const PHOTO_PATH = 'merchant_question_messages/';
 
-    /** @var \yii\web\UploadedFile[] */
-    public array $rawFiles = [];
-
     public static function tableName()
     {
         return '{{%merchant_question_messages}}';
@@ -80,64 +77,16 @@ class MerchantQuestionMessage extends ActiveRecord
 
     public function beforeSave($insert)
     {
-        if (parent::beforeSave($insert)) {
-            $this->uploadPhoto();
-            if (\is_array($this->files)) {
-                $this->files = !empty($this->files) ? Json::encode(array_values($this->files)) : null;
-            } else {
-                $this->files = null;
-            }
-            return true;
-        }
-        return false;
-    }
-
-    public function uploadPhoto(): void
-    {
-        if (empty($this->rawFiles)) {
-            return;
+        if (!parent::beforeSave($insert)) {
+            return false;
         }
 
-        /** @var \app\components\S3Component $s3 */
-        $s3 = Yii::$app->s3;
-        $newFiles = [];
-        $allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'webp', 'heif'];
-        $maxFileSize = 10 * 1024 * 1024;
-        foreach ($this->rawFiles as $file) {
-            if (!$file || $file->error !== UPLOAD_ERR_OK) {
-                Yii::warning("Upload error: " . ($file->error ?? 'unknown'), 'upload_error');
-                continue;
-            }
-            $ext = strtolower($file->extension);
-            if (!\in_array($ext, $allowedExtensions, true)) {
-                Yii::warning("Blocked unsafe file extension: .{$ext}", 'security_upload');
-                continue;
-            }
-            if ($file->size > $maxFileSize) {
-                Yii::warning("File size exceeds limit (10MB): {$file->name} ({$file->size} bytes)", 'upload_limit');
-                continue;
-            }
-            $filename = time() . '-' . mt_rand(0, 1000000) . '.' . $ext;
-
-            $tmp = Yii::getAlias('@runtime') . '/merchant_question_messages_' . uniqid() . '_' . $filename;
-            
-            if (!$file->saveAs($tmp)) {
-                continue;
-            }
-
-            try {
-                $contentType = @mime_content_type($tmp) ?: 'application/octet-stream';
-                $key = self::PHOTO_PATH . $this->question_id . '/' . $filename;
-                $s3->putFile($key, $tmp, $contentType);
-                $newFiles[] = $s3->url($key);
-            } catch (\Throwable $e) {
-                Yii::error("S3 Upload error: " . $e->getMessage(), 's3_upload');
-            } finally {
-                @unlink($tmp);
-            }
+        if (is_array($this->files)) {
+            $this->files = !empty($this->files)
+                ? Json::encode(array_values($this->files))
+                : null;
         }
 
-        $existingFiles = \is_array($this->files) ? $this->files : [];
-        $this->files = \array_merge($existingFiles, $newFiles);
+        return true;
     }
 }
