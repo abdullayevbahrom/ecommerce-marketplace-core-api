@@ -12,7 +12,6 @@ use yii\web\HttpException;
 
 class WarehouseTicketController extends Controller
 {
-
     public function actionReplyFromWarehouse()
     {
         $secretKey = Yii::$app->params['apiSecretKey'];
@@ -39,16 +38,17 @@ class WarehouseTicketController extends Controller
             $message->sender_id   = $merchant->id;
             $message->message     = $data['message'];
             $message->created_at  = time();
+            $message->files       = $data['files'] ?? [];
             $message->save(false);
 
             $question->status = MerchantQuestion::STATUS_ANSWERED;
             $question->answered_at = $data['answered_at'];
             $question->save(false);
+            
+            $transaction->commit();
 
             // уведомление клиенту
             NotificationService::notifyClientAnswered($question, $message);
-
-            $transaction->commit();
 
             return ['success' => true];
 
