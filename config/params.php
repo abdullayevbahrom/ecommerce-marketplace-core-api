@@ -113,7 +113,7 @@ $config = [
     'operatorApiUrl' => 'https://api.operator.example.com', // Default operator API URL
     'warehouseApiUrl' => 'https://api.warehouse.example.com', // Default warehouse API URL
     'apiSecretKey' => '123',
-    'warehouseSyncEnabled' => false,
+    'warehouseSyncEnabled' => true,
 
     // MyID Integration Settings
     'myid' => [
