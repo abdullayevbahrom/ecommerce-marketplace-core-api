@@ -499,7 +499,7 @@ class BtsComponent extends Component
 
             if ($status !== 200 || empty($res['status']) || ($res['status_code'] ?? 0) !== 200) {
                 $msg = $res['message'] ?? 'Noma\'lum xatolik';
-                throw new Exception("API so'rovi xato tugad: {$msg} (Status: {$status})");
+                throw new Exception("API so'rovi xato tugadi: {$msg} (Status: {$status}). Request: " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_IGNORE) . ". Response: " . json_encode($res, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_IGNORE));
             }
 
             if (!\is_array($res['data'])) {

@@ -250,7 +250,7 @@ class UserController extends Controller
         $userData['bts_region_id'] = $user->bts_region_id;
         $userData['bts_city_id'] = $user->bts_city_id;
         $userData['bts_region_name'] = $user->bts_region_id ? Yii::$app->bts->getRegionName($user->bts_region_id, $post['language'] ?? 'ru') : null;
-        $userData['bts_city_name'] = $user->bts_city_id ? Yii::$app->bts->getCityName($user->bts_region_id, $user->bts_city_id, $post['language'] ?? 'ru') : null;
+        $userData['bts_city_name'] = $user->bts_region_id && $user->bts_city_id ? Yii::$app->bts->getCityName($user->bts_region_id, $user->bts_city_id, $post['language'] ?? 'ru') : null;
 
         return $this->sendSuccess($userData);
     }

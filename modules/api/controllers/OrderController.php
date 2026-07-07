@@ -151,7 +151,7 @@ class OrderController extends Controller
         $user = Yii::$app->user->identity;
         $post = Yii::$app->request->post();
 
-        $cart = UserCart::find()->with(['cartFilter', 'product'])->where(['user_id' => $user->id])->all();
+        $cart = UserCart::find()->with(['cartFilter', 'product', 'product.stock'])->where(['user_id' => $user->id])->all();
         if (!$cart) {
             Yii::$app->response->statusCode = 422;
             return ['errors' => ['cart' => 'Your cart is empty']];
@@ -161,6 +161,10 @@ class OrderController extends Controller
             if (!$item->product || !$item->product->isAvailableForMarketplace()) {
                 Yii::$app->response->statusCode = 422;
                 return ['errors' => ['cart' => 'One or more products are no longer available for marketplace purchase']];
+            }
+            if (!$item->product->stock) {
+                Yii::$app->response->statusCode = 422;
+                return ['errors' => ['cart' => 'Product stock information is missing for one or more items']];
             }
         }
 
