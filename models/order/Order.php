@@ -524,7 +524,7 @@ class Order extends \yii\db\ActiveRecord
                 'weight' => $weightKg,
                 'volume' => $volumeM3,
                 'piece' => max(1, \count($orderProducts)),
-                'packageId' => BtsCatalog::PACKAGES[10],
+                'packageId' => 10,
             ],
         ];
 
