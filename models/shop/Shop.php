@@ -17,8 +17,6 @@ use app\models\product\Product;
 use app\models\product\review\ProductReview;
 use app\models\news\News;
 use app\models\shop\oferta\ShopOferta;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\RequestException;
 use yii\db\Exception as DbException;
 
 /**
@@ -274,6 +272,8 @@ class Shop extends \yii\db\ActiveRecord
         $stock->shop_id = $this->id;
         $stock->address = $this->address_legal ?? null;
         $stock->for_marketplace = 1;
+        $stock->bts_region_id = '01';
+        $stock->bts_city_id = '0110';
 
         if (!$stock->save()) {
             throw new \RuntimeException('Default stock creation failed');
