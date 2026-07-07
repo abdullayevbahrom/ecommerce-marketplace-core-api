@@ -87,10 +87,6 @@ class Product extends \yii\db\ActiveRecord
 
     public function isAvailableForMarketplace(): bool
     {
-        if ($this->stock_id === null) {
-            return true;
-        }
-
         return $this->stock !== null && $this->stock->isAvailableForMarketplace();
     }
 
