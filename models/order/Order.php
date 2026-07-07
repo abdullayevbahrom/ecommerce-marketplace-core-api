@@ -898,7 +898,7 @@ class Order extends \yii\db\ActiveRecord
             'buyer' => [
                 'yii_user_id' => $this->user_id,
                 'global_user_id' => $this->user->global_user_id ?? null,
-                'name' => $this->user->fio ?? $this->user->username,
+                'name' => $this->user->fio ?? $this->user->name,
                 'phone' => $this->user->phone,
             ],
             'items' => $items,
