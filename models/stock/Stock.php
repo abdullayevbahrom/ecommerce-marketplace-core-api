@@ -188,7 +188,7 @@ class Stock extends \yii\db\ActiveRecord
 
     public function isAvailableForMarketplace(): bool
     {
-        return (int) $this->for_marketplace === 1;
+        return (bool) $this->for_marketplace;
     }
 
     public function getRegionName($language = 'ru'): ?string
