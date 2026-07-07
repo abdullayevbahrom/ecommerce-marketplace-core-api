@@ -2,6 +2,7 @@
 
 namespace app\models\order;
 
+use app\components\Bts\BtsCatalog;
 use app\components\Bts\BtsComponent;
 use Yii;
 use app\models\didox\DidoxDocument;
@@ -523,6 +524,7 @@ class Order extends \yii\db\ActiveRecord
                 'weight' => $weightKg,
                 'volume' => $volumeM3,
                 'piece' => max(1, \count($orderProducts)),
+                'packageId' => BtsCatalog::PACKAGES[10],
             ],
         ];
 
