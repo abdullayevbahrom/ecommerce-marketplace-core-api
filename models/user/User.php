@@ -319,7 +319,7 @@ class User extends ActiveRecord implements IdentityInterface
             }
             $this->phone = $normalizedPhone;
 
-            $user = self::findOne(['phone' => $this->phone, 'role' => Yii::$app->user->identity->role]);
+            $user = self::findOne(['phone' => $this->phone, 'role' => $this->role]);
 
             if ($user && ($user->id != $this->id) && ($user->status == 1)) {
                 return $this->addError($attribute, 'Номер телефона уже занят');
