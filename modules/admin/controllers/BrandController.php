@@ -14,15 +14,17 @@ use app\models\moderator\ModerationComment;
 use GuzzleHttp\Client;
 use yii\web\HttpException;
 
-class BrandController extends Controller{
-	public $user;
-    
-    public function beforeAction($action) {
+class BrandController extends Controller
+{
+    public $user;
+
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
         if (Yii::$app->user->isGuest) {
             return $this->redirect(['/admin/default']);
         }
-        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
+        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id' => Yii::$app->user->identity->id])->one();
 
         if (!$this->user) {
             Yii::$app->user->logout(false);
@@ -52,7 +54,8 @@ class BrandController extends Controller{
         return parent::beforeAction($action);
     }
 
-    public function actionIndex() {
+    public function actionIndex()
+    {
         $searchModel = new CategoryBrandSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
 
@@ -63,7 +66,7 @@ class BrandController extends Controller{
             $query->andWhere(['status' => 2])->andWhere(['deleted_at' => null]);
         }
 
-        $categories = ArrayHelper::map(Category::find()->where(['type'=>'product'])->all(), 'id', 'name_ru');
+        $categories = ArrayHelper::map(Category::find()->where(['type' => 'product'])->all(), 'id', 'name_ru');
 
         return $this->render('index', [
             'searchModel' => $searchModel,
@@ -72,14 +75,15 @@ class BrandController extends Controller{
         ]);
     }
 
-    public function actionCreate($id = null) {
+    public function actionCreate($id = null)
+    {
         $model = new CategoryBrand;
-        
+
         $current_categories = [];
         $tree = [0 => ''];
 
         if ($id) {
-            $model = CategoryBrand::find()->with('image', 'category')->where(['id'=>$id])->one();
+            $model = CategoryBrand::find()->with('image', 'category')->where(['id' => $id])->one();
             if (!$model) {
                 throw new HttpException(404, 'Page not found');
             }
@@ -87,18 +91,21 @@ class BrandController extends Controller{
             $tree = explode('/', $model->category_tree);
 
             foreach ($tree as $key => $id) {
-                $current_categories[] = ArrayHelper::map(Category::find()->where(['parent_id'=>$id])->all(), 'id', 'name_ru');
+                if (!isset($tree[$key + 1])) {
+                    break;
+                }
+                $current_categories[] = ArrayHelper::map(Category::find()->where(['parent_id' => $id])->all(), 'id', 'name_ru');
             }
         }
 
         if ($model->load(Yii::$app->request->post()) && $model->validate()) {
             if ($model->saveObject()) {
                 Yii::$app->session->setFlash('brand_saved', 'Saved');
-                return $this->redirect(['/admin/brand/view', 'id'=>$model->id]);
+                return $this->redirect(['/admin/brand/view', 'id' => $model->id]);
             }
         }
 
-        $categories = ArrayHelper::map(Category::find()->where(['type'=>'product', 'parent_id'=>0])->all(), 'id', 'name_ru');
+        $categories = ArrayHelper::map(Category::find()->where(['type' => 'product', 'parent_id' => 0])->all(), 'id', 'name_ru');
 
         return $this->render('create', [
             'model' => $model,
@@ -108,10 +115,11 @@ class BrandController extends Controller{
         ]);
     }
 
-    public function actionView($id) {
+    public function actionView($id)
+    {
         $user = Yii::$app->user->identity;
 
-        $model = CategoryBrand::find()->with('image', 'category')->where(['id'=>$id])->one();
+        $model = CategoryBrand::find()->with('image', 'category')->where(['id' => $id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
@@ -125,12 +133,13 @@ class BrandController extends Controller{
         ]);
     }
 
-    public function actionRemove($id) {
-        $model = CategoryBrand::find()->with('image')->where(['id'=>$id])->one();
+    public function actionRemove($id)
+    {
+        $model = CategoryBrand::find()->with('image')->where(['id' => $id])->one();
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
-        
+
         if ($this->user && ($this->user->role != User::ROLE_USER) && $model && $model->removeObject()) {
             Yii::$app->session->setFlash('brand_removed', 'Deleted');
         }
@@ -138,7 +147,8 @@ class BrandController extends Controller{
         return $this->redirect(Yii::$app->request->referrer ?: ['/admin/brand']);
     }
 
-    public function actionLock($id) {
+    public function actionLock($id)
+    {
         $model = CategoryBrand::findOne($id);
 
         if (!$model) {
@@ -155,21 +165,21 @@ class BrandController extends Controller{
         $model->save(false);
 
         $comment = new ModerationComment();
-        $comment->entity_type  = 'brand';
-        $comment->entity_id    = $model->id;
-        $comment->action       = $model->status == CategoryBrand::STATUS_ACTIVE ? 'approve' : 'reject';
-        $comment->comment      = 'Ваша бренд разблокирован';
+        $comment->entity_type = 'brand';
+        $comment->entity_id = $model->id;
+        $comment->action = $model->status == CategoryBrand::STATUS_ACTIVE ? 'approve' : 'reject';
+        $comment->comment = 'Ваша бренд разблокирован';
         $comment->moderator_id = $user->id;
         $comment->is_sent_to_warehouse = (bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false);
         $comment->save(false);
 
         $this->sendToWarehouse([
             'id' => $model->id,
-            'entity_type'  => 'brand',
-            'entity_id'    => $model->id,
-            'action'       => $model->status == CategoryBrand::STATUS_ACTIVE  ? 'approve' : 'reject',
-            'status_after' => $model->status == CategoryBrand::STATUS_ACTIVE  ? 'approved' : 'rejected',
-            'comment'      => 'Ваша бренд разблокирован',
+            'entity_type' => 'brand',
+            'entity_id' => $model->id,
+            'action' => $model->status == CategoryBrand::STATUS_ACTIVE ? 'approve' : 'reject',
+            'status_after' => $model->status == CategoryBrand::STATUS_ACTIVE ? 'approved' : 'rejected',
+            'comment' => 'Ваша бренд разблокирован',
             'moderator_id' => $user->id,
         ]);
 
@@ -241,10 +251,10 @@ class BrandController extends Controller{
         }
 
         $comment = new ModerationComment();
-        $comment->entity_type  = 'brand';
-        $comment->entity_id    = $model->id;
-        $comment->action       = 'reject';   // approve | reject | block
-        $comment->comment      = $commentText;
+        $comment->entity_type = 'brand';
+        $comment->entity_id = $model->id;
+        $comment->action = 'reject';   // approve | reject | block
+        $comment->comment = $commentText;
         $comment->moderator_id = $user->id;
         $comment->is_sent_to_warehouse = 1;
         $comment->status_after = 'rejected';
@@ -252,11 +262,11 @@ class BrandController extends Controller{
 
         $this->sendToWarehouse([
             'id' => $model->id,
-            'entity_type'  => 'brand',
-            'entity_id'    => $model->id,
-            'action'       => 'reject',
+            'entity_type' => 'brand',
+            'entity_id' => $model->id,
+            'action' => 'reject',
             'status_after' => 'rejected',
-            'comment'      => $commentText,
+            'comment' => $commentText,
             'moderator_id' => $user->id,
         ]);
 

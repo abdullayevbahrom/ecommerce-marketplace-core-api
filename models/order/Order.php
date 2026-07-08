@@ -4,6 +4,8 @@ namespace app\models\order;
 
 use app\components\Bts\BtsCatalog;
 use app\components\Bts\BtsComponent;
+use app\components\RabbitMq\MessageFactory;
+use app\components\RabbitMq\OutboxService;
 use Yii;
 use app\models\didox\DidoxDocument;
 use app\models\user\User;
@@ -971,5 +973,69 @@ class Order extends \yii\db\ActiveRecord
         }
 
         return null;
+    }
+
+    public function publishSyncEvent(string $eventType): void
+    {
+        if ($this->shouldPublishSyncEvent()) {
+            $this->sendEvent($eventType);
+        }
+    }
+
+    protected function sendEvent(string $eventType): void
+    {
+        $message = MessageFactory::make(
+            eventType: $eventType,
+            source: 'market',
+            entityType: 'order',
+            entityId: $this->id,
+            branchId: null,
+            payload: $this->toSyncPayload(),
+        );
+
+        (new OutboxService())->queue(
+            exchange: 'market_to_sklad',
+            routingKey: $eventType,
+            eventType: $eventType,
+            entityType: 'order',
+            entityId: $this->id,
+            source: 'market',
+            branchId: null,
+            message: $message
+        );
+    }
+
+    protected function toSyncPayload(): array
+    {
+        return [
+            'id' => (int) $this->id,
+            'yii_product_id' => (int) $this->id,
+            'shop_id' => (int) $this->shop_id,
+            'user_id' => (int) $this->user_id,
+            'stock_id' => $this->stock_id ? (int) $this->stock_id : null,
+            'token_key' => $this->token_key,
+            'status' => (int) ($this->status ?? 2),
+            'name_ru' => $this->name_ru,
+            'name_en' => $this->name_en,
+            'name_uz' => $this->name_uz ?: $this->name_ru,
+            'description_ru' => $this->description_ru,
+            'description_en' => $this->description_en,
+            'description_uz' => $this->description_uz,
+            'price' => $this->price !== null ? (float) $this->price : 0,
+            'amount' => $this->amount !== null ? (float) $this->amount : 0,
+            'discount' => $this->discount !== null ? (float) $this->discount : null,
+            'sku' => null,
+            'barcode' => $this->barcode,
+            'ikpu_code' => $this->ikpu_code,
+            'category_id' => $this->category_id ? (int) $this->category_id : null,
+            'brand_id' => $this->brand_id ? (int) $this->brand_id : null,
+            'color_id' => $this->color_id ? (int) $this->color_id : null,
+            'colors' => $this->prepareColorPayload(),
+            'filters' => $this->prepareFilterPayload(),
+            'product_types' => $this->prepareProductTypePayload(),
+            'images' => $this->prepareImagePayload(),
+            'deleted_at' => $this->deleted_at ?? null,
+            'asl_belgisi' => $this->prepareAslBelgisiPayload(),
+        ];
     }
 }
