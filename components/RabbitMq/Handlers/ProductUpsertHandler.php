@@ -232,10 +232,11 @@ class ProductUpsertHandler
             $item->object_id = $product->id;
             $item->type = 'product';
             $item->photo = $image['photo'];
-            $item->main = !empty($image['main']) ? 1 : 2;
+            $item->main = $image['main'];
             $item->sort = $index;
             $item->status = 1;
             $item->web = 1;
+            $item->color_id = $image['color_id'] ?? null;
             $item->token_key = $image['token_key'] ?? $product->token_key;
             $item->save(false);
         }

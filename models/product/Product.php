@@ -1532,13 +1532,18 @@ class Product extends \yii\db\ActiveRecord
     // images
     public function getImage()
     {
-        return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 1]);
+        return $this->hasOne(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 1])->andOnCondition(['IS', 'color_id', null]);
     }
 
 
     public function getGallery()
     {
-        return $this->hasMany(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 2]);
+        return $this->hasMany(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 0])->andOnCondition(['IS', 'color_id', null]);
+    }
+
+    public function getColorImages()
+    {
+        return $this->hasMany(Images::class, ['object_id' => 'id'])->andOnCondition(['type' => 'product', 'main' => 0])->andOnCondition(['IS NOT', 'color_id', null]);
     }
 
     public function getBrand()
@@ -1614,7 +1619,7 @@ class Product extends \yii\db\ActiveRecord
 
     public function getProductTypes()
     {
-        return $this->hasMany(\app\models\product\ProductType::class, ['id' => 'product_type_id'])
+        return $this->hasMany(ProductType::class, ['id' => 'product_type_id'])
             ->via('productProductTypes');
     }
 
@@ -1743,12 +1748,12 @@ class Product extends \yii\db\ActiveRecord
         parent::afterSave($insert, $changedAttributes);
 
         try {
-            \Yii::$app->queue->push(new EsSyncProductJob([
+            Yii::$app->queue->push(new EsSyncProductJob([
                 'productId' => (int)$this->id,
                 'action' => 'upsert',
             ]));
         } catch (\Throwable $e) {
-            \Yii::error('ES sync queue push failed: ' . $e->getMessage(), 'product');
+            Yii::error('ES sync queue push failed: ' . $e->getMessage(), 'product');
         }
 
         if ($this->shouldPublishSyncEvent()) {
@@ -1772,12 +1777,12 @@ class Product extends \yii\db\ActiveRecord
         parent::afterDelete();
 
         try {
-            \Yii::$app->queue->push(new EsSyncProductJob([
+            Yii::$app->queue->push(new EsSyncProductJob([
                 'productId' => (int)$this->id,
                 'action' => 'delete',
             ]));
         } catch (\Throwable $e) {
-            \Yii::error('ES sync queue push failed: ' . $e->getMessage(), 'product');
+            Yii::error('ES sync queue push failed: ' . $e->getMessage(), 'product');
         }
 
         if ($this->shouldPublishSyncEvent()) {
@@ -1950,6 +1955,9 @@ class Product extends \yii\db\ActiveRecord
                 'photo' => $image->getPhoto('product', 'original'),
                 'main' => (int) $image->main === 1 ? 1 : 0,
                 'token_key' => $this->token_key,
+                'color_id' => $image->color_id,
+                'sort' => $image->sort,
+                'status' => $image->status
             ];
         }
 

@@ -89,7 +89,7 @@ class Images extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['object_id', 'main', 'sort', 'status'], 'integer'],
+            [['object_id', 'main', 'sort', 'status', 'color_id'], 'integer'],
             [['type', 'photo', 'number_image'], 'string', 'max' => 255],
             [['colors'], 'safe'],
             [['imageFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, gif, webp', 'maxSize' => 10485760],
@@ -106,6 +106,7 @@ class Images extends \yii\db\ActiveRecord
             'photo' => 'Photo',
             'main' => 'Main',
             'sort' => 'Sort',
+            'color_id' => 'Color ID',
         ];
     }
 
