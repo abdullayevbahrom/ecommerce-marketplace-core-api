@@ -15,8 +15,8 @@ class SkladProvisionService extends Component
     public function init()
     {
         parent::init();
-        $this->baseUrl = Yii::$app->params['skladInternalUrl'] ?? 'http://api.warehouse.example.com';
-        $this->token = Yii::$app->params['auth']['gateway']['internalToken'] ?? '';
+        $this->baseUrl = $this->baseUrl ?: (Yii::$app->params['warehouseApiUrl'] ?? 'https://api.warehouse.example.com');
+        $this->token = $this->token ?: (Yii::$app->params['auth']['gateway']['internalToken'] ?? '');
     }
 
     /**
