@@ -106,6 +106,7 @@ class User extends ActiveRecord implements IdentityInterface
     public $moderator_access = [];
     public bool $remember = false;
     public $address = [];
+    public $imageFiles;
 
     public static function tableName()
     {
@@ -809,6 +810,12 @@ class User extends ActiveRecord implements IdentityInterface
                 }
                 $image->uploadPhoto($this->id, 'user');
             }
+
+            if ($this->shop_id) {
+                $role = $this->role === self::ROLE_SHOP ? 'merchant' : 'user';
+                Yii::$app->skladProvisioner->ensurePersonalWarehouse($this, $role);
+            }
+
             return $this;
         }
 
