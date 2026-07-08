@@ -37,7 +37,7 @@ class SkladProvisionService extends Component
             'global_user_id' => $user->global_user_id ?? null,
             'yii_user_id' => $user->id,
             'yii_shop_id' => $user->shop_id ?? null,
-            'name' => $user->fio ?? $user->username,
+            'name' => $user->fio ?? $user->name,
             'phone' => $user->phone,
             'role' => $role,
             'inn' => $user->inn ?? null,
