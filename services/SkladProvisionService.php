@@ -2,10 +2,10 @@
 
 namespace app\services;
 
+use GuzzleHttp\Client;
 use Yii;
 use yii\base\Component;
 use yii\helpers\Json;
-use yii\httpclient\Client;
 
 class SkladProvisionService extends Component
 {
@@ -21,8 +21,8 @@ class SkladProvisionService extends Component
 
     /**
      * Ensure a personal warehouse for a user in Sklad service.
-     * 
-     * @param \app\models\User $user
+     *
+     * @param \app\models\user\User $user
      * @param string $role
      * @return array|false
      */
@@ -43,21 +43,17 @@ class SkladProvisionService extends Component
             'inn' => $user->inn ?? null,
         ];
 
+        $identifier = $payload['global_user_id'] ?: $payload['yii_user_id'];
+        $url = rtrim($this->baseUrl, '/') . '/api/internal/users/' . $identifier . '/ensure-personal-warehouse';
+
         try {
             $client = new Client();
-            $response = $client->createRequest()
-                ->setMethod('POST')
-                ->setUrl($this->baseUrl . '/api/internal/users/' . ($payload['global_user_id'] ?: $payload['yii_user_id']) . '/ensure-personal-warehouse')
-                ->setHeaders(['X-Service-Token' => $this->token])
-                ->setData($payload)
-                ->send();
+            $response = $client->post($url, [
+                'headers' => ['X-Service-Token' => $this->token],
+                'json' => $payload,
+            ]);
 
-            if (!$response->isOk) {
-                Yii::error("Sklad provisioning failed for user {$user->id}: " . $response->content);
-                return false;
-            }
-
-            return Json::decode($response->content);
+            return Json::decode($response->getBody()->getContents());
         } catch (\Exception $e) {
             Yii::error("Sklad provisioning exception for user {$user->id}: " . $e->getMessage());
             return false;
