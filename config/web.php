@@ -179,6 +179,9 @@ $config = [
                 'GET api/product-attribute/unit' => 'api/product-attribute/unit-list',
                 'GET api/product-attribute/currency' => 'api/product-attribute/currency-list',
 
+                // Stock sync from Sklad
+                'POST api/sklad/stock/update' => 'api/sklad-stock/update',
+
                 // Product Management (Sklad Integration)
                 'GET api/filters' => 'api/product/filters',
                 'GET api/products' => 'api/product/index',
