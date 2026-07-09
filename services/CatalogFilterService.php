@@ -43,6 +43,7 @@ class CatalogFilterService
         $query = Product::find()
             ->alias('product')
             ->where(['product.status' => 1])
+            ->where(['product.deleted_at' => null])
             ->marketplaceVisible('product');
 
         $ignoreBrand = (bool)($options['ignoreBrand'] ?? false);

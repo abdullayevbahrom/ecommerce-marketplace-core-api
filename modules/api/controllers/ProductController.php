@@ -212,7 +212,7 @@ class ProductController extends Controller
     {
         $behaviors = parent::behaviors();
         $behaviors['authenticator'] = [
-            'class' => HttpBearerAuth::className(),
+            'class' => HttpBearerAuth::class,
             'optional' => ['index', 'filters', 'index-es', 'best-products-es', 'by-category', 'by-brand', 'by-shop', 'by-filter', 'search', 'search-suggestions', 'detail', 'reviews', 'recently-viewed', 'related-products', 'by-photo', 'for-you', 'best-products', 'create'], // Added 'create' for Sklad integration
         ];
 
@@ -220,7 +220,7 @@ class ProductController extends Controller
         unset($behaviors['authenticator']);
 
         $behaviors['corsFilter'] = [
-            'class' => \yii\filters\Cors::className(),
+            'class' => \yii\filters\Cors::class,
             'cors' => [
                 'Access-Control-Allow-Origin' => ['*'],
                 'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
