@@ -109,7 +109,7 @@ class ModerationComment extends ActiveRecord
             'id' => $targetEntityId,
             'entity_type' => $this->entity_type,
             'entity_id' => $targetEntityId,
-            'action' => $this->action,
+            'action' => $this->resolveAction(),
             'status_after' => $this->status_after ?? $this->resolveStatusAfter(),
             'comment' => $this->comment,
             'moderator_id' => $this->moderator_id,
@@ -141,6 +141,14 @@ class ModerationComment extends ActiveRecord
             'block' => 'pending',
             'reject' => 'rejected',
             default => 'pending',
+        };
+    }
+
+    protected function resolveAction(): string
+    {
+        return match ($this->action) {
+            'block' => 'reject',
+            default => $this->action,
         };
     }
 }
