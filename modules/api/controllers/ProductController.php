@@ -1208,6 +1208,7 @@ class ProductController extends Controller
             ->leftJoin('`order` o', 'op.order_id = o.id AND o.status IN (1, 2, 3)')
             ->leftJoin('product_review pr', 'pr.product_id = p.id AND pr.status IN (1, 3)')
             ->where(['p.status' => 1])
+            ->where(['p.amount' => ['>', 0]])
             ->publicVisible('p')
             ->groupBy('p.id');
 
@@ -1341,6 +1342,7 @@ class ProductController extends Controller
         $query = Product::find()
             ->with('image', 'category', 'gallery', 'productFilters', 'productColors', 'productColors.color')
             ->where(['product.status' => 1])
+            ->where(['product.amount' => ['>', 0]])
             ->publicVisible();
 
         if (!empty($viewedProductIds)) {
