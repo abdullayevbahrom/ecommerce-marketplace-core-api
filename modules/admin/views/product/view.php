@@ -2,9 +2,12 @@
 use yii\helpers\ArrayHelper;
 use yii\helpers\Html;
 use app\models\product\ProductFilter;
-
 use app\widgets\admin_product_menu\AdminProductMenu;
 use app\widgets\admin_language_tab\AdminLanguageTab;
+
+/** @var yii\web\View $this */
+/** @var app\models\product\Product $model */
+/** @var yii\bootstrap4\ActiveForm $form */
 
 $this->title = 'Просмотр товара: ' . $model->name_ru;
 $this->params['breadcrumbs'][] = ['label' => 'Товары', 'url' => ['/admin/product/']];
@@ -21,7 +24,8 @@ $type = Yii::$app->request->get('type');
         </h1>
 
         <ol class="breadcrumb">
-            <li><a href="<?= Yii::$app->urlManager->createUrl(['/admin/']) ?>"><i class="fa fa-dashboard"></i> Главная</a>
+            <li><a href="<?= Yii::$app->urlManager->createUrl(['/admin/']) ?>"><i class="fa fa-dashboard"></i>
+                    Главная</a>
             </li>
             <li><a href="<?= Yii::$app->urlManager->createUrl(['/admin/product/']) ?>"><i class="fa fa-cube"></i>
                     Товары</a></li>
@@ -535,8 +539,8 @@ $type = Yii::$app->request->get('type');
                                         <?php if ($model->ikpu_code) { ?>
                                             <code
                                                 style="font-size: 14px; background-color: #f4f4f4; padding: 5px 8px; border-radius: 3px;">
-                                                        <?= \yii\helpers\Html::encode($model->ikpu_code); ?>
-                                                    </code>
+                                                                                <?= \yii\helpers\Html::encode($model->ikpu_code); ?>
+                                                                            </code>
                                             <?php if ($model->ikpu) { ?>
                                                 <a href="<?= Yii::$app->urlManager->createUrl(['/admin/ikpu/view', 'id' => $model->ikpu->id]); ?>"
                                                     class="btn btn-xs btn-info" style="margin-left: 10px;" title="Просмотреть ИКПУ">
@@ -566,8 +570,8 @@ $type = Yii::$app->request->get('type');
                                         <td>
                                             <code
                                                 style="font-size: 12px; background-color: #f9f9f9; padding: 3px 6px; border-radius: 3px;">
-                                                        <?= \yii\helpers\Html::encode($model->ikpu->parent_code); ?>
-                                                    </code>
+                                                                                <?= \yii\helpers\Html::encode($model->ikpu->parent_code); ?>
+                                                                            </code>
                                         </td>
                                     </tr>
                                 <?php } ?>
@@ -814,6 +818,20 @@ $type = Yii::$app->request->get('type');
                                         <div class="thumbnail">
                                             <img src="<?= $photo->getPhoto('product'); ?>" alt="Фото товара"
                                                 class="img-responsive" style="height: 200px; object-fit: cover;">
+                                            <div class="caption text-center">
+                                                <a href="<?= $photo->getPhoto('product'); ?>" target="_blank"
+                                                    class="btn btn-primary btn-xs">
+                                                    <i class="fa fa-search-plus"></i> Увеличить
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php } ?>
+                                <?php foreach ($model->colorImages as $photo) { ?>
+                                    <div class="col-md-3 col-sm-4 col-xs-6" style="margin-bottom: 15px;">
+                                        <div class="thumbnail">
+                                            <img src="<?= $photo->getPhoto('product'); ?>" alt="Фото товара"
+                                                class="img-responsive" style="height:200px; object-fit: cover;">
                                             <div class="caption text-center">
                                                 <a href="<?= $photo->getPhoto('product'); ?>" target="_blank"
                                                     class="btn btn-primary btn-xs">

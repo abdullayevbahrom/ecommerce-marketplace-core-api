@@ -38,15 +38,17 @@ use GuzzleHttp\Client;
 use yii\services\Billz;
 use Intervention\Image\ImageManager;
 
-class ProductController extends Controller {
+class ProductController extends Controller
+{
     public $user;
 
-    public function beforeAction($action) {
+    public function beforeAction($action)
+    {
         $this->enableCsrfValidation = false;
         if (Yii::$app->user->isGuest) {
             return $this->redirect(['/admin/default']);
         }
-        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id'=>Yii::$app->user->identity->id])->one();
+        $this->user = User::find()->with('moderatorAccess', 'moderatorAccess.moderator')->where(['id' => Yii::$app->user->identity->id])->one();
 
         if (!$this->user) {
             Yii::$app->user->logout(false);
@@ -72,7 +74,8 @@ class ProductController extends Controller {
         return parent::beforeAction($action);
     }
 
-    public function actionIndex($status = null,$page = 1) {
+    public function actionIndex($status = null, $page = 1)
+    {
         $searchModel = new ProductSearch();
         $dataProvider = $searchModel->search(Yii::$app->request->queryParams);
         $dataProvider->query->with('category', 'image');
@@ -87,10 +90,10 @@ class ProductController extends Controller {
             ]
         ]);
 
-        $shops = ArrayHelper::map(Shop::find()->where(['status'=>1])->all(), 'id', 'name_ru');
-        $users = ArrayHelper::map(User::find()->where(['status'=>1])->all(), 'id', 'name');
-        $categories = ArrayHelper::map(Category::find()->where(['type'=>'product'])->all(), 'id', 'name_ru');
-        $settings = Settings::findOne(['type'=>'filter_on']);
+        $shops = ArrayHelper::map(Shop::find()->where(['status' => 1])->all(), 'id', 'name_ru');
+        $users = ArrayHelper::map(User::find()->where(['status' => 1])->all(), 'id', 'name');
+        $categories = ArrayHelper::map(Category::find()->where(['type' => 'product'])->all(), 'id', 'name_ru');
+        $settings = Settings::findOne(['type' => 'filter_on']);
 
         return $this->render('index', [
             'searchModel' => $searchModel,
@@ -99,19 +102,39 @@ class ProductController extends Controller {
             'users' => $users,
             'categories' => $categories,
             'settings' => $settings,
-            'page'=>$page
+            'page' => $page
         ]);
     }
 
-    public function actionView($id,$page = 1) {
-        $this->log('view'.$id);
-        $model = Product::find()->with('delivery', 'category', 'image', 'productProperties', 'productColors', 'productColors.image', 'productColors.color', 'productOffices', 'productProductTypes', 'productProductTypes.productType', 'productProductTypes.productTypeValue', 'products', 'products.color', 'products.image', 'products.productProductTypes', 'products.productProductTypes.productType', 'products.productProductTypes.productTypeValue')->where(['id'=>$id])->one();
+    public function actionView($id, $page = 1)
+    {
+        $this->log('view' . $id);
+        $model = Product::find()->with(
+            'delivery',
+            'category',
+            'image',
+            'productProperties',
+            'productColors',
+            'productColors.image',
+            'productColors.color',
+            'productOffices',
+            'productProductTypes',
+            'productProductTypes.productType',
+            'productProductTypes.productTypeValue',
+            'products',
+            'products.color',
+            'products.image',
+            'products.productProductTypes',
+            'products.productProductTypes.productType',
+            'products.productProductTypes.productTypeValue',
+            'colorImages',
+        )->where(['id' => $id])->one();
 
         if (!$model) {
             throw new HttpException(404, 'Page not found');
         }
 
-        $notification = Notification::findOne(['type'=>'product_new', 'object_id'=>$id]);
+        $notification = Notification::findOne(['type' => 'product_new', 'object_id' => $id]);
         if ($notification) {
             $notification->status = 1;
             $notification->save(false);
@@ -123,35 +146,36 @@ class ProductController extends Controller {
         ]);
     }
 
-    public function actionCreate($id = null) {
+    public function actionCreate($id = null)
+    {
         $this->log('create');
         $model = new Product;
 
-        $current_categories = []; 
+        $current_categories = [];
         $current_colors = [];
         $current_product_types = [];
         $tree = [0 => ''];
-        
+
         if ($this->user && $this->user->role == User::ROLE_MODERATOR) {
             return $this->redirect(['/admin/default/profile']);
         }
 
         // edit
         if ($id) {
-            $model = Product::find()->with('image', 'gallery', 'category', 'productColors', 'productColors.image', 'productColors.color', 'productFilters', 'productFilters.filter', 'productProperties', 'productOffices')->where(['id'=>$id])->one();
+            $model = Product::find()->with('image', 'gallery', 'category', 'productColors', 'productColors.image', 'productColors.color', 'productFilters', 'productFilters.filter', 'productProperties', 'productOffices')->where(['id' => $id])->one();
 
             if (!$model) {
                 throw new HttpException(404, 'Page not found');
             }
-            
+
             $tree = $model->category_tree ? explode('/', $model->category_tree) : [0];
 
             foreach ($tree as $key => $v_id) {
-                $current_categories[] = ArrayHelper::map(Category::find()->where(['parent_id'=>$v_id])->all(), 'id', 'name_ru');
+                $current_categories[] = ArrayHelper::map(Category::find()->where(['parent_id' => $v_id])->all(), 'id', 'name_ru');
             }
 
             $current_colors = ArrayHelper::map(ProductColor::find()->where(['in', 'product_id', $v_id])->all(), 'color_id', 'color_id');
-            
+
             // Load existing product type connections
             $current_product_types = ProductProductType::find()
                 ->with('productType', 'productTypeValue')
@@ -164,7 +188,7 @@ class ProductController extends Controller {
             if (!$id) {
                 // Generate a shared token_key for all variants
                 $shared_token_key = $model->token_key ?: Yii::$app->security->generateRandomString();
-                
+
                 // Get explicit variants from request (new logic)
                 $post = Yii::$app->request->post();
                 $variants = isset($post['Product']['variants']) ? $post['Product']['variants'] : [];
@@ -174,7 +198,7 @@ class ProductController extends Controller {
                     foreach ($variants as $variant) {
                         $color = isset($variant['color_id']) && $variant['color_id'] !== '' ? $variant['color_id'] : null;
                         $types = isset($variant['types']) ? $variant['types'] : [];
-                        
+
                         $price_data = [
                             'price' => isset($variant['price']) ? $variant['price'] : null,
                             'price_small' => isset($variant['price_small']) ? $variant['price_small'] : null,
@@ -185,19 +209,19 @@ class ProductController extends Controller {
                         // saveObject expects product_types as [type_id => value_id] or [type_id => [value_id]]
                         // Our $types is [type_id => value_id]
                         // We need to pass it correctly. saveObject handles it.
-                        
+
                         $product = $model->saveObject(false, $color, $shared_token_key, null, $types, $price_data);
                     }
                 } else {
                     // Fallback to old logic (if no variants generated or JS disabled/failed)
-                    
+
                     // Get product type prices from request
                     $product_type_prices = isset($post['Product']['product_type_prices']) ? $post['Product']['product_type_prices'] : [];
-                    
+
                     // Create mode: Handle product type variations
                     if ($model->product_types) {
                         $type_combinations = $this->generateTypeCombinations($model->product_types);
-                        
+
                         foreach ($type_combinations as $combination) {
                             // Determine price overrides for this combination
                             $price_data = null;
@@ -233,7 +257,7 @@ class ProductController extends Controller {
                 // Update mode: Don't modify product types, just update the main product
                 $product = $model->updateObject(false);
             }
-            
+
             // Auto-check ASL Belgisi if product has barcode
             $this->checkAslBelgisiForProduct($product);
 
@@ -241,23 +265,23 @@ class ProductController extends Controller {
             return $this->redirect(['/admin/product/view', 'id' => $product->id]);
         }
 
-        $categories = ArrayHelper::map(Category::find()->with('childs')->where(['parent_id'=>0, 'type'=>'product'])->all(), 'id', 'name_ru');
-        $brands = ArrayHelper::map(CategoryBrand::find()->where(['status'=>1])->all(), 'id', 'name_ru');        
+        $categories = ArrayHelper::map(Category::find()->with('childs')->where(['parent_id' => 0, 'type' => 'product'])->all(), 'id', 'name_ru');
+        $brands = ArrayHelper::map(CategoryBrand::find()->where(['status' => 1])->all(), 'id', 'name_ru');
         $offices = ArrayHelper::map(Office::find()->all(), 'id', 'name');
         $deliveries = ArrayHelper::map(Delivery::find()->all(), 'id', 'name_ru');
         $stocks = ArrayHelper::map(Stock::find()->all(), 'id', 'name_ru');
-        $shops = ArrayHelper::map(Shop::find()->where(['status'=>1])->all(), 'id', 'name_ru');
-        
+        $shops = ArrayHelper::map(Shop::find()->where(['status' => 1])->all(), 'id', 'name_ru');
+
         // Prepare warehouses grouped by shop for dynamic filtering
         $warehousesByShop = [];
         $allWarehouses = Stock::find()->where(['status' => 1])->all();
-        
+
         // Debug: Log warehouse data
         error_log("🔧 DEBUG: Found " . count($allWarehouses) . " active warehouses");
-        
+
         foreach ($allWarehouses as $warehouse) {
             error_log("🔧 DEBUG: Warehouse ID: {$warehouse->id}, Name: {$warehouse->name_ru}, Shop ID: {$warehouse->shop_id}");
-            
+
             if ($warehouse->shop_id) {
                 $warehousesByShop[$warehouse->shop_id][] = [
                     'id' => $warehouse->id,
@@ -265,12 +289,12 @@ class ProductController extends Controller {
                 ];
             }
         }
-        
+
         // Debug: Log final grouped data
         error_log("🔧 DEBUG: warehousesByShop structure: " . json_encode($warehousesByShop));
         error_log("🔧 DEBUG: Shop IDs with warehouses: " . implode(', ', array_keys($warehousesByShop)));
-        
-        $tags = ArrayHelper::map(Category::find()->where(['type'=>'tag'])->all(), 'id', 'name_ru');
+
+        $tags = ArrayHelper::map(Category::find()->where(['type' => 'tag'])->all(), 'id', 'name_ru');
         $units = ArrayHelper::map(Category::find()->where(['type' => 'unit', 'status' => 1])->all(), 'id', 'name_ru');
         $colors = ArrayHelper::map(Color::find()->all(), 'id', 'name_ru');
         $colors_object = Color::find()->all();
@@ -350,21 +374,21 @@ class ProductController extends Controller {
         $commentText = $model->status == 1 ? 'Ваш товар разблокирован' : 'Ваш товар заблокирован модератором';
 
         $comment = new ModerationComment();
-        $comment->entity_type  = 'product';
-        $comment->entity_id    = $model->id;
-        $comment->action       = $model->status == 1 ? 'approve' : 'block';
-        $comment->comment      = $commentText;
+        $comment->entity_type = 'product';
+        $comment->entity_id = $model->id;
+        $comment->action = $model->status == 1 ? 'approve' : 'block';
+        $comment->comment = $commentText;
         $comment->moderator_id = $user->id;
         $comment->is_sent_to_warehouse = (bool) (Yii::$app->params['rabbitmq']['enable_moderation_events'] ?? false);
         $comment->save(false);
 
         $this->sendToWarehouse([
             'id' => $model->id,
-            'entity_type'  => 'product',
-            'entity_id'    => $model->id,
-            'action'       => $model->status == 1 ? 'approve' : 'block',
+            'entity_type' => 'product',
+            'entity_id' => $model->id,
+            'action' => $model->status == 1 ? 'approve' : 'block',
             'status_after' => $model->status == 1 ? 'approved' : 'pending',
-            'comment'      => $commentText,
+            'comment' => $commentText,
             'moderator_id' => $user->id,
         ]);
 
@@ -377,7 +401,7 @@ class ProductController extends Controller {
             ? $this->redirect(['/admin/product'])
             : $this->redirect(Yii::$app->request->referrer);
     }
-    
+
 
     protected function sendToWarehouse(array $payload)
     {
@@ -437,10 +461,10 @@ class ProductController extends Controller {
         }
 
         $comment = new ModerationComment();
-        $comment->entity_type  = 'product';
-        $comment->entity_id    = $model->id;
-        $comment->action       = 'reject';   // approve | reject | block
-        $comment->comment      = $commentText;
+        $comment->entity_type = 'product';
+        $comment->entity_id = $model->id;
+        $comment->action = 'reject';   // approve | reject | block
+        $comment->comment = $commentText;
         $comment->moderator_id = $user->id;
         $comment->is_sent_to_warehouse = 0;
         $comment->status_after = 'rejected';
@@ -448,11 +472,11 @@ class ProductController extends Controller {
 
         $this->sendToWarehouse([
             'id' => $model->id,
-            'entity_type'  => 'product',
-            'entity_id'    => $model->id,
-            'action'       => 'reject',
+            'entity_type' => 'product',
+            'entity_id' => $model->id,
+            'action' => 'reject',
             'status_after' => 'rejected',
-            'comment'      => $commentText,
+            'comment' => $commentText,
             'moderator_id' => $user->id,
         ]);
 
@@ -466,7 +490,7 @@ class ProductController extends Controller {
 
 
 
-    
+
     /**
      * List all ASL Belgisi check records (read-only).
      * GET /admin/product/asl-belgisi
@@ -596,37 +620,40 @@ class ProductController extends Controller {
         ]);
     }
 
-    public function actionRemoves($id,$page = 1) {
-    if(Yii::$app->user->identity->role == User::ROLE_ADMIN){
-        $this->log('remove'.$id);
-        $model = Product::find()->where(['id'=>$id])->one();
-    
+    public function actionRemoves($id, $page = 1)
+    {
+        if (Yii::$app->user->identity->role == User::ROLE_ADMIN) {
+            $this->log('remove' . $id);
+            $model = Product::find()->where(['id' => $id])->one();
 
-        if (!$model) {
-            throw new HttpException(404, 'Page not found');
-        }
-        $model->button_id = 1;
-        $model->save();
-        $model->softDelete();
-    }
 
-    if ($this->user && $this->user->role == User::ROLE_MODERATOR) {
-            return $this->redirect(['/admin/default/profile']);
+            if (!$model) {
+                throw new HttpException(404, 'Page not found');
+            }
+            $model->button_id = 1;
+            $model->save();
+            $model->softDelete();
         }
 
-        return $this->redirect(['/admin/product/index?page='.$page]);
-    }
-
-    public function actionRemove($id) {
         if ($this->user && $this->user->role == User::ROLE_MODERATOR) {
             return $this->redirect(['/admin/default/profile']);
         }
-        
-        $this->log('del'.$id);
+
+        return $this->redirect(['/admin/product/index?page=' . $page]);
+    }
+
+    public function actionRemove($id)
+    {
+        if ($this->user && $this->user->role == User::ROLE_MODERATOR) {
+            return $this->redirect(['/admin/default/profile']);
+        }
+
+        $this->log('del' . $id);
         return $this->redirect(Yii::$app->request->referrer);
     }
 
-    public function actionImport() {
+    public function actionImport()
+    {
         $billz = new Billz();
 
         $data = [
@@ -646,7 +673,7 @@ class ProductController extends Controller {
             foreach ($products->result as $k => $v) {
                 // category
                 if ($v->properties->CATEGORY) {
-                    $category = Category::findOne(['type'=>'product', 'name_ru'=>$v->properties->CATEGORY]);
+                    $category = Category::findOne(['type' => 'product', 'name_ru' => $v->properties->CATEGORY]);
                     if (!$category) {
                         $category = new Category;
                     }
@@ -658,7 +685,7 @@ class ProductController extends Controller {
                 }
                 // brand
                 if ($v->properties->BRAND) {
-                    $brand = CategoryBrand::findOne(['name_ru'=>$v->properties->BRAND]);
+                    $brand = CategoryBrand::findOne(['name_ru' => $v->properties->BRAND]);
                     if (!$brand) {
                         $brand = new CategoryBrand;
                     }
@@ -668,7 +695,7 @@ class ProductController extends Controller {
                 }
                 // color
                 if ($v->properties->COLOR) {
-                    $color = Color::findOne(['name_ru'=>$v->properties->COLOR]);
+                    $color = Color::findOne(['name_ru' => $v->properties->COLOR]);
                     if (!$color) {
                         $color = new Color;
                     }
@@ -678,7 +705,7 @@ class ProductController extends Controller {
                 // office
                 if ($v->offices) {
                     foreach ($v->offices as $k_office => $v_office) {
-                        $office = Office::findOne(['office_id'=>$v_office->officeID, 'name'=>$v_office->officeName]);
+                        $office = Office::findOne(['office_id' => $v_office->officeID, 'name' => $v_office->officeName]);
                         if (!$office) {
                             $office = new Office;
                         }
@@ -689,7 +716,7 @@ class ProductController extends Controller {
                     }
                 }
                 // product
-                $product = Product::findOne(['name_ru'=>$v->name, 'billz_id'=>$v->ID]);
+                $product = Product::findOne(['name_ru' => $v->name, 'billz_id' => $v->ID]);
                 if (!$product) {
                     $product = new Product;
                 }
@@ -716,7 +743,7 @@ class ProductController extends Controller {
 
                 // product color
                 if ($product && $color) {
-                    $product_color = ProductColor::findOne(['product_id'=>$product->id, 'color_id'=>$color->id]);
+                    $product_color = ProductColor::findOne(['product_id' => $product->id, 'color_id' => $color->id]);
                     if (!$product_color) {
                         $product_color = new ProductColor;
                     }
@@ -728,7 +755,7 @@ class ProductController extends Controller {
                 // product office
                 if ($product && $office && $v->offices) {
                     foreach ($v->offices as $pr_office_k => $pr_office_v) {
-                        $product_office = ProductOffice::findOne(['product_id'=>$product->id]);
+                        $product_office = ProductOffice::findOne(['product_id' => $product->id]);
                         if (!$product_office) {
                             $product_office = new ProductOffice;
                         }
@@ -745,7 +772,7 @@ class ProductController extends Controller {
                     foreach ($v->imageUrls as $k_img => $v_img) {
                         if ($v_img && $v_img->url) {
                             $img = str_replace('_square', '', $v_img->url);
-                            $image = Images::findOne(['object_id'=>$product->id, 'type'=>'product', 'web'=>1, 'photo'=>$img]);
+                            $image = Images::findOne(['object_id' => $product->id, 'type' => 'product', 'web' => 1, 'photo' => $img]);
                             if (!$image) {
                                 $image = new Images;
                             }
@@ -767,8 +794,9 @@ class ProductController extends Controller {
         return $this->redirect(['/admin/product']);
     }
 
-    public function actionFilterOn() {
-        $settings = Settings::findOne(['type'=>'filter_on']);
+    public function actionFilterOn()
+    {
+        $settings = Settings::findOne(['type' => 'filter_on']);
 
         if (!$settings) {
             $settings = new Settings;
@@ -793,7 +821,8 @@ class ProductController extends Controller {
 
 
 
-    function log($type){
+    function log($type)
+    {
         $userId = Yii::$app->user->identity ? Yii::$app->user->identity->id : 'guest';
         $get = @file_get_contents('log.txt') ?: '';
         @file_put_contents('log.txt', $get . "\n" . date("Y-m-d H:i:s") . ' - ' . $type . ' - ' . $userId);
@@ -832,9 +861,10 @@ class ProductController extends Controller {
      * @param array $product_types
      * @return array
      */
-    private function generateTypeCombinations($product_types) {
+    private function generateTypeCombinations($product_types)
+    {
         $combinations = [];
-        
+
         // If only one type is selected, return simple combinations
         if (count($product_types) == 1) {
             foreach ($product_types as $type_id => $values) {
@@ -848,7 +878,7 @@ class ProductController extends Controller {
             }
             return $combinations;
         }
-        
+
         // For multiple types, generate all combinations
         $type_arrays = [];
         foreach ($product_types as $type_id => $values) {
@@ -860,12 +890,12 @@ class ProductController extends Controller {
                 $type_arrays[$type_id][] = $values;
             }
         }
-        
+
         // Generate cartesian product of all type combinations
         $keys = array_keys($type_arrays);
         $values = array_values($type_arrays);
         $total = array_product(array_map('count', $values));
-        
+
         for ($i = 0; $i < $total; $i++) {
             $combination = [];
             $temp = $i;
@@ -875,7 +905,7 @@ class ProductController extends Controller {
             }
             $combinations[] = array_reverse($combination, true);
         }
-        
+
         return $combinations;
     }
 }
