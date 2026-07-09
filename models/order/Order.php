@@ -504,7 +504,7 @@ class Order extends \yii\db\ActiveRecord
         $volumeM3 = max(0.001, $volumeM3);
 
         $data = [
-            'clientId' => $user->id,
+            'clientId' => (string) $user->id,
             'pickup_type' => 'courier',
             'dropoff_type' => 'courier',
 
