@@ -29,7 +29,7 @@ class CatalogFilterService
             'store_ids' => $this->parseIdList($request->get('store_ids'), $request->get('shop_id')),
             'price_min' => $this->toNullableFloat($request->get('price_min')),
             'price_max' => $this->toNullableFloat($request->get('price_max')),
-            'attribute_logic' => strtolower((string)$request->get('filter_logic', 'and')) === 'or' ? 'or' : 'and',
+            'attribute_logic' => strtolower((string) $request->get('filter_logic', 'and')) === 'or' ? 'or' : 'and',
             'attribute_filters' => $this->normalizeAttributeFilters(
                 is_array($attributes) ? $attributes : [],
                 is_array($legacyFilter) ? $legacyFilter : [],
@@ -44,15 +44,16 @@ class CatalogFilterService
             ->alias('product')
             ->where(['product.status' => 1])
             ->where(['product.deleted_at' => null])
+            ->where(['product.amount' => ['>=', 1]])
             ->marketplaceVisible('product');
 
-        $ignoreBrand = (bool)($options['ignoreBrand'] ?? false);
-        $ignoreStore = (bool)($options['ignoreStore'] ?? false);
-        $ignorePrice = (bool)($options['ignorePrice'] ?? false);
+        $ignoreBrand = (bool) ($options['ignoreBrand'] ?? false);
+        $ignoreStore = (bool) ($options['ignoreStore'] ?? false);
+        $ignorePrice = (bool) ($options['ignorePrice'] ?? false);
         $ignoreAttributeFilterIds = array_map('intval', $options['ignoreAttributeFilterIds'] ?? []);
 
         if (!empty($state['category_id'])) {
-            $query->andWhere(['product.category_id' => $this->getCategoryScopeIds((int)$state['category_id'])]);
+            $query->andWhere(['product.category_id' => $this->getCategoryScopeIds((int) $state['category_id'])]);
         }
 
         if (!$ignoreBrand && !empty($state['brand_ids'])) {
@@ -108,7 +109,7 @@ class CatalogFilterService
         $category = Category::findOne($categoryId);
 
         if ($category && $category->parent_id) {
-            $categoryIds[] = (int)$category->parent_id;
+            $categoryIds[] = (int) $category->parent_id;
         }
 
         return Filter::find()
@@ -171,7 +172,7 @@ class CatalogFilterService
         }
 
         foreach ($rawAttributes as $rawKey => $rawValues) {
-            if (mb_strlen(trim((string)$rawKey)) > 100) {
+            if (mb_strlen(trim((string) $rawKey)) > 100) {
                 return [
                     'message' => 'attributes: maximum string length is 100',
                     'field' => 'attributes',
@@ -187,7 +188,7 @@ class CatalogFilterService
             }
 
             foreach ($values as $value) {
-                if (mb_strlen(trim((string)$value)) > 100) {
+                if (mb_strlen(trim((string) $value)) > 100) {
                     return [
                         'message' => 'attributes: maximum string length is 100',
                         'field' => 'attributes',
@@ -218,9 +219,9 @@ class CatalogFilterService
 
         return array_map(function (array $row) {
             return [
-                'id' => (int)$row['id'],
+                'id' => (int) $row['id'],
                 'name' => $this->pickLocalizedValue($row['name_ru'] ?? null, $row['name_uz'] ?? null, $row['name_en'] ?? null) ?? '',
-                'count' => (int)$row['count'],
+                'count' => (int) $row['count'],
             ];
         }, $rows);
     }
@@ -244,9 +245,9 @@ class CatalogFilterService
 
         return array_map(function (array $row) {
             return [
-                'id' => (int)$row['id'],
+                'id' => (int) $row['id'],
                 'name' => $this->pickLocalizedValue($row['name_ru'] ?? null, $row['name_uz'] ?? null, $row['name_en'] ?? null) ?? '',
-                'count' => (int)$row['count'],
+                'count' => (int) $row['count'],
             ];
         }, $rows);
     }
@@ -262,18 +263,18 @@ class CatalogFilterService
         $max = $maxQuery->max('product.price');
 
         return [
-            'min' => $min !== null ? (float)$min : 0,
-            'max' => $max !== null ? (float)$max : 0,
+            'min' => $min !== null ? (float) $min : 0,
+            'max' => $max !== null ? (float) $max : 0,
         ];
     }
 
     private function buildAttributeFacets(array $state): array
     {
-        $filters = $this->getCategoryRootFilters((int)$state['category_id']);
+        $filters = $this->getCategoryRootFilters((int) $state['category_id']);
         $result = [];
 
         foreach ($filters as $filter) {
-            $optionMap = $this->getFilterOptionMap((int)$filter->id);
+            $optionMap = $this->getFilterOptionMap((int) $filter->id);
             $rows = $this->buildProductsQuery($state, ['ignoreAttributeFilterIds' => [$filter->id]])
                 ->select([
                     'value_ru' => 'facet_filter.value_ru',
@@ -303,7 +304,7 @@ class CatalogFilterService
                     : $rawValue;
 
                 $optionValue = $matchedOption !== null
-                    ? (int)$matchedOption['id']
+                    ? (int) $matchedOption['id']
                     : $this->encodeRawFacetValue($rawValue);
                 $optionKey = is_int($optionValue) ? 'id:' . $optionValue : 'raw:' . $optionValue;
 
@@ -315,7 +316,7 @@ class CatalogFilterService
                     ];
                 }
 
-                $options[$optionKey]['count'] += (int)$row['count'];
+                $options[$optionKey]['count'] += (int) $row['count'];
             }
 
             if (empty($options)) {
@@ -328,7 +329,7 @@ class CatalogFilterService
                     return $countComparison;
                 }
 
-                return strcmp((string)$left['label'], (string)$right['label']);
+                return strcmp((string) $left['label'], (string) $right['label']);
             });
 
             $result[] = [
@@ -347,7 +348,7 @@ class CatalogFilterService
         $existsConditions = [];
 
         foreach ($attributeFilters as $filterId => $values) {
-            $filterId = (int)$filterId;
+            $filterId = (int) $filterId;
             if ($filterId <= 0 || in_array($filterId, $ignoreFilterIds, true)) {
                 continue;
             }
@@ -358,7 +359,7 @@ class CatalogFilterService
                 }
 
                 return $value === '' ? null : $value;
-            }, (array)$values), static fn($value) => $value !== null));
+            }, (array) $values), static fn($value) => $value !== null));
 
             if (empty($values)) {
                 continue;
@@ -412,13 +413,13 @@ class CatalogFilterService
 
         if ($categoryId) {
             foreach ($this->getCategoryRootFilters($categoryId) as $filter) {
-                $availableFilters[(string)$filter->id] = (int)$filter->id;
+                $availableFilters[(string) $filter->id] = (int) $filter->id;
                 if ($filter->code) {
-                    $availableFilters[$filter->code] = (int)$filter->id;
+                    $availableFilters[$filter->code] = (int) $filter->id;
                 }
 
                 foreach ($this->buildLegacyFilterKeys($filter) as $legacyKey) {
-                    $availableFilters[$legacyKey] = (int)$filter->id;
+                    $availableFilters[$legacyKey] = (int) $filter->id;
                 }
             }
         }
@@ -456,7 +457,7 @@ class CatalogFilterService
 
     private function resolveFilterId($rawKey, array $availableFilters): ?int
     {
-        $normalized = trim((string)$rawKey);
+        $normalized = trim((string) $rawKey);
         if ($normalized === '') {
             return null;
         }
@@ -466,7 +467,7 @@ class CatalogFilterService
         }
 
         if (ctype_digit($normalized)) {
-            return (int)$normalized;
+            return (int) $normalized;
         }
 
         $slug = Inflector::slug($normalized);
@@ -525,7 +526,7 @@ class CatalogFilterService
             ->column();
 
         foreach ($subcategories as $subcategoryId) {
-            $categoryIds[] = (int)$subcategoryId;
+            $categoryIds[] = (int) $subcategoryId;
         }
 
         return array_values(array_unique($categoryIds));
@@ -537,12 +538,12 @@ class CatalogFilterService
         $optionMap = $this->getFilterOptionMap($filterId);
 
         foreach ($values as $value) {
-            if (is_numeric($value) && (string)(int)$value === (string)$value) {
-                $optionId = (int)$value;
+            if (is_numeric($value) && (string) (int) $value === (string) $value) {
+                $optionId = (int) $value;
                 if (isset($optionMap['by_id'][$optionId])) {
                     $option = $optionMap['by_id'][$optionId];
                     foreach (['name_ru', 'name_uz', 'name_en', 'value_ru', 'value_uz', 'value_en'] as $field) {
-                        foreach ($this->expandComparableStrings((string)($option[$field] ?? '')) as $candidate) {
+                        foreach ($this->expandComparableStrings((string) ($option[$field] ?? '')) as $candidate) {
                             $expanded[] = $candidate;
                         }
                     }
@@ -560,7 +561,7 @@ class CatalogFilterService
                 }
             }
 
-            foreach ($this->expandComparableStrings((string)$value) as $candidate) {
+            foreach ($this->expandComparableStrings((string) $value) as $candidate) {
                 $expanded[] = $candidate;
             }
         }
@@ -571,27 +572,27 @@ class CatalogFilterService
     private function buildFilterKey(Filter $filter): string
     {
         if (!empty($filter->code)) {
-            return (string)$filter->code;
+            return (string) $filter->code;
         }
 
         $legacyKeys = $this->buildLegacyFilterKeys($filter);
         $legacyKey = reset($legacyKeys);
 
-        return $legacyKey !== '' ? $legacyKey : (string)$filter->id;
+        return $legacyKey !== '' ? $legacyKey : (string) $filter->id;
     }
 
     private function buildLegacyFilterKeys(Filter $filter): array
     {
         $slugs = [];
         foreach ([$filter->name_ru, $filter->name_uz, $filter->name_en] as $name) {
-            $slug = Inflector::slug((string)$name);
+            $slug = Inflector::slug((string) $name);
             if ($slug !== '') {
                 $slugs[] = $slug;
             }
         }
 
         $preferred = $this->pickLocalizedValue($filter->name_ru, $filter->name_uz, $filter->name_en);
-        $preferredSlug = Inflector::slug((string)$preferred);
+        $preferredSlug = Inflector::slug((string) $preferred);
         if ($preferredSlug !== '') {
             array_unshift($slugs, $preferredSlug);
         }
@@ -620,7 +621,7 @@ class CatalogFilterService
             return null;
         }
 
-        return (int)$value;
+        return (int) $value;
     }
 
     private function toNullableFloat($value): ?float
@@ -633,7 +634,7 @@ class CatalogFilterService
             return null;
         }
 
-        return (float)$value;
+        return (float) $value;
     }
 
     private function getFilterOptionMap(int $filterId): array
@@ -653,10 +654,10 @@ class CatalogFilterService
         $byComparable = [];
 
         foreach ($rows as $row) {
-            $byId[(int)$row['id']] = $row;
+            $byId[(int) $row['id']] = $row;
 
             foreach (['name_ru', 'name_uz', 'name_en', 'value_ru', 'value_uz', 'value_en'] as $field) {
-                $raw = trim((string)($row[$field] ?? ''));
+                $raw = trim((string) ($row[$field] ?? ''));
                 if ($raw !== '') {
                     $byRaw[$raw] = $row;
                     foreach ($this->expandComparableStrings($raw) as $comparable) {
@@ -676,7 +677,7 @@ class CatalogFilterService
     private function resolveAttributeOptionByRawValue(array $optionMap, array $row): ?array
     {
         foreach (['value_ru', 'value_uz', 'value_en'] as $field) {
-            $raw = trim((string)($row[$field] ?? ''));
+            $raw = trim((string) ($row[$field] ?? ''));
             if ($raw !== '' && isset($optionMap['by_raw'][$raw])) {
                 return $optionMap['by_raw'][$raw];
             }
@@ -749,7 +750,7 @@ class CatalogFilterService
 
         foreach ([is_array($attributes) ? $attributes : [], is_array($legacyFilter) ? $legacyFilter : []] as $source) {
             foreach ($source as $key => $value) {
-                $payload[(string)$key] = $value;
+                $payload[(string) $key] = $value;
             }
         }
 

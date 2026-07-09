@@ -3,7 +3,6 @@
 namespace app\modules\api\controllers;
 
 use Yii;
-use yii\web\Response;
 use yii\web\HttpException;
 use yii\web\UploadedFile;
 use yii\rest\Controller;
@@ -28,8 +27,6 @@ use app\models\user\compare\UserCompare;
 use app\models\user\User;
 use app\models\user\activity\UserActivity;
 use app\models\brand\CategoryBrand; // Added Brand model
-use app\models\Brand; // Added Brand model
-use app\models\Shop; // Added Shop model
 use app\models\stock\Stock;
 
 use Jenssegers\ImageHash\ImageHash;
