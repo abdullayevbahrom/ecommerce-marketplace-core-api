@@ -55,7 +55,7 @@ class BtsComponent extends Component
 
     /**
      * @param array{
-     *  clientId: int,
+     *  clientId: string,
      *  pickup_type: 'courier'|'pickup'|'self',
      *  dropoff_type: 'courier'|'pickup'|'self',
      *  sender: array{

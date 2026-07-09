@@ -544,15 +544,15 @@ class Order extends \yii\db\ActiveRecord
         $btsPrice = $bts->calculateOrder($calculateData);
         $response = $bts->createOrder($data);
 
-        if (!empty($response['success']) && isset($response['data']['orderId'])) {
-            $btsData = $response['data'];
+        if (!empty($response['orderId'])) {
+            $btsData = $response;
 
             $btsId = $btsData['orderId'];
-            $btsStatus = $btsData['status']['code'] ?? $btsData['status']['id'] ?? null;
-            $btsStatusInfo = $btsData['status']['info'] ?? $btsData['status']['name'] ?? null;
+            $btsStatus = $btsData['status']['code'];
+            $btsStatusInfo = $btsData['status']['info'];
 
-            $pricePerProduct = count($orderProducts) > 0
-                ? round(((float) $btsPrice) / count($orderProducts), 2)
+            $pricePerProduct = \count($orderProducts) > 0
+                ? round(((float) $btsPrice) / \count($orderProducts), 2)
                 : 0;
 
             foreach ($orderProducts as $orderProduct) {
