@@ -512,7 +512,7 @@ Click System --> POST /payment/click (complete, action=1)
 ### Data Sent
 ```json
 {
-    "octo_shop_id": "4874",
+    "octo_shop_id": "10001",
     "octo_secret": "{secret}",
     "shop_transaction_id": "{order_id}",
     "auto_capture": true,

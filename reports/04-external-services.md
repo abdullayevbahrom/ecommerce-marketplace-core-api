@@ -674,7 +674,7 @@ Authentication via `octo_shop_id` and `octo_secret` sent in the request body (no
 
 ```json
 {
-    "octo_shop_id": "4874",
+    "octo_shop_id": "10001",
     "octo_secret": "{secret}",
     "shop_transaction_id": "<order_id>",
     "auto_capture": true,
