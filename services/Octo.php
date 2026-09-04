@@ -4,10 +4,10 @@ namespace yii\services;
 // use paragraph1\phpFCM\Client;
 
 class Octo {
-    protected $url = 'https://secure.octo.uz';
-    protected $shop_id = '4874';
-    protected $secret = '00000000-0000-0000-0000-000000000000';
-    protected $notify_url = 'http://checkout.example.com/payment/octo/notify';
+    protected $url = 'https://secure.example.com';
+    protected $shop_id = getenv('OCTO_SHOP_ID') ?: '10001';
+    protected $secret = getenv('OCTO_SECRET') ?: '00000000-0000-0000-0000-000000000000';
+    protected $notify_url = 'https://api.example.com/payment/octo/notify';
 
     public function prepare($order) {
         $data = [

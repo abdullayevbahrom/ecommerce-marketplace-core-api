@@ -7,7 +7,7 @@ use http\Client;
 
 class SMSCService
 {
-    const BASE_URL = 'https://smsc.ru/rest/send/';
+    const BASE_URL = 'https://api.sms-provider.example.com/rest/send/';
     const LOGIN = 'sample_sms_login';
     const PASSWORD = 'sample_sms_password';
 

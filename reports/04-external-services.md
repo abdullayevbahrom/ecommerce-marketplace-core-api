@@ -656,7 +656,7 @@ Credentials:
 | Base URL | `https://secure.octo.uz` |
 | HTTP Client | cURL (native) |
 | Protocol | HTTPS with JSON payloads |
-| Notify URL | `http://checkout.example.com/payment/octo/notify` |
+| Notify URL | `https://api.example.com/payment/octo/notify` |
 
 ### 9.2 Authentication
 

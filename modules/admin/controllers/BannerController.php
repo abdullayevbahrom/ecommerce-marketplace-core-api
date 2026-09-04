@@ -137,7 +137,7 @@ class BannerController extends Controller{
 
         foreach ($images as $image) {
             if ($image->photo) {
-                $path = 'http://cdn.example.com/uploads/'.$image->type.'/'.$image->object_id.'/original/'.$image->photo;
+                $path = 'https://cdn.example.com/uploads/'.$image->type.'/'.$image->object_id.'/original/'.$image->photo;
                 $hash = $hasher->hash($path);
                 $image->hash = $hash->toHex();
                 $image->save(false);

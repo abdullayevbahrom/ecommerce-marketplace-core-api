@@ -11,11 +11,11 @@ class Sms {
      * @return bool|string Ответ от сервера SMS-шлюза или false в случае ошибки.
      */
     public function send($phone, $text) {
-        $url = 'https://send.smsxabar.uz/broker-api/send';
+        $url = 'https://api.sms-gateway.example.com/broker-api/send';
 
         $login = Yii::$app->params['sms_login'];
         $password = Yii::$app->params['sms_password'];
-        $password = 'HS#4';
+        $password = Yii::$app->params['sms_password'] ?? 'sample_password';
 
         $full_text = "app. " . $text;
 

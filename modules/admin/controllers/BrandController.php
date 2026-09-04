@@ -201,7 +201,7 @@ class BrandController extends Controller
         try {
             $client = new Client(['timeout' => 5.0]);
 
-            $apiUrl = rtrim(Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com', '/') . '/api/moderation/sync';
+            $apiUrl = rtrim(Yii::$app->params['warehouseApiUrl'] ?? 'https://api.warehouse.example.com', '/') . '/api/moderation/sync';
 
             $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
 

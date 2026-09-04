@@ -3,8 +3,8 @@ namespace yii\services;
 
 class Billz
 {
-    public $url = 'https://api.billz.uz/v1/';
-    public $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJub3ZleS5pdC1tYWtlci51eiIsImlhdCI6MTY2NTU0MDA1MiwiZXhwIjoxOTE4MDAwODUyLCJzdWIiOiJub3ZleS5lY29tbWVyY2UifQ.K00Eb53UF-YgFogjLXu8EijfbesIFtgaovx7SNcXDR4';
+    public $url = 'https://api.pos-integration.example.com/v1/';
+    public $token = 'sample_jwt_token';
 
     public function request($data)
     {

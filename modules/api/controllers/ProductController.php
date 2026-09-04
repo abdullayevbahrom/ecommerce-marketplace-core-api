@@ -487,7 +487,7 @@ class ProductController extends Controller
         try {
             $client = new \GuzzleHttp\Client(['timeout' => 5.0]);
 
-            $apiUrl = rtrim(Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com', '/') . '/api/webhooks/marketplace/product-approved';
+            $apiUrl = rtrim(Yii::$app->params['warehouseApiUrl'] ?? 'https://api.warehouse.example.com', '/') . '/api/webhooks/marketplace/product-approved';
 
             $secretKey = Yii::$app->params['apiSecretKey'] ?? null;
             if (!$secretKey) {

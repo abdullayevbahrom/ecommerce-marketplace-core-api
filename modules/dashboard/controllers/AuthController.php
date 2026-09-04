@@ -99,7 +99,7 @@ class AuthController extends Controller {
 
         try {
             $client = new \GuzzleHttp\Client();
-            $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com';
+            $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? 'https://api.warehouse.example.com';
             $client->post($baseUrl . '/api/v1/shop/log-out', [
                 'form_params' => [
                     'login' => $model->login,

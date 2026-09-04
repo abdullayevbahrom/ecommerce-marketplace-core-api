@@ -891,7 +891,7 @@ class Order extends \yii\db\ActiveRecord
             return;
         }
 
-        $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? 'http://warehouse.example.com';
+        $baseUrl = Yii::$app->params['warehouseApiUrl'] ?? 'https://api.warehouse.example.com';
         $apiUrl = $baseUrl . '/api/sales/create-from-ecommerce';
 
         $client = new Client(['timeout' => 10.0]);

@@ -497,7 +497,7 @@ Click System --> POST /payment/click (complete, action=1)
 |----------|-------|
 | Method | **Shop ID + Secret** (in request body) |
 | Shop ID | `4874` |
-| Notify URL | `http://checkout.example.com/payment/octo/notify` |
+| Notify URL | `https://api.example.com/payment/octo/notify` |
 
 ### Base URL
 
@@ -522,7 +522,7 @@ Click System --> POST /payment/click (complete, action=1)
     "currency": "UZS",
     "description": "Order payment",
     "language": "ru",
-    "notify_url": "http://checkout.example.com/payment/octo/notify",
+    "notify_url": "https://api.example.com/payment/octo/notify",
     "ttl": 15
 }
 ```
@@ -978,7 +978,7 @@ verifyAndSaveUser(code, userId):
 | Property | Value |
 |----------|-------|
 | Config Key | `Yii::$app->params['warehouseApiUrl']` |
-| Default | `http://warehouse.example.com` |
+| Default | `https://api.warehouse.example.com` |
 | Dev Default | `http://localhost:8080` |
 
 ### Endpoint

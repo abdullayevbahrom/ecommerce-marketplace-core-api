@@ -11,7 +11,7 @@ class PaymeSubscribe
     // kassa
     protected $id = 'sample_payme_merchant_id';
     protected $password = 'sample_payme_secret_key';
-    protected $url = 'https://checkout.paycom.uz/api';
+    protected $url = 'https://checkout.example.com/api';
 
     public function sendRequest($data, $key = false) {
         $password = ($key === true) ? $this->id.':'.$this->password : $this->id;

@@ -13,7 +13,7 @@ class Yookassa
     public function createPayment($amount, $description, $type)
     {
         $yookassa = new Client();
-        $yookassa->setAuth('239537', 'test_oEKmFN2MHOIGsGv0ubYpO70jPToj94bv3xTNDvPVi9U');
+        $yookassa->setAuth('sample_shop_id', 'sample_secret_key');
         $payment = $yookassa->createPayment(
             array(
                 'amount' => array(
