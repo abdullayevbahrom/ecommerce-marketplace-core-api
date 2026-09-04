@@ -62,7 +62,7 @@ $config = [
         ],
         'request' => [
             // !!! insert a secret key in the following (if it is empty) - this is required by cookie validation
-            'cookieValidationKey' => 'sample_cookie_validation_secret_key',
+            'cookieValidationKey' => getenv('COOKIE_VALIDATION_KEY') ?: 'sample_cookie_validation_secret_key_32bytes',
             'baseUrl' => '',
             'csrfParam' => '_csrf-app',
             'parsers' => [

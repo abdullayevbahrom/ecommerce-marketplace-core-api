@@ -68,4 +68,9 @@ eimzo-telegram/.claude/worktrees/
 /products-populated*.png
 /tc*.png
 /ux-*.png
-/eimzo-telegram/
+/eimzo-telegram/services/key/*.pem
+services/key/*.key
+storage/jwt/*.pem
+storage/jwt/*.key
+*.sql
+.phpunit.result.cache

@@ -60,19 +60,18 @@ $config = [
     'senderName' => 'Example.com mailer',
 
     // Didox E-IMZO integration settings
-    //'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjM4LCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzYwOTM2NzIwfQ.Dr8fBTTwJ2O5KRh98tOtBeF4vfc8w4hxTye0hJ-qPSc', // Add your Didox partner token here
-    'didoxPartnerToken' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MzcxLCJzdGF0dXMiOiJBQ1RJVkUiLCJuYW1lIjoiXCJNQVJDQSBDQVBJVEFMIFRBU0hLRU5UXCIgTUNISiIsInJvbGUiOiJQQVJUTkVSIiwidGluIjoiMzEyNDYzMDk4IiwiaWF0IjoxNzc4MjI3NTk1fQ.Cf0uSMM2A2tUIdkcY0jRUrmpFkWxLUX36i-EA7wNM1o', // Add your Didox partner token here prod
-    'didoxTestTaxId' => '123456789', // TIN for testing Didox integration for https://testapi.einvoice.example.com (should be registered in Didox system) prod https://api.einvoice.example.com
+    'didoxPartnerToken' => getenv('DIDOX_PARTNER_TOKEN') ?: 'sample_partner_token',
+    'didoxTestTaxId' => getenv('DIDOX_TEST_TAX_ID') ?: '123456789',
     'didoxInvoiceForceSumOne' => filter_var(getenv('DIDOX_INVOICE_FORCE_SUM_ONE') ?: false, FILTER_VALIDATE_BOOL),
 
-    // BTS delivery service integration settings
-    'bts_token' => 'sample_logistics_token', // Your current BTS token
-    'bts_username' => getenv('BTS_LOGIN') ?: null, // Add your BTS username for token generation
-    'bts_password' => getenv('BTS_PASSWORD') ?: null, // Add your BTS password for token generation  
-    'bts_inn' => '123456789', // Add your company INN for BTS authentication
+    // Logistics / Delivery integration settings
+    'bts_token' => getenv('BTS_TOKEN') ?: 'sample_logistics_token',
+    'bts_username' => getenv('BTS_LOGIN') ?: null,
+    'bts_password' => getenv('BTS_PASSWORD') ?: null,
+    'bts_inn' => getenv('BTS_INN') ?: '123456789',
 
     'bts' => [
-        'url' => getenv('BTS_URL') ?: 'https://apitest.logistics.example.com:28345',
+        'url' => getenv('BTS_URL') ?: 'https://apitest.logistics.example.com',
         'version' => getenv('BTS_VERSION') ?: 'v1',
         'login' => getenv('BTS_LOGIN') ?: null,
         'password' => getenv('BTS_PASSWORD') ?: null,
@@ -109,41 +108,38 @@ $config = [
         'queue_auth_outbox_shop' => $rabbitMqQueueAuthOutboxShop,
     ],
     // Base URL
-    'baseUrl' => 'https://api.example.com',
-    'operatorApiUrl' => 'https://api.operator.example.com', // Default operator API URL
-    'warehouseApiUrl' => 'https://api.warehouse.example.com', // Default warehouse API URL
-    'apiSecretKey' => '123',
+    'baseUrl' => getenv('BASE_URL') ?: 'https://api.example.com',
+    'operatorApiUrl' => getenv('OPERATOR_API_URL') ?: 'https://api.operator.example.com',
+    'warehouseApiUrl' => getenv('WAREHOUSE_API_URL') ?: 'https://api.warehouse.example.com',
+    'apiSecretKey' => getenv('API_SECRET_KEY') ?: 'secret_api_key',
     'warehouseSyncEnabled' => true,
 
-    // MyID Integration Settings
+    // Identity Verification (MyID) Settings
     'myid' => [
-        'client_id' => 'sample_client_id',
-        'client_secret' => 'X5wRGK18FguxdCqUlvDrVEljezRUU5KkDJgBRKMjVDhMU1bXXk3wiiU9bQwSFTo9BHZzwcnnjWolBGVSQQ6rRSmr7ebhBg6i04ri',
-        'client_hash_id' => '26854a43-bb59-43fb-a454-79492a745f96',
-        'redirect_uri' => 'http://shop.test/api/myid/callback',
+        'client_id' => getenv('MYID_CLIENT_ID') ?: 'sample_client_id',
+        'client_secret' => getenv('MYID_CLIENT_SECRET') ?: 'sample_client_secret',
+        'client_hash_id' => getenv('MYID_CLIENT_HASH_ID') ?: 'sample_hash_id',
+        'redirect_uri' => getenv('MYID_REDIRECT_URI') ?: 'http://localhost/api/myid/callback',
         'sandbox' => true,
         'base_url' => 'https://api.devid.example.com',
         'web_url' => 'https://web.devid.example.com',
     ],
 
-    // ASL Belgisi product registry integration
+    // Product marking registry integration
     'aslBelgisi' => [
-        'apiKey' => getenv('ASL_BELGISI_API_KEY') ?: 'fdf30890-20f9-4d0e-9ba1-3e2e0968a1e8',
+        'apiKey' => getenv('ASL_BELGISI_API_KEY') ?: 'sample_api_key',
         'baseUrl' => 'https://xtrace.marking.example.com',
     ],
 
     // E-IMZO direct integration (e-imzo-server instance)
     'eimzo' => [
         'serverUrl' => getenv('EIMZO_SERVER_URL') ?: 'http://127.0.0.1:8080',
-        'siteId' => getenv('EIMZO_SITE_ID') ?: '3383',
+        'siteId' => getenv('EIMZO_SITE_ID') ?: '1234',
         // Registered upload URL for mobile PKCS#7 delivery
         'uploadUrl' => 'https://api.example.com/v1/integration/eimzo',
-        // Status polling interval hint for mobile clients (seconds)
         'mobileStatusPollInterval' => 5,
-        // Status polling timeout (seconds)
         'mobileStatusTimeout' => 120,
     ],
-    // If enabled, outgoing Didox invoice payload is forced to total sum = 1 for testing.
 
     'telegram' => [
         'botToken' => $botToken,
@@ -151,26 +147,16 @@ $config = [
     ],
 
     // Wallet Configuration
-    'walletServiceUrl' => 'https://wallet.example.com', // External Wallet Service URL
-    'walletPaymentId' => 101, // Category ID for Marco crypto pay
-
-    'walletDefaultToken' => 'USDT', // Default token symbol for wallet payments
-
-    // Currency backend URL — hosts the /api/app/pay/order/{id} endpoint for crypto payments.
-    // Falls back to walletServiceUrl if not set.
+    'walletServiceUrl' => getenv('WALLET_SERVICE_URL') ?: 'https://wallet.example.com',
+    'walletPaymentId' => 101,
+    'walletDefaultToken' => 'USDT',
     'currencyBackendUrl' => getenv('CURRENCY_BACKEND_URL') ?: 'https://wallet.example.com',
-
-    // Sklad API URL — for POS QR payment session resolution
     'skladApiUrl' => getenv('SKLAD_API_URL') ?: 'https://api.warehouse.example.com',
-
-    // UZS to USDT exchange rate (default 1:1 for testing)
     'uzsToUsdtRate' => (float) (getenv('UZS_TO_USDT_RATE') ?: 1.0),
-
 ];
 
 if (YII_ENV_DEV) {
     $config['baseUrl'] = getenv('BASE_URL') ?: 'http://localhost:8002';
-    // In local docker network warehouse service is reachable as "sklad_app"
     $config['warehouseApiUrl'] = getenv('WAREHOUSE_API_URL') ?: 'http://sklad_app';
     $config['skladApiUrl'] = getenv('SKLAD_API_URL') ?: 'http://sklad_app';
     $config['operatorApiUrl'] = getenv('OPERATOR_API_URL') ?: 'http://operator_app';
